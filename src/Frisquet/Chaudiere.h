@@ -30,6 +30,10 @@ public:
         bool arretChauffage = false;
 
         String getLibelle() {
+            if(anomalie) {
+                return "Anomalie";
+            }
+
             if(arretChauffage) {
                 return "Arrêt chauffage";
             } else if(!fonctionnement) {
@@ -126,6 +130,7 @@ private:
 
     struct {
         MqttEntity etatChaudiere;
+        MqttEntity anomalieChaudiere;
         MqttEntity modeFonctionnement;
         MqttEntity modeECS;
         MqttEntity tempECS;

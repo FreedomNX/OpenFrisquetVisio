@@ -14,6 +14,13 @@ void Chaudiere::begin(std::function<void(const String&)> modeEcsCommandCb) {
     _mqttEntities.etatChaudiere.set("icon", "mdi:tune-variant");
     _mqtt.registerEntity(*device, _mqttEntities.etatChaudiere, true);
 
+    _mqttEntities.anomalieChaudiere.id = "anomalieChaudiere";
+    _mqttEntities.anomalieChaudiere.name = "Anomalie chaudière";
+    _mqttEntities.anomalieChaudiere.component = "binary_sensor";
+    _mqttEntities.anomalieChaudiere.stateTopic = MqttTopic(MqttManager::compose({device->baseTopic, "chaudiere", "anomalieChaudiere"}), 0, true);
+    _mqttEntities.anomalieChaudiere.set("device_class", "problem");
+    _mqtt.registerEntity(*device, _mqttEntities.anomalieChaudiere, true);
+
     _mqttEntities.modeFonctionnement.id = "modeFonctionnement";
     _mqttEntities.modeFonctionnement.name = "Mode de fonctionnement";
     _mqttEntities.modeFonctionnement.component = "sensor";
@@ -124,6 +131,7 @@ void Chaudiere::begin(std::function<void(const String&)> modeEcsCommandCb) {
 
 void Chaudiere::publishMqtt() {
     _mqtt.publishState(_mqttEntities.etatChaudiere, getEtatChaudiere().getLibelle().c_str());
+    _mqtt.publishState(_mqttEntities.anomalieChaudiere, getEtatChaudiere().anomalieDetecte() ? "ON" : "OFF");
     _mqtt.publishState(_mqttEntities.modeFonctionnement, getNomModeFonctionnement());
 
     if (!isnan(getTemperatureECS())) {
@@ -178,13 +186,13 @@ void Chaudiere::setTemperatureExterieure(float temperature) {
 void Chaudiere::setModeFonctionnement(uint16_t modeFonctionnement) {
     _modeFonctionnementRaw = modeFonctionnement;
 
-    switch (modeFonctionnement) {
-        case 0x0005:
-        case 0x0105:
+    // Le bit 1 distingue le chauffage ECS du chauffage radiateurs.
+    // Le bit 0 doit rester positionné pour que la valeur soit reconnue.
+    switch (modeFonctionnement & 0x0003) {
+        case 0x0001:
             _modeFonctionnement = MODE_FONCTIONNEMENT::CHAUFFAGE_RADIATEURS;
             break;
-        case 0x0007:
-        case 0x0107:
+        case 0x0003:
             _modeFonctionnement = MODE_FONCTIONNEMENT::CHAUFFAGE_ECS;
             break;
         default:

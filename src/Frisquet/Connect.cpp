@@ -730,7 +730,7 @@ void Connect::loop() {
     }
 
     if(estAssocie()) {
-        if (now - _lastRecuperationTemperatures >= 300000 || _lastRecuperationTemperatures == 0) { // 5 minutes
+        if (now - _lastRecuperationTemperatures >= 150000 || _lastRecuperationTemperatures == 0) { // 2.5 minutes
             info("[CONNECT] Récupération des températures...");
             if(recupererInformations()) {
                 _lastRecuperationTemperatures = now;

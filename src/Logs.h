@@ -1,11 +1,11 @@
 #pragma once
 
-#include <heltec.h>
+#include <Board.h>
 #include <TimeLib.h>
 
 class Logs {
 public:
-  static constexpr size_t kMaxLines = 300;
+  static constexpr size_t kMaxLines = LOGS_MAX_LINES;
   static constexpr size_t kMaxLevelLen = 8;
   static constexpr size_t kMaxMessageLen = 192;
   static constexpr size_t kMaxFormattedLen = 256;

@@ -1,6 +1,6 @@
 # 🧠 OpenFrisquetVisio
 
-Emulation complète du module **Frisquet Connect**, **sonde Extérieure** ou encore **satellite d'ambiance** sur base **Heltec ESP32 WiFi LoRa 32 (SX1262)**.  
+Emulation complète du module **Frisquet Connect**, **sonde Extérieure** ou encore **satellite d'ambiance** sur base **Heltec ESP32 WiFi LoRa 32 (SX1262)** ou **TTGO / LilyGO LoRa32 V2.1 (SX1276)**.  
 Ce projet permet à un ESP32 de dialoguer directement avec votre chaudière Frisquet,  
 de récupérer les informations en temps réel et de les exposer à **Home Assistant via MQTT**.
 
@@ -62,8 +62,9 @@ Deux modes possibles :
 
 | Composant | Description | Remarques |
 |------------|-------------|-----------|
-| 🧠 Heltec ESP32 WiFi LoRa 32 (SX1262) | Carte principale | Doit posséder le module **SX1262** |
-| 🌡️ DS18B20 (optionnel) | Sonde de température | Connectée sur GPIO **33** par défaut |
+| 🧠 Heltec ESP32 WiFi LoRa 32 V3/V4 (SX1262) | Carte principale | Doit posséder le module **SX1262** |
+| 🧠 *ou* TTGO / LilyGO LoRa32 V2.1 (SX1276) | Carte principale alternative | Version **868 MHz** obligatoire |
+| 🌡️ DS18B20 (optionnel) | Sonde de température | GPIO **33** (Heltec) / GPIO **13** (TTGO) |
 | 🔩 Résistance 4,7 kΩ | Pull-up pour DS18B20 | Entre **VCC** et **DATA** |
 | ☕ Café | Indispensable | Pour le développeur 😁 |
 
@@ -74,19 +75,25 @@ Deux modes possibles :
 ### 1️⃣ Préparation du firmware
 
 Avant le flash :
-- Ouvrir le fichier **`DS18B20.h`**  
-  et vérifier / modifier les options selon vos besoins :
+- Ouvrir le fichier **`include/Board.h`**  
+  et vérifier / modifier les options de votre carte selon vos besoins :
 
 | Option | Description |
 |---------|-------------|
-| `PIN_DS18B20` | GPIO utilisé (par défaut 33) |
+| `DS18B20_PIN` | GPIO de la sonde DS18B20 (33 sur Heltec, 13 sur TTGO) |
+| `RADIO_*` | Brochage du module radio |
 
 ---
 
 ### 2️⃣ Flash du firmware
 
-- Connecter la carte **Heltec ESP32** via **USB**  
+- Connecter la carte via **USB**  
 - Compiler et téléverser avec **PlatformIO** ou **Arduino IDE**
+  - Heltec V3 : environnement `heltec_wifi_lora_32_V3` (V4 : `heltec_wifi_lora_32_V4`)
+  - TTGO LoRa32 V2.1 : environnement `ttgo_lora32_v21`, par ex. `pio run -e ttgo_lora32_v21 -t upload`
+
+> ℹ️ **TTGO / SX1276** : la FIFO FSK du SX1276 est limitée à 64 octets ; les plus grandes trames Frisquet (63 octets) passent sans marge.
+> L'ESP32 classique ayant moins de RAM statique, le journal en mémoire est limité à 120 lignes (300 sur Heltec).
 - Au premier démarrage, le module crée un **point d’accès WiFi**
 
 ---

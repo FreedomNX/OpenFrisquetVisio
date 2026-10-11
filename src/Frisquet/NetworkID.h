@@ -1,6 +1,6 @@
 #pragma once
 
-#include <heltec.h>
+#include <Board.h>
 
 struct NetworkID {
     NetworkID(uint8_t b0=0, uint8_t b1=0, uint8_t b2=0, uint8_t b3=0) {

@@ -1,6 +1,6 @@
 #pragma once
 
-#include <heltec.h>
+#include <Board.h>
 
 struct MqttTopic {
   String full;     // ex: "home/sensor/boiler/z1/state"

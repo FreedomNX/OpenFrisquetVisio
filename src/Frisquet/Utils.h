@@ -1,5 +1,5 @@
 #pragma once
-#include <heltec.h>
+#include <Board.h>
 
 struct fword {
     fword() {}

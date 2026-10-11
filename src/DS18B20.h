@@ -1,10 +1,9 @@
 #pragma once
 
-#include "heltec.h"
+#include <Board.h>
 #include <OneWire.h>
 #include <DallasTemperature.h>
 
-#define DS18B20_PIN GPIO_NUM_33     // Broche du bus OneWire (DS18B20)
 
 class DS18B20 {
 

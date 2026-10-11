@@ -6,7 +6,9 @@ void App::begin() {
   Serial.begin(115200);
   delay(50);
 
+#if defined(BOARD_HELTEC)
   Heltec.begin(false /*DisplayEnable disable*/, false /*LoRa Disable*/, true /*Serial Enable*/);
+#endif
 
   initConfig();
   initNetwork();

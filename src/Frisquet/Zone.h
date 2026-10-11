@@ -1,6 +1,6 @@
 #pragma once
 
-#include <heltec.h>
+#include <Board.h>
 #include "../MQTT/MqttManager.h"
 #include "../Logs.h"
 #include "FrisquetDevice.h"

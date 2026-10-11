@@ -1,6 +1,6 @@
 #pragma once
 
-#include "heltec.h"
+#include <Board.h>
 #include "FrisquetRadio.h"
 #include <Preferences.h>
 #include "../MQTT/MqttManager.h"

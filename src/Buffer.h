@@ -1,6 +1,6 @@
 #pragma once
 
-#include <heltec.h>
+#include <Board.h>
 
 class Buffer {
     protected:

@@ -102,6 +102,20 @@ class FrisquetRadio : public Radio {
             bool useReadData = false
         );
 
+    // Attente bornée en temps (et non en nombre de paquets reçus) : les répétitions de la trame
+    // à laquelle on attend une réponse (émise par idDestinataire, même idMessage) sont ignorées.
+    int16_t receiveExpectedWithin(
+            uint8_t idExpediteur,
+            uint8_t idDestinataire,
+            uint8_t idAssociation,
+            uint8_t idMessage,
+            uint8_t idReception,
+            uint8_t type,
+            byte* donnees,
+            size_t& length,
+            uint32_t timeoutMs
+        );
+
     void setNetworkID(NetworkID networkID);
 
     bool popBufferedPacket(byte* donnees, size_t& length);

@@ -314,6 +314,65 @@ int16_t FrisquetRadio::receiveExpected(
     return err;
 }
 
+int16_t FrisquetRadio::receiveExpectedWithin(
+    uint8_t idExpediteur,
+    uint8_t idDestinataire,
+    uint8_t idAssociation,
+    uint8_t idMessage,
+    uint8_t idReception,
+    uint8_t type,
+    byte* donnees,
+    size_t& length,
+    uint32_t timeoutMs
+) {
+    interruptReceive = true;
+
+    byte buff[RADIOLIB_SX126X_MAX_PACKET_LENGTH];
+    int16_t err = RADIOLIB_ERR_RX_TIMEOUT;
+    RadioTrameHeader radioTrameHeader;
+    const uint32_t debut = millis();
+
+    while (millis() - debut < timeoutMs) {
+        if (this->receive(buff, 0) != RADIOLIB_ERR_NONE) {
+            continue;
+        }
+
+        size_t len = this->getPacketLength();
+        if (len < sizeof(radioTrameHeader)) {
+            continue;
+        }
+
+        memcpy(&radioTrameHeader, buff, sizeof(radioTrameHeader));
+
+        // Le satellite répète sa trame en rafale tant que la chaudière n'a pas répondu
+        if (radioTrameHeader.idExpediteur == idDestinataire && radioTrameHeader.idMessage == idMessage) {
+            continue;
+        }
+
+        logRadio(true, (byte*)buff, len);
+
+        if( radioTrameHeader.idExpediteur == idExpediteur &&
+            radioTrameHeader.idDestinataire == idDestinataire &&
+            radioTrameHeader.idMessage == idMessage &&
+            radioTrameHeader.idReception ==  idReception &&
+            radioTrameHeader.type ==  type
+        ) {
+            if(length == 0 || len < length) {
+                length = len;
+            }
+            memcpy(donnees, buff, length);
+            err = RADIOLIB_ERR_NONE;
+            break;
+        }
+
+        bufferUnexpectedPacket(buff, len);
+    }
+
+    interruptReceive = false;
+    startReceive();
+    return err;
+}
+
 void FrisquetRadio::setNetworkID(NetworkID networkID) {
     this->setSyncWord(networkID.bytes, sizeof(networkID.bytes));
 }

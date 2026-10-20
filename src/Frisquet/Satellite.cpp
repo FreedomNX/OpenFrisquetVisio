@@ -452,9 +452,8 @@ bool Satellite::onReceive(byte* donnees, size_t length) {
                 byte buffZones[RADIOLIB_SX126X_MAX_PACKET_LENGTH];
 
                 if(! getEcrasement()) {
-                    delay(300);
-
-                    err = radio().receiveExpected(
+                    // Hydroconfort : le satellite émet en rafale ~7 s avant l'acquittement de la chaudière
+                    err = radio().receiveExpectedWithin(
                         ID_CHAUDIERE,
                         this->getId(),
                         header->idAssociation, 
@@ -463,10 +462,12 @@ bool Satellite::onReceive(byte* donnees, size_t length) {
                         header->type,
                         (byte*) buffZones,
                         lengthRx,
-                        15, true
+                        12000
                     );
                     
                     if(err != RADIOLIB_ERR_NONE) {
+                        info("[SATELLITE Z%d] Pas de réponse chaudière au message %d.", getNumeroZone(), header->idMessage);
+                        setIdMessage(header->idMessage); // ne pas retraiter les répétitions restantes
                         return false;
                     }
 
@@ -497,13 +498,13 @@ bool Satellite::onReceive(byte* donnees, size_t length) {
                         byte i7[4] = {0x00, 0x00, 0x00, 0x00};
                     }* donneesZones = (donneesZones_t*)readBuffer.getBytes(sizeof(donneesZones_t));
 
-                    if(lengthRx < sizeof(donneesZones_t)) {
-                        return false;
+                    // Hydroconfort : la chaudière acquitte avec une réponse courte (9 octets) sans les données de zones,
+                    // seules les valeurs envoyées par le satellite sont alors exploitables
+                    if(lengthRx >= sizeof(donneesZones_t)) {
+                        setEtatChaudiere(donneesZones->etatChaudiere);
+                        Date date = donneesZones->date;
+                        setDate(date);
                     }
-
-                    setEtatChaudiere(donneesZones->etatChaudiere);
-                    Date date = donneesZones->date;
-                    setDate(date);
                 }
 
                 setIdAssociation(header->idAssociation);

@@ -8,5 +8,5 @@ void Radio::init() {
     _radio.setBitRate(25.0);
     _radio.setFrequencyDeviation(50.0);
     _radio.setRxBandwidth(250.0);
-    _radio.setPreambleLength(4);
+    _radio.setPreambleLength(16);
 }

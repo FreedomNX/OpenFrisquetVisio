@@ -46,4 +46,16 @@ private:
   void initMqtt();
   void initPortal();
   void initOta();
+  void initLocalUi();
+  void updateLocalUi();
+  void renderLocalUi();
+  void sleepLocalUi();
+
+  bool _bootBtnLastPressed = false;
+  uint32_t _bootBtnDebounceMs = 0;
+  uint8_t _uiPage = 0;
+  bool _uiAwake = false;
+  uint32_t _uiAwakeUntilMs = 0;
+  uint32_t _uiNextRefreshMs = 0;
+  bool _uiDirty = true;
 };

@@ -27,6 +27,9 @@ public:
   Connect& connect() { return _connect; }
   Chaudiere& chaudiere() { return _chaudiere; }
   SondeExterieure& sondeExterieure() { return _sondeExterieure; }
+  Zone& zone1() { return _zone1; }
+  Zone& zone2() { return _zone2; }
+  Zone& zone3() { return _zone3; }
   Satellite& satelliteZ1() { return _satelliteZ1; }
   Satellite& satelliteZ2() { return _satelliteZ2; }
   Satellite& satelliteZ3() { return _satelliteZ3; }

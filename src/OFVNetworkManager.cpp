@@ -1,6 +1,6 @@
-#include "NetworkManager.h"
+#include "OFVNetworkManager.h"
 
-void NetworkManager::begin(const Options& opts) {
+void OFVNetworkManager::begin(const Options& opts) {
   _opts = opts;
 
   // Mode station only
@@ -25,7 +25,7 @@ void NetworkManager::begin(const Options& opts) {
   startConnect();
 }
 
-void NetworkManager::attachEvents() {
+void OFVNetworkManager::attachEvents() {
   // Un seul callback global, on switch par type d’événement
   _evAny = WiFi.onEvent([this](WiFiEvent_t event, WiFiEventInfo_t info){
     switch (event) {
@@ -63,7 +63,7 @@ void NetworkManager::attachEvents() {
   });
 }
 
-void NetworkManager::startConnect() {
+void OFVNetworkManager::startConnect() {
   if (_opts.ssid.isEmpty()) return;
 
   // Petite protection : si déjà connecté, ne rien faire
@@ -82,7 +82,7 @@ void NetworkManager::startConnect() {
   }
 }
 
-void NetworkManager::scheduleReconnect() {
+void OFVNetworkManager::scheduleReconnect() {
   // Couper proprement avant tentative
   WiFi.disconnect(true, false);
 
@@ -94,7 +94,7 @@ void NetworkManager::scheduleReconnect() {
   if (_failCount < 10) _failCount++;
 }
 
-uint32_t NetworkManager::computeBackoffMs() const {
+uint32_t OFVNetworkManager::computeBackoffMs() const {
   // backoff = min(max, min * 2^failCount) + jitter(0..1s)
   uint32_t base = _opts.reconnectMinMs;
   uint32_t cap  = _opts.reconnectMaxMs;
@@ -106,7 +106,7 @@ uint32_t NetworkManager::computeBackoffMs() const {
   return backoff + jitter;
 }
 
-void NetworkManager::loop() {
+void OFVNetworkManager::loop() {
   // Si connecté, rien à faire ici
   if (WiFi.isConnected()) return;
 
@@ -123,7 +123,7 @@ void NetworkManager::loop() {
   }
 }
 
-void NetworkManager::requestReconnectNow() {
+void OFVNetworkManager::requestReconnectNow() {
   // Force la re-tentative immédiate
   WiFi.disconnect(true, false);
   _tNextAttempt = 0;
@@ -132,7 +132,7 @@ void NetworkManager::requestReconnectNow() {
   startConnect();
 }
 
-String NetworkManager::reasonToString(uint8_t reason) {
+String OFVNetworkManager::reasonToString(uint8_t reason) {
   // Principaux codes (esp_wifi_types.h)
   switch (reason) {
     case WIFI_REASON_UNSPECIFIED: return "unspecified";

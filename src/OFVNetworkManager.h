@@ -3,7 +3,7 @@
 #include <WiFi.h>
 #include "Logs.h"
 
-class NetworkManager {
+class OFVNetworkManager {
 public:
   struct Options {
     // Identification & accès
@@ -29,7 +29,7 @@ public:
     bool wifiSleep = false;
   };
 
-  NetworkManager() = default;
+  OFVNetworkManager() = default;
 
   void begin(const Options& opts);
   void loop();

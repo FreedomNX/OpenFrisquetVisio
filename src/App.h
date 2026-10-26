@@ -5,7 +5,7 @@
 #include "MQTT/MqttManager.h"
 #include "MQTT/MqttDevice.h"
 #include "Config.h"
-#include "NetworkManager.h"
+#include "OFVNetworkManager.h"
 #include "Portal.h"
 #include "Logs.h"
 #include "OTA.h"
@@ -25,7 +25,7 @@ private:
   Config _cfg;
   WiFiClient _wifiClient;
   MqttManager _mqtt;
-  NetworkManager _networkManager;
+  OFVNetworkManager _networkManager;
   OTA _ota;
 
   FrisquetManager _frisquetManager;

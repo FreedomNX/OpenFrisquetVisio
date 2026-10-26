@@ -3,7 +3,7 @@
 #include <WiFi.h>
 #include "Logs.h"
 
-class NetworkManager {
+class OFVNetworkManager {
 public:
   struct Options {
     // Identification & accès
@@ -29,7 +29,7 @@ public:
     bool wifiSleep = false;
   };
 
-  NetworkManager() = default;
+  OFVNetworkManager() = default;
 
   void begin(const Options& opts);
   void loop();
@@ -49,14 +49,26 @@ public:
   // Forcer une reconnexion immédiate (utile après changement de config)
   void requestReconnectNow();
 
+  // Durée écoulée sans IP (0 si connecté)
+  uint32_t offlineForMs() const { return _offlineSinceMs ? (millis() - _offlineSinceMs) : 0; }
+
 private:
   Options _opts;
 
   // État interne
   uint32_t _tConnectStart = 0;    // début de tentative en cours
   uint32_t _tNextAttempt = 0;     // prochain créneau de tentative
+  uint32_t _offlineSinceMs = 0;   // début de la période hors ligne (0 = en ligne)
   uint8_t  _failCount = 0;        // pour le backoff exponentiel
   bool     _everConnected = false;
+
+  void markOffline() { if (!_offlineSinceMs) _offlineSinceMs = millis() ? millis() : 1; }
+
+  // Événements WiFi : le callback système ne fait que poser des drapeaux,
+  // tout appel à l'API WiFi (disconnect/begin) ou aux logs se fait dans loop().
+  volatile bool _evDisconnected = false;
+  volatile bool _evGotIp = false;
+  volatile uint8_t _evReason = 0;
 
   // Callbacks
   std::function<void()> _onConnected;

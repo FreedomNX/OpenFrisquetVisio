@@ -1,6 +1,6 @@
-#include "NetworkManager.h"
+#include "OFVNetworkManager.h"
 
-void NetworkManager::begin(const Options& opts) {
+void OFVNetworkManager::begin(const Options& opts) {
   _opts = opts;
 
   // Mode station only
@@ -22,10 +22,11 @@ void NetworkManager::begin(const Options& opts) {
   }
 
   attachEvents();
+  markOffline();
   startConnect();
 }
 
-void NetworkManager::attachEvents() {
+void OFVNetworkManager::attachEvents() {
   // Un seul callback global, on switch par type d’événement
   _evAny = WiFi.onEvent([this](WiFiEvent_t event, WiFiEventInfo_t info){
     switch (event) {
@@ -38,23 +39,25 @@ void NetworkManager::attachEvents() {
       case ARDUINO_EVENT_WIFI_STA_GOT_IP: {
         _tConnectStart = 0;
         _tNextAttempt = 0;
+        _offlineSinceMs = 0;
         _failCount = 0;
         _everConnected = true;
-
-        if (_onConnected) _onConnected();
+        _evGotIp = true;
         break;
       }
 
       case ARDUINO_EVENT_WIFI_STA_DISCONNECTED: {
-        // Raison de déconnexion
-        uint8_t r = info.wifi_sta_disconnected.reason;
-        String reason = reasonToString(r);
+        markOffline();
+        _evReason = info.wifi_sta_disconnected.reason;
+        _evDisconnected = true;
+        break;
+      }
 
-        if (_onDisconnected) _onDisconnected(reason);
-
-        if (_opts.autoReconnect) {
-          scheduleReconnect();
-        }
+      case ARDUINO_EVENT_WIFI_STA_LOST_IP: {
+        // Associé mais plus d'IP (bail DHCP perdu) : traité comme une coupure
+        markOffline();
+        _evReason = 0xFF;
+        _evDisconnected = true;
         break;
       }
 
@@ -63,7 +66,7 @@ void NetworkManager::attachEvents() {
   });
 }
 
-void NetworkManager::startConnect() {
+void OFVNetworkManager::startConnect() {
   if (_opts.ssid.isEmpty()) return;
 
   // Petite protection : si déjà connecté, ne rien faire
@@ -74,6 +77,10 @@ void NetworkManager::startConnect() {
   info("[WIFI] Connexion au WiFi...");
   WiFi.begin(_opts.ssid.c_str(), _opts.password.c_str());
 
+  // Attente bloquante uniquement au démarrage ; ensuite les tentatives sont
+  // asynchrones pour ne pas geler la radio et le portail à chaque essai.
+  if (_everConnected) return;
+
   uint8_t status = WiFi.waitForConnectResult(10000);
   if(status == WL_CONNECTED) {
     info("[WiFi] Connexion établie.");
@@ -82,9 +89,9 @@ void NetworkManager::startConnect() {
   }
 }
 
-void NetworkManager::scheduleReconnect() {
-  // Couper proprement avant tentative
-  WiFi.disconnect(true, false);
+void OFVNetworkManager::scheduleReconnect() {
+  // Couper la tentative en cours sans éteindre la radio WiFi
+  WiFi.disconnect(false, false);
 
   // Calcule next attempt (backoff exponentiel borné + jitter)
   uint32_t delayMs = computeBackoffMs();
@@ -94,7 +101,7 @@ void NetworkManager::scheduleReconnect() {
   if (_failCount < 10) _failCount++;
 }
 
-uint32_t NetworkManager::computeBackoffMs() const {
+uint32_t OFVNetworkManager::computeBackoffMs() const {
   // backoff = min(max, min * 2^failCount) + jitter(0..1s)
   uint32_t base = _opts.reconnectMinMs;
   uint32_t cap  = _opts.reconnectMaxMs;
@@ -106,7 +113,25 @@ uint32_t NetworkManager::computeBackoffMs() const {
   return backoff + jitter;
 }
 
-void NetworkManager::loop() {
+void OFVNetworkManager::loop() {
+  if (_evGotIp) {
+    _evGotIp = false;
+    _evDisconnected = false;
+    if (_onConnected) _onConnected();
+  }
+
+  if (_evDisconnected) {
+    _evDisconnected = false;
+    String reason = (_evReason == 0xFF) ? String("lost ip") : reasonToString(_evReason);
+    if (_onDisconnected) _onDisconnected(reason);
+    // Notre propre disconnect() et les échecs d'association génèrent aussi des
+    // événements : on ne replanifie que si rien n'est déjà planifié.
+    if (_opts.autoReconnect && !WiFi.isConnected() && !_tNextAttempt) {
+      scheduleReconnect();
+      _tConnectStart = 0;
+    }
+  }
+
   // Si connecté, rien à faire ici
   if (WiFi.isConnected()) return;
 
@@ -120,19 +145,27 @@ void NetworkManager::loop() {
   if (_tNextAttempt && (int32_t)(millis() - _tNextAttempt) >= 0) {
     _tNextAttempt = 0;
     startConnect();
+    return;
+  }
+
+  // Filet de sécurité : hors ligne sans aucune tentative en cours ni planifiée
+  // (événement manqué), on replanifie.
+  if (!_tConnectStart && !_tNextAttempt && _opts.autoReconnect) {
+    markOffline();
+    scheduleReconnect();
   }
 }
 
-void NetworkManager::requestReconnectNow() {
+void OFVNetworkManager::requestReconnectNow() {
   // Force la re-tentative immédiate
-  WiFi.disconnect(true, false);
+  WiFi.disconnect(false, false);
   _tNextAttempt = 0;
   _tConnectStart = 0;
   _failCount = 0;
   startConnect();
 }
 
-String NetworkManager::reasonToString(uint8_t reason) {
+String OFVNetworkManager::reasonToString(uint8_t reason) {
   // Principaux codes (esp_wifi_types.h)
   switch (reason) {
     case WIFI_REASON_UNSPECIFIED: return "unspecified";

@@ -1,14 +1,14 @@
 #pragma once
 #include <Board.h>
 #include <Preferences.h>
-#include "NetworkManager.h"
+#include "OFVNetworkManager.h"
 #include "MQTT/MqttManager.h"
 #include "Frisquet/NetworkID.h"
 #include "RadioSettings.h"
 
 class Config {
     private:
-        NetworkManager::Options _wifiOpts;
+        OFVNetworkManager::Options _wifiOpts;
         MqttManager::Options _mqttOpts;
         NetworkID _networkId;
 
@@ -45,7 +45,7 @@ class Config {
         bool radioLnaBypass() const { return _radioLnaBypass; }
         void radioLnaBypass(bool enabled) { _radioLnaBypass = enabled; }
 
-        NetworkManager::Options& getWiFiOptions() { return _wifiOpts; }
+        OFVNetworkManager::Options& getWiFiOptions() { return _wifiOpts; }
         MqttManager::Options& getMQTTOptions() { return _mqttOpts; }
         NetworkID& getNetworkID() { return _networkId; }
         void setNetworkID(NetworkID networkId) { _networkId = networkId; }

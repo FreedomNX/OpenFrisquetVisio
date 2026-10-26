@@ -5,7 +5,7 @@
 #include "MQTT/MqttManager.h"
 #include "MQTT/MqttDevice.h"
 #include "Config.h"
-#include "NetworkManager.h"
+#include "OFVNetworkManager.h"
 #include "Portal.h"
 #include "Logs.h"
 #include "OTA.h"
@@ -25,7 +25,7 @@ private:
   Config _cfg;
   WiFiClient _wifiClient;
   MqttManager _mqtt;
-  NetworkManager _networkManager;
+  OFVNetworkManager _networkManager;
   OTA _ota;
 
   FrisquetManager _frisquetManager;
@@ -36,9 +36,17 @@ private:
   // Radio
   FrisquetRadio _radio;
 
-  // AP fallback after disconnect
-  bool _apFallbackArmed = false;
-  uint32_t _apFallbackAtMs = 0;
+  // Politique hors ligne : AP de secours après 5 min, redémarrage après 10 min
+  static constexpr uint32_t kApFallbackAfterMs = 5UL * 60UL * 1000UL;
+  static constexpr uint32_t kRestartAfterOfflineMs = 10UL * 60UL * 1000UL;
+  bool _apFallbackStarted = false;
+  bool _wifiConfigured = false;
+
+  // La gestion WiFi tourne dans sa propre tâche : la boucle principale peut
+  // rester bloquée plusieurs minutes par les échanges radio (retries).
+  TaskHandle_t _wifiTask = nullptr;
+  static void wifiTaskEntry(void* self);
+  void wifiLoop();
 
   // Étapes
   void initConfig();

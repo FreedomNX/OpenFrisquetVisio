@@ -13,6 +13,7 @@ public:
 
   // startApFallbackIfNoWifi = monte un AP "ESP32-Setup" si pas de Wi-Fi actif
   void begin(bool startApFallbackIfNoWifi = false);
+  void startAp();
   void loop();
 
 private:
@@ -88,7 +89,6 @@ private:
   bool hexStringToBufferRaw(const String& hex, uint8_t* buffer, size_t maxLen, size_t& outLen);
 
   // AP
-  void startAp();
 
   String _lastUpdateError;
 };

@@ -249,6 +249,25 @@ constexpr uint8_t KCT8103L_CTX_PIN = GPIO_NUM_5;
 }
 #endif
 
+#if defined(WIFI_LORA_32_V4) && defined(USE_GC1109_PA)
+// Heltec WiFi LoRa 32 V4 avec FEM GC1109 : alimentation GPIO7, enable GPIO2,
+// sélection TX GPIO46 (LOW = réception, HIGH = émission).
+namespace {
+constexpr uint8_t GC1109_POWER_PIN = GPIO_NUM_7;
+constexpr uint8_t GC1109_ENABLE_PIN = GPIO_NUM_2;
+constexpr uint8_t GC1109_TX_EN_PIN = GPIO_NUM_46;
+const uint32_t gc1109RfSwitchPins[Module::RFSWITCH_MAX_PINS] = {
+    GC1109_TX_EN_PIN, RADIOLIB_NC, RADIOLIB_NC, RADIOLIB_NC, RADIOLIB_NC
+};
+const Module::RfSwitchMode_t gc1109RfSwitchTable[] = {
+    { Module::MODE_IDLE, { LOW } },
+    { Module::MODE_RX,   { LOW } },
+    { Module::MODE_TX,   { HIGH } },
+    END_OF_MODE_TABLE,
+};
+}
+#endif
+
 Radio::Radio() : _radio(new Module(RADIO_NSS, RADIO_IRQ, RADIO_RST, RADIO_GPIO)) {}
 
 void Radio::init(float rxBandwidth, bool lnaBypass) {
@@ -281,6 +300,14 @@ void Radio::init(float rxBandwidth, bool lnaBypass) {
         _radio.setRfSwitchPins(RADIOLIB_NC, KCT8103L_CTX_PIN);
     }
     info("[RADIO] KCT8103L : bypass du LNA %s en réception.", lnaBypass ? "activé" : "désactivé");
+#endif
+#if defined(WIFI_LORA_32_V4) && defined(USE_GC1109_PA)
+    pinMode(GC1109_POWER_PIN, OUTPUT);
+    digitalWrite(GC1109_POWER_PIN, HIGH);
+    pinMode(GC1109_ENABLE_PIN, OUTPUT);
+    digitalWrite(GC1109_ENABLE_PIN, HIGH);
+    _radio.setRfSwitchTable(gc1109RfSwitchPins, gc1109RfSwitchTable);
+    info("[RADIO] GC1109 : FEM alimenté, TX_EN sur GPIO%d.", GC1109_TX_EN_PIN);
 #endif
 
     const int16_t initResult = _radio.beginFSK();

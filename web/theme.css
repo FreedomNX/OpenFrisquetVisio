@@ -1,0 +1,32 @@
+:root{color-scheme:light}
+:root[data-theme="dark"]{
+  color-scheme:dark;
+  --bg:#101722;--surface:#1b2635;--card:#1b2635;--soft:#222f40;--surface-soft:#222f40;
+  --text:#e4ebf5;--txt:#e4ebf5;--muted:#a8b6ca;--border:#3a4b62;--bd:#3a4b62;
+  --navy:#a9d4ff;--acc:#a9d4ff;--blue:#63c5ff;--green:#70d8a4;--ok:#70d8a4;
+  --red:#ff9e94;--orange:#ffc071;--warn:#ffc071;--reduced:#30445e;--comfort:#c88b31;
+  --shadow:0 12px 32px rgba(0,0,0,.2)
+}
+html[data-theme="dark"] body{background:var(--bg);color:var(--text)}
+html[data-theme="dark"] :is(.topbar,.btn,.tool,.diagnostic,.empty,.day-name,.tab.active){background:var(--surface)}
+html[data-theme="dark"] .hero-main{background:linear-gradient(135deg,var(--surface),#20374d)}
+html[data-theme="dark"] :is(.btn.primary,.login button){background:#245c92;border-color:#3678b5;color:#fff}
+html[data-theme="dark"] :is(input,select){background:var(--soft);color:var(--text);border-color:var(--border)}
+html[data-theme="dark"] :is(.badge,.msg,.tabs){background:var(--soft)}
+html[data-theme="dark"] :is(.tab,.field label){color:var(--text)}
+html[data-theme="dark"] :is(.state-icon,.mode){background:#203e55;color:#8fd8ff}
+html[data-theme="dark"] .zone-value{border-color:var(--border)}
+html[data-theme="dark"] .status{background:var(--soft);color:var(--muted)}
+html[data-theme="dark"] :is(.status.ok,.message){background:#183e32;color:var(--green)}
+html[data-theme="dark"] .status.warn{background:#45341e;color:var(--orange)}
+html[data-theme="dark"] :is(.status.bad,.message.error){background:#49282b;color:var(--red)}
+html[data-theme="dark"] :is(.error,.msg.err){color:var(--red)}
+html[data-theme="dark"] .btn.comfort{background:#514023}
+html[data-theme="dark"] .btn.reduced{background:var(--reduced)}
+html[data-theme="dark"] :is(.slot,.swatch){border-color:var(--border)}
+html[data-theme="dark"] .slot.comfort{border-color:#dba84c}
+html[data-theme="dark"] .empty{border-color:var(--border)}
+html[data-theme="dark"] .logo{background:#fff;border-radius:8px;padding:5px}
+html[data-theme="dark"] .login main{background:var(--surface);border-color:var(--border)}
+html[data-theme="dark"] .login h1{color:var(--navy)}
+html[data-theme="dark"] .login p:not(.error){color:var(--muted)}

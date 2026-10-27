@@ -9,6 +9,8 @@ WEB_DIR = os.path.join(PROJECT_DIR, "web")
 OUTPUT_PATH = os.path.join(PROJECT_DIR, "src", "generated", "WebAssets.h")
 
 ASSETS = (
+    ("THEME_CSS", "theme.css"),
+    ("THEME_JS", "theme.js"),
     ("LOGIN_HTML", "login.html"),
     ("INDEX_HTML", "index.html"),
     ("SETTINGS_HTML", "settings.html"),

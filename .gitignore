@@ -20,3 +20,5 @@ tests/*
 !tests/boiler-state.test.mjs
 
 !tests/test_sx1276_radio.py
+
+!tests/portal-theme.test.mjs

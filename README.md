@@ -55,6 +55,7 @@ Deux modes possibles :
 
 ### 🌐 Portail Web intégré
 - Configuration du **WiFi** et du **MQTT**
+- **Apparence du portail** : choix Clair, Sombre ou Auto dans **Paramètres → Système**. Auto utilise l’heure locale du navigateur : clair de 7 h à 20 h, sombre le reste du temps. Le choix est appliqué immédiatement sur toutes les pages, connexion comprise, et mémorisé par navigateur sans redémarrage de l’appareil.
 - **Programmation hebdomadaire** : créneaux Confort/Réduit de 30 minutes, copie de journées et sauvegarde persistante pour les zones pilotées par un Connect actif ou un satellite virtuel. Accessible depuis le tableau de bord ou `/programming`.
 - Visualisation des **logs**
 - Informations système et réseau

@@ -22,6 +22,8 @@
     @media(max-width:760px){.tabs{grid-template-columns:1fr 1fr}.grid-2,.grid-3,.system-grid,.tools{grid-template-columns:1fr}.panel{padding:18px}.page-head{align-items:flex-start;flex-direction:column}}
     @media(max-width:480px){.shell{width:calc(100% - 20px)}.logo{width:185px}.back-label{display:none}.tabs{gap:5px;padding:5px}.tab{font-size:13px}}
   </style>
+  <link rel="stylesheet" href="/theme.css">
+  <script src="/theme.js"></script>
 </head>
 <body>
   <header class="topbar"><div class="shell topbar-inner"><a href="/"><img class="logo" src="/logo.png" alt="OpenFrisquetVisio"></a><a class="btn" href="/">← <span class="back-label">Tableau de bord</span></a></div></header>
@@ -53,6 +55,11 @@
 
       <section class="panel" data-panel="system"><h2>Système</h2><p class="intro">État de l’appareil, maintenance et mise à jour du firmware.</p>
         <div class="system-grid"><div class="system-card"><span>Version</span><strong>{{OPENFRISQUETVISIO_VERSION}}</strong></div><div class="system-card"><span>Adresse IP</span><strong id="systemIp">—</strong></div><div class="system-card"><span>Durée de fonctionnement</span><strong id="systemUptime">—</strong></div><div class="system-card"><span>Mémoire libre</span><strong id="systemHeap">—</strong></div><div class="system-card"><span>Signal Wi‑Fi</span><strong id="systemRssi">—</strong></div><div class="system-card"><span>Dernier redémarrage</span><strong id="systemReset">—</strong></div></div>
+        <div class="subsection"><h3>Apparence</h3>
+          <div class="field"><label for="portalTheme">Style du portail</label><select id="portalTheme" aria-describedby="portalThemeHelp portalThemeStatus"><option value="light">Clair</option><option value="dark">Sombre</option><option value="auto">Auto (selon l’heure)</option></select>
+          <span class="hint" id="portalThemeHelp">Auto : clair de 7 h à 20 h, sombre le reste du temps, selon l’heure locale de ce navigateur. Le choix est appliqué immédiatement et mémorisé sur ce navigateur, sans redémarrage.</span>
+          <span class="hint" id="portalThemeStatus" role="status"></span></div>
+        </div>
         <div class="subsection"><h3>Accès au portail</h3>
           <p class="hint">Laissez les deux champs vides pour conserver le mot de passe actuel.</p>
           <div class="grid-2">

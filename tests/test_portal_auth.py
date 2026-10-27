@@ -32,8 +32,8 @@ methods = [extract(signature) for signature in (
     "void Portal::handleLogout(", "void Portal::onAuthenticated(", "void Portal::begin(",
 )]
 begin = methods[-1]
-# Only the login form and login submission may be public registrations.
-assert re.findall(r'_srv\.on\("([^"]+)"', begin) == ["/login", "/login"]
+# Only login and shared visual resources are public registrations.
+assert re.findall(r'_srv\.on\("([^"]+)"', begin) == ["/theme.css", "/theme.js", "/login", "/login"]
 assert 'if (!requireAuthentication()) return;' in begin
 assert '"Cookie"' in begin
 assert "portalPassword" not in extract("void Portal::handleGetConfig(")
@@ -133,6 +133,7 @@ struct WebServer {
         if(!strcmp(name,"Set-Cookie"))cookieOut=value;
         if(!strcmp(name,"Cache-Control"))cache=value;
     }
+    void send_P(int status,const char* type,const char* content){send(status,type,content);}
     void send(int status,const char* =nullptr,const String& content=String()){code=status;body=content;}
     void prepare(const char* uri,HTTPMethod method,const String& cookies=String()){
         requestUri=uri;requestMethod=method;cookie=cookies;
@@ -148,7 +149,7 @@ uint64_t nowMs=100;uint32_t millis(){return static_cast<uint32_t>(nowMs);}
 int64_t esp_timer_get_time(){return nowMs*1000;}
 void esp_fill_random(void* buffer,size_t n){static uint8_t seed=1;auto* p=static_cast<uint8_t*>(buffer);for(size_t i=0;i<n;++i)p[i]=seed+i;++seed;}
 void info(const char*,...){}
-namespace WebAssets { const char* LOGIN_HTML="<form><input type=password name=password>{{LOGIN_ERROR}}</form>"; }
+namespace WebAssets { const char* THEME_CSS="theme css"; const char* THEME_JS="theme js"; const char* LOGIN_HTML="<form><input type=password name=password>{{LOGIN_ERROR}}</form>"; }
 #define FPSTR(x) x
 '''
 declarations = "\n".join(method.split("{", 1)[0].replace("Portal::", "", 1).strip() + ";" for method in methods)
@@ -169,10 +170,12 @@ int main(){
     config._preferences.stored="";config.load();assert(config.portalPassword()=="admin");
     FrisquetManager fm;Portal p(fm);p.begin(false);assert(p._srv.cookiesCollected);
     for(size_t i=0;i<p._srv.count;++i){
-        auto& r=p._srv.routes[i];if(r.uri=="/login")continue;
+        auto& r=p._srv.routes[i];if(r.uri=="/login"||r.uri=="/theme.css"||r.uri=="/theme.js")continue;
         p._srv.prepare(r.uri.c_str(),r.method);int before=p.handled;r.handler.run();
         assert(p.handled==before);assert(p._srv.code==(r.uri.startsWith("/api/")?401:303));
     }
+    p._srv.prepare("/theme.css",HTTP_GET);p._srv.dispatch();assert(p._srv.code==200&&p._srv.body=="theme css");
+    p._srv.prepare("/theme.js",HTTP_GET);p._srv.dispatch();assert(p._srv.code==200&&p._srv.body=="theme js");
     p._srv.prepare("/login",HTTP_GET);p._srv.dispatch();assert(p._srv.code==200);
     for(int i=0;i<5;++i){p._srv.prepare("/login",HTTP_POST);p._srv.password="wrong";p._srv.dispatch();assert(p._srv.code==(i==4?429:401));assert(p._srv.cookieOut.isEmpty());}
     p._srv.prepare("/login",HTTP_POST);p._srv.password="admin";p._srv.dispatch();assert(p._srv.code==429);

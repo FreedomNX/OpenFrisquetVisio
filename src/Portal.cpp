@@ -302,6 +302,15 @@ void Portal::begin(bool startApFallbackIfNoWifi) {
 
   const char* headerKeys[] = {"Cookie"};
   _srv.collectHeaders(headerKeys, 1);
+  // Ressources visuelles publiques : nécessaires avant l’authentification.
+  _srv.on("/theme.css", HTTP_GET, [this] {
+    _srv.sendHeader("Cache-Control", "no-cache");
+    _srv.send_P(200, "text/css; charset=utf-8", WebAssets::THEME_CSS);
+  });
+  _srv.on("/theme.js", HTTP_GET, [this] {
+    _srv.sendHeader("Cache-Control", "no-cache");
+    _srv.send_P(200, "application/javascript; charset=utf-8", WebAssets::THEME_JS);
+  });
   _srv.on("/login", HTTP_GET, [this] { handleLoginPage(); });
   _srv.on("/login", HTTP_POST, [this] { handleLogin(); });
   onAuthenticated("/logout", HTTP_POST, &Portal::handleLogout);

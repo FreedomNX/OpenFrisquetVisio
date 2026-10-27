@@ -8,7 +8,7 @@
     :root{--bg:#f3f6fa;--surface:#fff;--text:#172033;--muted:#687386;--border:#dce3ec;--navy:#07305f;--comfort:#e9a33b;--reduced:#e8eef6;--shadow:0 12px 32px rgba(31,48,75,.08)}
     *{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text);font:15px/1.5 system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif}a{color:inherit;text-decoration:none}button,select{font:inherit}button{cursor:pointer}button:disabled,select:disabled{cursor:default;opacity:.55}button:focus-visible,select:focus-visible,a:focus-visible{outline:3px solid #0798df;outline-offset:3px}
     .shell{width:min(1180px,calc(100% - 32px));margin:auto}.topbar{background:#fff;border-bottom:1px solid var(--border)}.topbar-inner{min-height:76px;display:flex;align-items:center;justify-content:space-between;gap:18px}.logo{display:block;width:250px;max-width:55vw}main{padding:30px 0 44px}h1,h2,p{margin-top:0}h1{color:var(--navy);font-size:clamp(27px,4vw,36px);margin-bottom:8px}h2{color:var(--navy);font-size:18px}.intro{color:var(--muted);max-width:780px}.panel{background:var(--surface);border:1px solid var(--border);border-radius:20px;padding:22px;box-shadow:var(--shadow);margin-top:18px}.row{display:flex;align-items:center;flex-wrap:wrap;gap:12px}.between{justify-content:space-between}.btn{display:inline-flex;align-items:center;justify-content:center;min-height:42px;padding:9px 15px;border:1px solid var(--border);border-radius:12px;background:#fff;color:var(--navy);font-weight:700}.btn.primary{background:var(--navy);color:#fff;border-color:var(--navy)}.btn.selected{outline:2px solid var(--navy);outline-offset:2px}.btn.comfort{background:#fff0d7}.btn.reduced{background:var(--reduced)}select{padding:9px 12px;background:#fff;color:var(--text);border:1px solid var(--border);border-radius:10px}label{font-weight:650}.hint{font-size:13px;color:var(--muted);margin:12px 0 0}.message{margin-top:14px;padding:12px 15px;border-radius:12px;background:#edf7fd;color:var(--navy)}.message.error{background:#ffebe8;color:#b42318}.message:empty{display:none}.status{font-size:13px;color:var(--muted)}fieldset{border:0;padding:0;margin:0;min-width:0}
-    .timeline{overflow-x:auto;margin:20px -4px 0;padding:4px 4px 12px}.week{min-width:1040px}.hours{display:grid;grid-template-columns:110px repeat(6,1fr) 24px;align-items:center;color:var(--muted);font-size:12px;margin-bottom:8px}.day-row{display:grid;grid-template-columns:110px 1fr;align-items:center;margin:8px 0}.hours>span:last-child{text-align:right}.day-name{font-weight:750;color:var(--navy);position:sticky;left:0;z-index:2;background:#fff}.slots{display:grid;grid-template-columns:repeat(48,minmax(0,1fr));gap:2px}.slot{border:1px solid #d4deeb;border-radius:4px;height:34px;padding:0;background:var(--reduced);touch-action:none}.slot.comfort{background:var(--comfort);border-color:#d6902b}.slot:nth-child(8n+1){box-shadow:-2px 0 0 #9faec0}.slot:focus-visible{position:relative;z-index:1}.summaries{margin-top:16px;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}.summary{font-size:13px;color:var(--muted)}.summary strong{color:var(--navy)}.swatch{display:inline-block;width:12px;height:12px;border:1px solid #d4deeb;border-radius:3px;margin-right:5px}.swatch.comfort{background:var(--comfort)}.swatch.reduced{background:var(--reduced)}.save-row{margin-top:22px;padding-top:18px;border-top:1px solid var(--border)}footer{text-align:center;color:var(--muted);font-size:12px;padding:0 16px 28px}
+    .timeline{overflow-x:auto;margin:20px -4px 0;padding:4px 4px 12px}.week{min-width:1040px}.hours{display:grid;grid-template-columns:110px 1fr;position:relative;align-items:center;color:var(--muted);font-size:12px;margin-bottom:8px}.day-row{display:grid;grid-template-columns:110px 1fr;align-items:center;margin:8px 0}.hours>span:last-child{position:absolute;right:0}.day-name{font-weight:750;color:var(--navy);position:sticky;left:0;z-index:2;background:#fff}.slots,.marks{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:6px}.marks>span{justify-self:start}.marks>span+span{transform:translateX(calc(-50% - 3px))}.group{display:grid;grid-template-columns:repeat(8,minmax(0,1fr));gap:2px;position:relative}.group+.group::before{content:'';position:absolute;top:-5px;bottom:-5px;left:-4px;border-left:2px solid var(--navy)}html[data-theme="dark"] .group+.group::before{border-color:#627d9a}.slot{border:1px solid #d4deeb;border-radius:4px;height:34px;padding:0;background:var(--reduced);touch-action:none;position:relative}.slot.comfort{background:var(--comfort);border-color:#d6902b}.now{position:absolute;top:-5px;bottom:-5px;margin-left:-1px;border-left:2px solid #d92d20;pointer-events:none;z-index:1}.slot:focus-visible{z-index:1}.summaries{margin-top:16px;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}.summary{font-size:13px;color:var(--muted)}.summary strong{color:var(--navy)}.swatch{display:inline-block;width:12px;height:12px;border:1px solid #d4deeb;border-radius:3px;margin-right:5px}.swatch.comfort{background:var(--comfort)}.swatch.reduced{background:var(--reduced)}.save-row{margin-top:22px;padding-top:18px;border-top:1px solid var(--border)}footer{text-align:center;color:var(--muted);font-size:12px;padding:0 16px 28px}
     @media(max-width:600px){.shell{width:calc(100% - 20px)}.panel{padding:16px}.logo{width:185px}.back-label{display:none}.summaries{grid-template-columns:1fr}.row{gap:9px}.timeline{margin-right:-10px}.save-row .btn{flex:1}}
   </style>
   <link rel="stylesheet" href="/theme.css">
@@ -26,7 +26,7 @@
       <fieldset id="editor" disabled aria-label="Éditeur de programmation">
         <div class="row" style="margin-top:20px"><span>Peindre les créneaux :</span><button type="button" class="btn comfort selected" id="comfort" aria-pressed="true">☀ Confort</button><button type="button" class="btn reduced" id="reduced" aria-pressed="false">☾ Réduit</button></div>
         <p class="hint">Cliquez ou glissez sur les créneaux pour appliquer le profil choisi. Au clavier, utilisez Tab puis Entrée ou Espace. Sur mobile, faites défiler la grille horizontalement entre les lignes.</p>
-        <div class="timeline" tabindex="0" aria-label="Grille hebdomadaire, défilement horizontal"><div class="week"><div class="hours"><span></span><span>00:00</span><span>04:00</span><span>08:00</span><span>12:00</span><span>16:00</span><span>20:00</span><span>24:00</span></div><div id="grid"></div></div></div>
+        <div class="timeline" tabindex="0" aria-label="Grille hebdomadaire, défilement horizontal"><div class="week"><div class="hours"><span></span><div class="marks"><span>00:00</span><span>04:00</span><span>08:00</span><span>12:00</span><span>16:00</span><span>20:00</span></div><span>24:00</span></div><div id="grid"></div></div></div>
         <div class="row"><span><i class="swatch comfort"></i>Confort</span><span><i class="swatch reduced"></i>Réduit</span></div>
         <div class="summaries" id="summaries"></div>
         <div style="margin-top:24px"><h2>Appliquer à plusieurs journées</h2><div class="row"><label for="copyFrom">Copier</label><select id="copyFrom"></select><label for="copyTo">vers</label><select id="copyTo"><option value="all">Toute la semaine</option><option value="work">Lundi à vendredi</option><option value="weekend">Samedi et dimanche</option></select><button type="button" class="btn" id="copy">Copier la journée</button></div><div class="row" style="margin-top:12px"><button type="button" class="btn comfort" id="allComfort">Toute la semaine en Confort</button><button type="button" class="btn reduced" id="allReduced">Toute la semaine en Réduit</button></div></div>
@@ -60,7 +60,7 @@
       }
       return ranges.length ? ranges.join(', ') : 'Aucune période Confort';
     }
-    let zones=[],selected=null,draft=null,original='',revision='',dirty=false,brush=true,painting=false,busy=false,loading=false;
+    let zones=[],selected=null,draft=null,original='',revision='',dirty=false,brush=true,painting=false,busy=false,loading=false,polling=false;
     function message(text,error=false) { $('#message').textContent=text; $('#message').className='message'+(error?' error':''); }
     function selectBrush(value) {
       brush=value; for(const [id,active] of [['comfort',value],['reduced',!value]]) {
@@ -85,12 +85,22 @@
         const row=document.createElement('div');row.className='day-row';
         const name=document.createElement('span');name.className='day-name';name.textContent=DAYS[day];row.append(name);
         const slots=document.createElement('div');slots.className='slots';slots.setAttribute('role','group');slots.setAttribute('aria-label',DAYS[day]);
+        let group;
         for(let slot=0;slot<48;slot++) {
-          const button=document.createElement('button');button.type='button';button.className='slot';button.dataset.day=day;button.dataset.slot=slot;slots.append(button);
+          if(slot%8===0) {group=document.createElement('div');group.className='group';slots.append(group);}
+          const button=document.createElement('button');button.type='button';button.className='slot';button.dataset.day=day;button.dataset.slot=slot;group.append(button);
         }
         row.append(slots);$('#grid').append(row);
       }
-      refreshGrid();
+      updateNow();refreshGrid();
+    }
+    // Repère de l’heure actuelle (horloge du navigateur) sur la ligne du jour.
+    function updateNow() {
+      $('#grid .now')?.remove();
+      const now=new Date(),minutes=now.getHours()*60+now.getMinutes();
+      const button=$('#grid .slot[data-day="'+now.getDay()+'"][data-slot="'+Math.floor(minutes/30)+'"]');
+      if(!button) return;
+      const bar=document.createElement('i');bar.className='now';bar.style.left=(minutes%30)/30*100+'%';button.append(bar);
     }
     function refreshGrid() {
       if(!draft) return;
@@ -116,16 +126,21 @@
       original=zone.program;revision=zone.revision;draft=decodeProgram(zone.program);dirty=false;$('#zone').value=String(id);message('');renderGrid();
     }
     async function load({manual=false}={}) {
-      if(busy || loading || painting) return;
+      if(busy || loading || painting || (!manual && (polling || document.hidden))) return;
       if(manual && dirty && !confirm('Abandonner les modifications non enregistrées et recharger ?')) return;
-      loading=true;refreshControls();
+      // Le rafraîchissement automatique ne désactive pas l’éditeur, pour éviter un clignotement toutes les 5 s.
+      if(manual) {loading=true;refreshControls();} else polling=true;
       try {
         const response=await fetch('/api/programming',{cache:'no-store'});const data=await response.json();
+        if(busy) return;
         if(!response.ok || !data.ok) throw new Error(data.err || 'Chargement impossible.');
         const incoming=(data.zones||[]).filter(zone=>zone.enabled);
         for(const zone of incoming) decodeProgram(zone.program);
-        zones=incoming;$('#zone').replaceChildren();
-        for(const zone of zones) {const option=document.createElement('option');option.value=zone.id;option.textContent='Zone '+zone.id;$('#zone').append(option);}
+        const ids=incoming.map(zone=>String(zone.id)).join();zones=incoming;
+        if(ids!==[...$('#zone').options].map(option=>option.value).join()) {
+          $('#zone').replaceChildren();
+          for(const zone of zones) {const option=document.createElement('option');option.value=zone.id;option.textContent='Zone '+zone.id;$('#zone').append(option);}
+        }
         if(!zones.length) {selected=null;$('#availability').textContent='Aucune zone de chauffage activée.';refreshControls();return;}
         if(!zones.some(zone=>zone.id===selected)) {
           if(dirty && !manual) {message('La zone a été désactivée. Rechargez pour choisir une autre zone.',true);refreshControls();return;}
@@ -133,7 +148,7 @@
         } else if(manual || (!dirty && zones.find(zone=>zone.id===selected).revision!==revision)) showZone(selected);
         else {$('#zone').value=String(selected);refreshControls();if(zones.find(zone=>zone.id===selected).revision!==revision) message('La programmation a changé ailleurs. Vos modifications sont conservées ; rechargez avant d’enregistrer.',true);}
       } catch(error) {message(error.message || 'Impossible de charger la programmation.',true);}
-      finally {loading=false;refreshControls();}
+      finally {if(manual) loading=false; else polling=false;refreshControls();}
     }
     async function save() {
       if(busy || loading || (!dirty && zones.find(zone=>zone.id===selected)?.known) || $('#editor').disabled) return;
@@ -165,7 +180,7 @@
     $('#zone').addEventListener('change',()=>{const id=Number($('#zone').value);if(dirty && !confirm('Abandonner les modifications non enregistrées de cette zone ?')){$('#zone').value=String(selected);return;}showZone(id);});
     $('#reload').addEventListener('click',()=>load({manual:true}));$('#save').addEventListener('click',save);
     window.addEventListener('beforeunload',event=>{if(dirty){event.preventDefault();event.returnValue='';}});
-    load();setInterval(load,5000);
+    load();setInterval(load,5000);setInterval(updateNow,60000);
   </script>
 </body>
 </html>

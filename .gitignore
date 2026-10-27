@@ -9,6 +9,7 @@ platformio.ini
 docs/
 tools/*
 !tools/generate_web_assets.py
+!tools/version.py
 tests/*
 !tests/test_radio_crc.py
 !tests/radio_crc_test.cpp

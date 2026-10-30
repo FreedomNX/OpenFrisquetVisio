@@ -68,8 +68,9 @@ bool Connect::envoyerZone(Zone& zone) {
         temperature8 temperatureHorsGel;     // Début 5°C -> 0 = 50 = 5°C - MAX Hors gel
         uint8_t mode = 0x00; 
         byte modeOptions = 0b00000100;
-        // Hypothèse : mêmes bits de mode que Satellite::MODE (voir Zone.h).
-        // 0x10 Hors Gel, 0x04 Auto, 0x02 Dérogation, 0x01 Confort.
+        // Même format que l'octet A02F du satellite (voir Zone.h et Satellite.h).
+        // Un Connect réel envoie ici la dernière valeur A02F lue (0x25 en Auto) ;
+        // le firmware conserve 0x04 pour Auto en attendant validation sur chaudière.
         // Boost (0x40) et bits non interprétés conservés par Zone::setMode().
         byte inconnu1 = 0x00;
         Zone::Programmation programmation;

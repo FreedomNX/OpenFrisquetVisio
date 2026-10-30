@@ -654,67 +654,38 @@ void Satellite::setMode(Satellite::MODE mode) {
     }
 }
 
-Satellite::MODE Satellite::decodeModeFromRaw(uint8_t rawMode, bool* compatConnect) const {
-    auto decodeDirect = [](uint8_t modeValue) -> MODE {
-        switch (modeValue) {
-            case MODE::REDUIT_PERMANENT:
-            case MODE::CONFORT_PERMANENT:
-            case MODE::REDUIT_DEROGATION:
-            case MODE::CONFORT_DEROGATION:
-            case MODE::REDUIT_AUTO:
-            case MODE::CONFORT_AUTO:
-            case MODE::HORS_GEL:
-                return (MODE)modeValue;
-            default:
-                return MODE::INCONNU;
-        }
-    };
-
-    MODE direct = decodeDirect(rawMode);
-    if (direct != MODE::INCONNU) {
-        if (compatConnect) {
-            *compatConnect = false;
-        }
-        return direct;
+Satellite::MODE Satellite::decodeModeFromRaw(uint8_t rawMode) const {
+    if (rawMode == MODE::HORS_GEL) {
+        return MODE::HORS_GEL;
+    }
+    if (rawMode & ~MODE_BITS_CONNUS) {
+        return MODE::INCONNU;
     }
 
-    uint8_t xorMode = rawMode ^ MODE_CONNECT_COMPAT_XOR;
-    MODE decodedXor = decodeDirect(xorMode);
-    if (decodedXor != MODE::INCONNU) {
-        if (compatConnect) {
-            *compatConnect = true;
-        }
-        return decodedXor;
+    // Le bit 0x04 est un état interne du satellite : il ne distingue pas
+    // Auto de permanent et n'est pas interprété.
+    const bool confort = (rawMode & MODE_BIT_CONFORT) != 0;
+    if (rawMode & MODE_BIT_DEROGATION) {
+        return confort ? MODE::CONFORT_DEROGATION : MODE::REDUIT_DEROGATION;
     }
-
-    if (compatConnect) {
-        *compatConnect = false;
+    if (rawMode & MODE_BIT_AUTO) {
+        return confort ? MODE::CONFORT_AUTO : MODE::REDUIT_AUTO;
     }
-    return MODE::INCONNU;
+    return confort ? MODE::CONFORT_PERMANENT : MODE::REDUIT_PERMANENT;
 }
 
 uint8_t Satellite::encodeModeForSend(Satellite::MODE mode) const {
-    uint8_t rawMode = (uint8_t)mode;
-    if (_modeCompatConnect) {
-        rawMode ^= MODE_CONNECT_COMPAT_XOR;
-    }
-    return rawMode;
+    return (uint8_t)mode;
 }
 
 void Satellite::setModeFromRaw(uint8_t rawMode) {
-    bool compatConnect = false;
-    MODE decodedMode = decodeModeFromRaw(rawMode, &compatConnect);
-    _modeCompatConnect = compatConnect;
+    MODE decodedMode = decodeModeFromRaw(rawMode);
 
     if (decodedMode == MODE::INCONNU) {
         char hexMode[5];
         snprintf(hexMode, sizeof(hexMode), "%02X", rawMode);
         warning(String("[SATELLITE Z") + String(getNumeroZone()) + "] Mode satellite inconnu: 0x" + String(hexMode));
         return;
-    }
-
-    if (_modeCompatConnect) {
-        debug("[SATELLITE Z%d] Mode avec compatibilité Connect détectée (XOR 0x20).", getNumeroZone());
     }
 
     setMode(decodedMode);

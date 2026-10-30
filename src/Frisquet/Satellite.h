@@ -10,15 +10,31 @@
 class Satellite : public FrisquetDevice {
     
     public:
-        static constexpr uint8_t MODE_CONNECT_COMPAT_XOR = 0x20;
+        // Octet « mode » écrit par le satellite en A02F (4e mot), observé sur
+        // satellite physique piloté par le boîtier et par l'appli Connect :
+        //   0x20 Auto (programme en cours), absent en Confort/Réduit permanent ;
+        //   0x02 Dérogation en cours ;
+        //   0x01 Confort (1) / Réduit (0) ;
+        //   0x04 état interne sans rapport avec le mode : effacé pendant ~3 h
+        //        après un changement (passage programmé en réduit, réécriture du
+        //        programme, redémarrage, retour en Auto) puis remis seul ;
+        //   0x10 Hors Gel.
+        static constexpr uint8_t MODE_BIT_CONFORT = 0x01;
+        static constexpr uint8_t MODE_BIT_DEROGATION = 0x02;
+        static constexpr uint8_t MODE_BIT_ETAT_INTERNE = 0x04;
+        static constexpr uint8_t MODE_BIT_AUTO = 0x20;
+        static constexpr uint8_t MODE_BITS_CONNUS = MODE_BIT_CONFORT | MODE_BIT_DEROGATION | MODE_BIT_ETAT_INTERNE | MODE_BIT_AUTO;
 
+        // Valeurs émises : celles observées sur un satellite physique en régime
+        // établi (Auto, Confort permanent, Réduit permanent, dérogation réduit) ;
+        // la dérogation confort reprend la valeur demandée par le Connect.
         enum MODE : uint8_t {
             REDUIT_PERMANENT = 0x00,
-            CONFORT_PERMANENT = 0x01,
-            REDUIT_DEROGATION = 0x02,
-            CONFORT_DEROGATION = 0x03,
-            REDUIT_AUTO = 0x04,
-            CONFORT_AUTO = 0x05,
+            CONFORT_PERMANENT = 0x05,
+            REDUIT_DEROGATION = 0x22,
+            CONFORT_DEROGATION = 0x23,
+            REDUIT_AUTO = 0x24,
+            CONFORT_AUTO = 0x25,
             HORS_GEL = 0x10,
             INCONNU = 0xFF,
         };
@@ -67,9 +83,8 @@ class Satellite : public FrisquetDevice {
         bool _initialReadPending = true;
         bool _modeVirtuel = false;
         bool _ecrasement = false;
-        bool _modeCompatConnect = false;
 
-        MODE decodeModeFromRaw(uint8_t rawMode, bool* compatConnect = nullptr) const;
+        MODE decodeModeFromRaw(uint8_t rawMode) const;
         uint8_t encodeModeForSend(MODE mode) const;
         struct {
             MqttEntity ecrasementConsigne;

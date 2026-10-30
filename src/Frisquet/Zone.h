@@ -169,10 +169,12 @@ class Zone {
         MODE_ZONE _mode = MODE_ZONE::INCONNU;            // 0x05 auto - 0x06 confort - 0x07 reduit - 0x08 hors gel
         byte _modeOptions = 0x05;
 
-        // Hypothèse : mêmes bits de mode que Satellite::MODE.
-        // Du bit 7 au bit 0 :
-        // 0x80 inconnu, 0x40 Boost, 0x20 inconnu (compatibilité Connect supposée),
-        // 0x10 Hors Gel, 0x08 inconnu, 0x04 Auto, 0x02 Dérogation, 0x01 Confort.
+        // Octet « options » du bloc zone A154 (6e octet), au format de l'octet
+        // A02F du satellite (voir Satellite.h : 0x20 Auto, 0x02 Dérogation,
+        // 0x01 Confort, 0x04 état interne, 0x10 Hors Gel ; 0x40 Boost côté Connect).
+        // Un Connect réel y recopie la dernière valeur A02F lue (ex. 0x25 en Auto) ;
+        // l'émission du firmware conserve 0x04 pour Auto en attendant validation
+        // sur chaudière. Seuls les bits 0x01, 0x02 et 0x40 sont interprétés ici.
         Programmation _programmation;
         // Programme confirmé par radio, défini sur le portail ou restauré de NVS.
         bool _programmationRecue = false;

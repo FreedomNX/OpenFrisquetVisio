@@ -17,6 +17,7 @@ tests/*
 !tests/portal-password.test.mjs
 
 !tests/test_zone_modes.py
+!tests/test_satellite_mode.py
 !tests/test_boiler_state.py
 !tests/boiler-state.test.mjs
 

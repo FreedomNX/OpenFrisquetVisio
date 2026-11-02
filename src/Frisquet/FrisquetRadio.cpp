@@ -56,10 +56,15 @@ bool FrisquetRadio::bufferUnexpectedPacket(const byte* donnees, size_t length) {
 bool FrisquetRadio::popBufferedPacket(byte* donnees, size_t& length, float* rssi) {
     purgeBufferedPackets();
 
-    for (BufferedPacket& packet : _rxBuffer) {
-        if (!packet.used) {
-            continue;
-        }
+    // Dépiler la plus ancienne : avec un TTL de 4 s, une trame récente pourrait
+    // sinon être rejouée avant une plus vieille et se faire écraser ensuite.
+    BufferedPacket* plusAncien = nullptr;
+    for (BufferedPacket& p : _rxBuffer) {
+        if (!p.used) continue;
+        if (!plusAncien || (int32_t)(p.timestamp - plusAncien->timestamp) < 0) plusAncien = &p;
+    }
+    if (plusAncien) {
+        BufferedPacket& packet = *plusAncien;
 
         if (length == 0 || packet.length < length) {
             length = packet.length;

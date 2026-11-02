@@ -6,7 +6,7 @@
 class FrisquetRadio : public Radio {
     public: 
     static constexpr uint8_t RX_BUFFER_SIZE = 6;
-    static constexpr uint32_t RX_PACKET_TTL_MS = 1000;
+    static constexpr uint32_t RX_PACKET_TTL_MS = 4000;
 
     enum MessageType : byte {
         READ = 0x03,

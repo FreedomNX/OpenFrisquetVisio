@@ -1,5 +1,6 @@
 #include "Radio.h"
 #include "Logs.h"
+#include "CrashTrace.h"
 
 #if defined(RADIO_SX1276)
 int16_t Radio::PacketRadio::startReceive() {
@@ -76,12 +77,14 @@ int16_t Radio::PacketRadio::startReceiveWithLimit(uint32_t timeout) {
     if (getPacketType() != RADIOLIB_SX126X_PACKET_TYPE_GFSK) return RADIOLIB_ERR_WRONG_MODEM;
     // Désactiver le traitement matériel pour conserver longueur et CRC reçus.
     // Réappliquer explicitement la longueur brute avant chaque réception.
-    result = setCRC(0);
+    // En mode variable, laisser le modem vérifier le CRC (CCITT Frisquet) :
+    // il le retire du buffer mais positionne CRC_ERR en cas d'échec.
+    result = tunedVar ? setCRC(2, 0x1D0F, 0x1021, true) : setCRC(0);
     if (result != RADIOLIB_ERR_NONE) return result;
-    result = fixedPacketLengthMode(RadioCrc::RAW_LENGTH);
+    result = tunedVar ? variablePacketLengthMode(255) : fixedPacketLengthMode(tunedLen);
     if (result != RADIOLIB_ERR_NONE) return result;
     return SX1262::startReceive(timeout, RADIOLIB_IRQ_RX_DEFAULT_FLAGS,
-                               RADIOLIB_IRQ_RX_DEFAULT_MASK, RadioCrc::RAW_LENGTH);
+                               RADIOLIB_IRQ_RX_DEFAULT_MASK, tunedVar ? 0 : tunedLen);
 }
 
 int16_t Radio::PacketRadio::receive(uint8_t* data, size_t len, RadioLibTime_t timeout) {
@@ -91,6 +94,7 @@ int16_t Radio::PacketRadio::receive(uint8_t* data, size_t len, RadioLibTime_t ti
     const uint32_t timeoutMs = timeout != 0 ? timeout
         : static_cast<uint32_t>(expectedLength * 8.0f / 25.0f * 5.0f);
     const uint32_t radioTimeout = static_cast<uint32_t>(timeoutMs * 1000.0f / 15.625f);
+    CrashTrace::Scope waitTrace(CrashTrace::S_RX_WAIT);
     int16_t result = startReceiveWithLimit(radioTimeout);
     if (result != RADIOLIB_ERR_NONE) return result;
     const uint32_t started = getMod()->hal->millis();
@@ -139,9 +143,20 @@ int16_t Radio::PacketRadio::readData(uint8_t* data, size_t len) {
     if (result != RADIOLIB_ERR_NONE) return result;
     // Décoder dans un tampon local : ne pas dépasser len lors de la copie.
     uint8_t payload[MAX_RX_PACKET_LENGTH];
-    if (status[0] == sizeof(raw) && (lastRxIrq & RADIOLIB_SX126X_IRQ_RX_DONE)
+    if ((lastRxIrq & RADIOLIB_SX126X_IRQ_RX_DONE)
         && !(lastRxIrq & (RADIOLIB_SX126X_IRQ_CRC_ERR | RADIOLIB_SX126X_IRQ_HEADER_ERR))) {
-        crcResult = RadioCrc::decode(raw, rawLength, payload);
+        if (tunedVar) {
+            // CRC vérifié par le modem (CRC_ERR absent, testé plus haut).
+            if (rawLength >= RadioCrc::HEADER_LENGTH && rawLength <= RadioCrc::MAX_PAYLOAD) {
+                memcpy(payload, raw, rawLength);
+                crcResult.status = RadioCrc::Status::Valid;
+                crcResult.length = rawLength;
+            } else {
+                crcResult.status = RadioCrc::Status::InvalidLength;
+            }
+        } else if (status[0] == sizeof(raw)) {
+            crcResult = RadioCrc::decode(raw, rawLength, payload);
+        }
     }
     lastRxLength = crcResult.length;
     const bool accepted = crcResult.status == RadioCrc::Status::Valid
@@ -154,6 +169,7 @@ int16_t Radio::PacketRadio::readData(uint8_t* data, size_t len) {
 #endif
 
 int16_t Radio::transmit(byte data[], size_t len) {
+    CrashTrace::Scope txTrace(CrashTrace::S_TX);
 #if defined(RADIO_SX1276)
     if(len > MAX_RX_PACKET_LENGTH) return RADIOLIB_ERR_PACKET_TOO_LONG;
 #endif
@@ -271,6 +287,7 @@ const Module::RfSwitchMode_t gc1109RfSwitchTable[] = {
 Radio::Radio() : _radio(new Module(RADIO_NSS, RADIO_IRQ, RADIO_RST, RADIO_GPIO)) {}
 
 void Radio::init(float rxBandwidth, bool lnaBypass) {
+    loadTuning();   // réglages persistés (préambule, longueur/variable)
 #if defined(RADIO_SX1276)
     SPI.begin(RADIO_SCK, RADIO_MISO, RADIO_MOSI, RADIO_NSS);
 #endif
@@ -325,7 +342,7 @@ void Radio::init(float rxBandwidth, bool lnaBypass) {
     } else {
         info("[RADIO] Bande RX configurée : %.1f kHz.", rxBandwidth);
     }
-    _radio.setPreambleLength(16);
+    _radio.setPreambleLength(tunedPreamble());
 #if defined(RADIO_SX1276)
     info("[RADIO] SX1276 : longueur variable, %u octets max, CRC matériel CCITT.", MAX_RX_PACKET_LENGTH);
 #else

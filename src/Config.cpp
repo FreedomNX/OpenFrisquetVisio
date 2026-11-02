@@ -79,8 +79,7 @@ void Config::load() {
   _preferences.end();
   delay(100);
 
-  // Migration
-  checkMigration = true;
+  // Migration : seulement si sysconfig n'a pas encore de NetworkID.
   if(checkMigration && _preferences.begin("net-conf", true)) {
     if(_preferences.isKey("net_id")) {
       _preferences.getBytes("net_id", &_networkId, sizeof(NetworkID));

@@ -24,3 +24,4 @@ tests/*
 !tests/test_sx1276_radio.py
 
 !tests/portal-theme.test.mjs
+!tests/test_config_migration.py

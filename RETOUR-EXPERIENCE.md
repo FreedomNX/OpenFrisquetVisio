@@ -125,3 +125,60 @@ la carte ne pilote pas, elle écoute.
   régime actif, état chaudière, anomalie, position du thermostat
 - 20 entités en attente, dont toutes les mesures techniques et les commandes
 - Une trame reçue toutes les 5 à 10 minutes, aucune perte, aucun redémarrage
+
+---
+
+# Compléments après plusieurs jours d'exploitation
+
+## La grille de programmation : dimanche est le jour 0
+
+`weekday()` de TimeLib renvoie **1 pour dimanche**. Le programme occupe 42 octets,
+`42 = 7 × 48` demi-heures, et l'index se calcule par `(weekday()-1)*48`. L'index 0
+est donc **dimanche**, comme le rappellent `ZoneProgram.h` (« dimanche en premier »)
+et `Zone.h` (« du dimanche au samedi »).
+
+Construire la grille en plaçant lundi en position 0 décale **toute la semaine d'un
+jour**, sans aucun message d'erreur : le mercredi se retrouve avec les horaires d'un
+jour travaillé et le mardi chauffe en continu. Le symptôme se voit seulement en
+comparant le régime observé aux heures charnières.
+
+Le bit se lit en **LSB first** : `program[slot/8] & (1u << (slot%8))`, avec
+`slot = (weekday()-1)*48 + heure*2 + minute/30`. Un décodage en MSB first produit
+des horaires absurdes du type 04:00-06:00 — c'est le signe qu'on lit à l'envers.
+
+## `pending: false` ne signifie pas « la chaudière a acquitté »
+
+`Zone.h` pose `pending = (source != SATELLITE_VIRTUEL)`. En satellite virtuel, le
+programme reste **local à la carte** : aucune trame radio n'est envoyée à la
+chaudière, qui ne reçoit que la consigne recalculée. Il n'y a donc pas d'état
+incohérent possible côté chaudière — mais rien ne prouve non plus que le bon jour
+est programmé. La seule preuve est le régime observé aux heures charnières.
+
+## Découverte MQTT : une config obsolète reste retenue
+
+`Zone.cpp` déclare `temperatureAmbiante` en `sensor`, puis change son `component`
+en `number` lorsque la source est `SATELLITE_VIRTUEL`. Les deux configs de
+découverte sont publiées en `retain` sur des topics différents, avec **le même
+`uniq_id`** :
+
+```
+homeassistant/sensor/<id>/config
+homeassistant/number/<id>/config
+```
+
+Home Assistant les traite comme deux entités distinctes (domaines différents), donc
+ce n'est pas un conflit bloquant. Mais l'ancienne config `sensor` n'est **jamais
+effacée** : après un changement de mode, les deux entités cohabitent, et celle qui
+n'est plus alimentée reste figée à sa dernière valeur. Le même schéma existe pour
+`temperatureConsigne` et pour la sonde extérieure.
+
+Correction possible : suffixer l'entité de commande (`..._set`) ou publier un payload
+vide sur le topic de découverte devenu inutile.
+
+## Sonder la carte sans se tromper d'indicateur
+
+Une entité Home Assistant dont la valeur ne change pas conserve son horodatage :
+surveiller sa fraîcheur pour détecter une panne produit de **fausses alertes**
+pendant les périodes stables. La preuve de vie doit venir du **battement MQTT** de
+la carte, qui émet un cycle complet chaque minute environ, que la valeur change ou
+non.

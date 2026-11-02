@@ -182,3 +182,44 @@ surveiller sa fraîcheur pour détecter une panne produit de **fausses alertes**
 pendant les périodes stables. La preuve de vie doit venir du **battement MQTT** de
 la carte, qui émet un cycle complet chaque minute environ, que la valeur change ou
 non.
+
+## Surveiller la sonde qui alimente la régulation
+
+Le firmware **n'a aucun délai de péremption** : si la source de la consigne
+d'ambiance se tait, la carte conserve indéfiniment la dernière valeur reçue et la
+chaudière régule sur une mesure morte. Aucun symptôme visible, ni dans Home
+Assistant, ni sur la chaudière. C'est le point faible du montage en satellite
+virtuel.
+
+Deux façons de se tromper, toutes deux rencontrées :
+
+**1. Tester la fraîcheur de l'entité surveillée.** Un capteur Zigbee n'émet pas
+quand la valeur ne change pas. Une pièce stable produit le même silence qu'un
+capteur mort, et l'alerte part toutes les nuits. Elle finit par être ignorée.
+
+**2. Filtrer les états sans exclure les transitions.** Le test
+`e.state in ['unknown','unavailable']` placé dans un calcul de battement remet
+l'horodateur à « maintenant » quand l'appareil tombe : la surveillance se désarme
+précisément au moment où elle devrait servir. Il faut `not_to: [unavailable,
+unknown]` sur le déclencheur.
+
+Le principe qui tient : **une preuve de vie est un événement d'un autre signal du
+même appareil**, pas l'âge de la valeur surveillée. Un capteur de température et
+d'humidité expose les deux ; l'humidité varie presque toujours. Elle sert de
+battement de cœur, la température de mesure.
+
+Deux pièges de plus, côté Home Assistant :
+
+- Un `trigger: state` avec `for:` est **perdu au redémarrage** de l'instance :
+  l'alerte ne partira jamais si la panne couvre un redémarrage. Préférer un
+  déclencheur périodique avec condition sur l'âge.
+- Initialiser l'horodateur au démarrage de Home Assistant **masque une sonde morte
+  depuis des heures**. Il vaut mieux une alerte en double qu'une panne invisible.
+
+Enfin, **ne pas se contenter de cesser d'écrire** : ne rien envoyer ne protège de
+rien puisque la carte garde de toute façon la dernière valeur. Il faut écrire
+explicitement une consigne de repli, et aligner son seuil sur celui de l'alerte —
+une notification qui annonce une bascule qui n'a pas eu lieu décrédibilise les
+suivantes.
+
+Un exemple complet et générique est fourni dans `examples/home-assistant/`.

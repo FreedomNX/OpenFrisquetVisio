@@ -1,0 +1,114 @@
+# Surveille une sonde d'ambiance utilisée par un satellite virtuel.
+#
+# À adapter : entités du capteur, entité de consigne, consigne de repli,
+# service de notification. Voir README.md pour le raisonnement.
+
+input_datetime:
+  derniere_mesure_ambiance:
+    name: Dernière mesure ambiance
+    has_date: true
+    has_time: true
+
+input_boolean:
+  alerte_ambiance_envoyee:
+    name: Alerte ambiance envoyée
+    initial: false
+
+automation:
+
+  # 1. Battement : chaque message de l'appareil horodate l'instant présent.
+  #
+  # `not_to: unavailable/unknown` est indispensable. Sans lui, la chute de
+  # l'appareil remet l'horodateur à « maintenant » : la surveillance se désarme
+  # exactement au moment où elle devrait servir.
+  - id: ambiance_battement
+    alias: "Ambiance — battement"
+    mode: queued
+    max: 10
+    triggers:
+      - trigger: state
+        entity_id:
+          - sensor.ambiance_humidity      # signal le plus fréquent
+          - sensor.ambiance_temperature
+        not_to:
+          - "unavailable"
+          - "unknown"
+    conditions: []
+    actions:
+      - action: input_datetime.set_datetime
+        target:
+          entity_id: input_datetime.derniere_mesure_ambiance
+        data:
+          datetime: "{{ now().strftime('%Y-%m-%d %H:%M:%S') }}"
+
+  # 2. Muette : déclencheur PÉRIODIQUE, pas `state` + `for`.
+  # Un `for` en cours est perdu au redémarrage de Home Assistant, et l'alerte ne
+  # partirait jamais dans ce cas. Le booléen évite la répétition.
+  - id: ambiance_muette
+    alias: "Ambiance — muette"
+    mode: single
+    triggers:
+      - trigger: time_pattern
+        minutes: "/10"
+    conditions:
+      - condition: template
+        value_template: >-
+          {{ (now() - states.input_datetime.derniere_mesure_ambiance.last_changed).total_seconds() > 7200 }}
+      - condition: state
+        entity_id: input_boolean.alerte_ambiance_envoyee
+        state: "off"
+    actions:
+      - action: input_boolean.turn_on
+        target:
+          entity_id: input_boolean.alerte_ambiance_envoyee
+      - action: notify.persistent_notification
+        data:
+          title: Sonde d'ambiance muette
+          message: >-
+            Aucune mesure depuis plus de 2 h. La consigne de repli est appliquée.
+
+  # 3. Retour : réarme l'alerte quand la sonde republie.
+  - id: ambiance_retour
+    alias: "Ambiance — retour"
+    mode: single
+    triggers:
+      - trigger: state
+        entity_id: sensor.ambiance_temperature
+        for:
+          minutes: 2
+    conditions:
+      - condition: template
+        value_template: >-
+          {{ states('sensor.ambiance_temperature') not in ['unknown','unavailable','none'] }}
+    actions:
+      - action: input_boolean.turn_off
+        target:
+          entity_id: input_boolean.alerte_ambiance_envoyee
+
+  # 4. Consigne : valeur réelle si la mesure est fraîche et plausible, sinon
+  #    REPLI. Pas de condition de plage en amont : elle empêcherait justement le
+  #    repli de s'appliquer quand la valeur est aberrante.
+  #    Seuil aligné sur celui de l'alerte, sinon on annonce une bascule qui n'a
+  #    pas eu lieu.
+  - id: ambiance_consigne
+    alias: "Ambiance — consigne vers la chaudière"
+    mode: single
+    triggers:
+      - trigger: state
+        entity_id: sensor.ambiance_temperature
+      - trigger: time_pattern
+        minutes: "/10"
+    conditions: []
+    actions:
+      - action: number.set_value
+        target:
+          entity_id: number.chaudiere_consigne_ambiante
+        data:
+          value: >-
+            {% set age = (now() - states.input_datetime.derniere_mesure_ambiance.last_changed).total_seconds() %}
+            {% set t = states('sensor.ambiance_temperature') %}
+            {% if age < 7200 and t not in ['unknown','unavailable','none'] and 5 < (t | float(0)) < 35 %}
+              {{ t | float }}
+            {% else %}
+              {{ 18 }}
+            {% endif %}

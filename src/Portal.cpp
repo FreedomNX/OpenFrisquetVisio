@@ -2,6 +2,10 @@
 #include <WiFi.h>
 #include <ESPmDNS.h>
 #include <Update.h>
+#include <freertos/FreeRTOS.h>
+#include <freertos/task.h>
+#include "CrashTrace.h"
+#include "Sniffer.h"
 #include <stdarg.h>
 #include <cstring>
 #include <esp_system.h>
@@ -330,6 +334,11 @@ void Portal::begin(bool startApFallbackIfNoWifi) {
   onAuthenticated("/api/logs/clear", HTTP_POST, &Portal::handleClearLogs);
   onAuthenticated("/logs", HTTP_GET, &Portal::handleLogsPage);
   onAuthenticated("/api/status", HTTP_GET, &Portal::handleStatus);
+  onAuthenticated("/api/rssi", HTTP_GET, &Portal::handleRssi);
+  onAuthenticated("/api/sniff", HTTP_POST, &Portal::handleSniffStart);
+  onAuthenticated("/api/sniff/report", HTTP_GET, &Portal::handleSniffReport);
+  onAuthenticated("/api/network-id/hunt", HTTP_POST, &Portal::handleHunt);
+  onAuthenticated("/api/radio/tune", HTTP_POST, &Portal::handleRadioTune);
   onAuthenticated("/logs-radio", HTTP_GET, &Portal::handleRadioLogsPage);
   onAuthenticated("/api/memory", HTTP_GET, &Portal::handleMemoryRead);
   onAuthenticated("/api/memory/scan", HTTP_GET, &Portal::handleMemoryScan);
@@ -355,6 +364,58 @@ void Portal::begin(bool startApFallbackIfNoWifi) {
 
 void Portal::loop() {
   _srv.handleClient();
+}
+
+void Portal::handleRadioTune() {
+  const uint8_t preamble = _srv.hasArg("preamble") ? (uint8_t)_srv.arg("preamble").toInt() : 0;
+  const size_t  len      = _srv.hasArg("len")      ? (size_t)_srv.arg("len").toInt() : 0;
+  const float   bw       = _srv.hasArg("bw")       ? _srv.arg("bw").toFloat() : 0.0f;
+  const int16_t st = _frisquetManager.radio().applyTuning(preamble, len, bw);
+  String j = "{\"ok\":" + String(st == RADIOLIB_ERR_NONE ? "true" : "false");
+  j += ",\"err\":" + String(st);
+  j += ",\"preamble\":" + String(_frisquetManager.radio().tunedPreamble());
+  j += ",\"len\":" + String(_frisquetManager.radio().tunedLen()) + "}";
+  _srv.send(st == RADIOLIB_ERR_NONE ? 200 : 500, "application/json; charset=utf-8", j);
+}
+
+void Portal::handleHunt() {
+  const bool on = _srv.arg("on") != "0";
+  _frisquetManager.setHunt(on);
+  info("[PORTAIL] Chasse au NetworkID : %s", on ? "activée" : "arrêtée");
+  _srv.send(200, "application/json; charset=utf-8", "{\"ok\":true,\"hunt\":true}");
+}
+
+void Portal::handleSniffStart() {
+  const uint32_t sec  = _srv.hasArg("sec")  ? _srv.arg("sec").toInt()  : 60;
+  const uint8_t  sync = _srv.hasArg("sync") ? (uint8_t)strtoul(_srv.arg("sync").c_str(), nullptr, 16) : 0xAA;
+  const uint8_t  len  = _srv.hasArg("len")  ? (uint8_t)_srv.arg("len").toInt() : 1;
+  const float    mhz  = _srv.hasArg("f")    ? _srv.arg("f").toFloat() : 868.96f;
+  if (mhz < 800.0f || mhz > 1000.0f) { _srv.send(400, "application/json", "{\"ok\":false,\"err\":\"fréquence hors bornes\"}"); return; }
+
+  Sniffer::start(sec, sync, len, mhz);
+  Radio& r = _frisquetManager.radio();
+  r.stopReceiveForSniff();
+  uint8_t sw[8];
+  for (uint8_t i = 0; i < len; i++) sw[i] = sync;
+  r.setSniffSync(sw, len, mhz);
+  info("[SNIFF] écoute brute %lu s, sync %u octet(s) = 0x%02X, f=%.3f",
+       (unsigned long)sec, (unsigned)len, (unsigned)sync, mhz);
+  _srv.send(200, "application/json; charset=utf-8", "{\"ok\":true,\"sec\":" + String(sec) + "}");
+}
+
+void Portal::handleSniffReport() {
+  _srv.send(200, "application/json; charset=utf-8", Sniffer::report());
+}
+
+void Portal::handleRssi() {
+  const String f = _srv.arg("f");
+  if (!f.length()) { _srv.send(400, "application/json", "{\"ok\":false,\"err\":\"paramètre f manquant\"}"); return; }
+  const float mhz = f.toFloat();
+  if (mhz < 800.0f || mhz > 1000.0f) { _srv.send(400, "application/json", "{\"ok\":false,\"err\":\"fréquence hors bornes\"}"); return; }
+  const float r = _frisquetManager.radio().rssiAt(mhz);
+  if (_srv.arg("restore") == "1") _frisquetManager.radio().radioRestore();
+  String json = "{\"ok\":true,\"f\":" + String(mhz, 3) + ",\"rssi\":" + String(r, 1) + "}";
+  _srv.send(200, "application/json; charset=utf-8", json);
 }
 
 void Portal::handleClearLogs() {
@@ -1021,7 +1082,21 @@ void Portal::handleStatus() {
   json += "\"uptimeSec\":"     + String(upMs / 1000) + ",";
   json += "\"resetReason\":\"" + jsonEscape(String(resetReason)) + "\",";
   json += "\"freeHeap\":"      + String(freeHeap) + ",";
-  json += "\"minFreeHeap\":"   + String(minFreeHeap);
+  json += "\"minFreeHeap\":"   + String(minFreeHeap) + ",";
+  const CrashTrace::Snapshot trace = CrashTrace::snapshot();
+  json += "\"wdtResets\":"     + String(trace.wdtResets) + ",";
+  json += "\"prevStep\":"      + String(trace.prevStep) + ",";
+  json += "\"prevStepAtMs\":"  + String(trace.prevStepAtMs) + ",";
+  json += "\"rxFrames\":"      + String(trace.rxFrames) + ",";
+  json += "\"maxLoopMs\":"     + String(trace.maxLoopMs) + ",";
+  json += "\"slowLoops\":"     + String(trace.slowLoops) + ",";
+  json += "\"loopStackFree\":" + String(uxTaskGetStackHighWaterMark(nullptr)) + ",";
+  json += "\"rxIrqs\":"       + String(trace.rxIrqs) + ",";
+  json += "\"rssiInst\":"     + String(trace.rssiInst) + ",";
+  json += "\"hunt\":"         + String(_frisquetManager.huntActive() ? 1 : 0) + ",";
+  json += "\"networkID\":\""  + networkIdToStr(_frisquetManager.config().getNetworkID()) + "\",";
+  json += "\"lastLen\":"      + String(CrashTrace::lastFrameLen()) + ",";
+  json += "\"lastFrame\":\""  + CrashTrace::lastFrameHex() + "\"";
   json += "}";
   _srv.send(200, "application/json; charset=utf-8", json);
 }

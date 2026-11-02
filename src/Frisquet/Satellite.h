@@ -84,6 +84,13 @@ class Satellite : public FrisquetDevice {
         bool _modeVirtuel = false;
         bool _ecrasement = false;
 
+        // Lecture seule : attente de la réponse chaudière = 1 lecture du tampon
+        // + (ESSAIS - 1) fenêtres d'écoute de 408 ms => 6 x 408 = 2448 ms au pire.
+        // Rester sous FrisquetRadio::RX_PACKET_TTL_MS (4000 ms) pour que les trames
+        // longues mises de côté pendant l'attente soient rejouées avant expiration.
+        static constexpr uint32_t ATTENTE_REPONSE_CHAUDIERE_MS = 2400;
+        static constexpr uint8_t ESSAIS_REPONSE_CHAUDIERE = 1 + (ATTENTE_REPONSE_CHAUDIERE_MS + 407) / 408;
+
         MODE decodeModeFromRaw(uint8_t rawMode) const;
         uint8_t encodeModeForSend(MODE mode) const;
         struct {

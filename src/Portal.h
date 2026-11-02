@@ -57,6 +57,11 @@ private:
   void handleMemoryScan();       // GET /api/memory/scan
   void handleMemoryPage();       // GET /memory
   void handleStatus();
+  void handleRssi();             // GET /api/rssi?f=<MHz>
+  void handleSniffStart();       // POST /api/sniff?sec=&sync=&len=&f=
+  void handleRadioTune();        // POST /api/radio/tune?preamble=&len=&bw=
+  void handleHunt();             // POST /api/network-id/hunt?on=1
+  void handleSniffReport();      // GET /api/sniff/report
   void handleRadioLogsPage();
   void handleSendRadio();
   void handleUpdate();           // POST /api/update (finish)

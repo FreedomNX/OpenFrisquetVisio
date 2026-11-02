@@ -1,4 +1,5 @@
 #include "Zone.h"
+#include "../CrashTrace.h"
 #include "ZoneProgram.h"
 #include <TimeLib.h>
 #include <stdlib.h>
@@ -53,6 +54,8 @@ void Zone::loadConfig() {
 
 void Zone::saveConfig() {   
     _preferences.begin("zoneCfg" + getNumeroZone(), false);
+
+    CrashTrace::Scope nvsTrace(CrashTrace::S_NVS);
 
     _preferences.putUChar("mode", getMode());
     _preferences.putUChar("modeOpts", getModeOptions());

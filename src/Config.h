@@ -48,6 +48,10 @@ class Config {
         OFVNetworkManager::Options& getWiFiOptions() { return _wifiOpts; }
         MqttManager::Options& getMQTTOptions() { return _mqttOpts; }
         NetworkID& getNetworkID() { return _networkId; }
+        bool hasNetworkID() const {
+            return !(_networkId.bytes[0] == 0 && _networkId.bytes[1] == 0
+                  && _networkId.bytes[2] == 0 && _networkId.bytes[3] == 0);
+        }
         void setNetworkID(NetworkID networkId) { _networkId = networkId; }
 
         bool useConnect() { return _useConnect; }

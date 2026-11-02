@@ -474,8 +474,33 @@ bool Satellite::onReceive(byte* donnees, size_t length) {
                 byte buffZones[RADIOLIB_SX126X_MAX_PACKET_LENGTH];
 
                 if(! getEcrasement()) {
-                    delay(300);
+                    // 1) Publier d'abord ce que la trame du satellite contient déjà :
+                    //    ambiante, consigne et mode ne dépendent pas de la réponse chaudière.
+                    setIdAssociation(header->idAssociation);
+                    setIdMessage(header->idMessage);
+                    _zone.setTemperatureAmbiante(donneesSatellite->temperatureAmbiante.toFloat());
+                    {
+                        const auto modeDemande = _zone.getMode();
+                        const byte optionsDemandees = _zone.getModeOptions();
+                        const bool commandeConnectEnAttente = _zone.getSource() == Zone::SOURCE::CONNECT
+                            && _zone.getLastChange() > _zone.getLastEnvoi();
+                        setModeFromRaw(donneesSatellite->mode);
+                        if(_zone.getSource() == Zone::SOURCE::SATELLITE_PHYSIQUE) {
+                            _zone.desactiverBoost();
+                            _zone.confirmerMode();
+                        }
+                        if(commandeConnectEnAttente) {
+                            _zone.setMode(modeDemande);
+                            _zone.setModeOptions(optionsDemandees);
+                        }
+                    }
+                    _zone.setTemperatureConsigne(donneesSatellite->temperatureConsigne.toFloat());
+                    saveConfig();
+                    _zone.saveConfig();
+                    publishMqtt();
+                    _zone.publishMqtt();
 
+                    // 2) Réponse chaudière (état, date) : attente bornée, échec non bloquant.
                     err = radio().receiveExpected(
                         ID_CHAUDIERE,
                         this->getId(),
@@ -485,11 +510,12 @@ bool Satellite::onReceive(byte* donnees, size_t length) {
                         header->type,
                         (byte*) buffZones,
                         lengthRx,
-                        15, true
+                        ESSAIS_REPONSE_CHAUDIERE, true
                     );
-                    
+
                     if(err != RADIOLIB_ERR_NONE) {
-                        return false;
+                        debug("[SATELLITE Z%d] Pas de réponse chaudière (err %d) : valeurs satellite publiées.", getNumeroZone(), err);
+                        return true;
                     }
 
                     readBuffer = ReadBuffer(buffZones, lengthRx);
@@ -526,31 +552,27 @@ bool Satellite::onReceive(byte* donnees, size_t length) {
                     setEtatChaudiere(donneesZones->etatChaudiere);
                     Date date = donneesZones->date;
                     setDate(date);
+                    // Température extérieure : présente dans la réponse chaudière (offset 7)
+                    // mais jamais décodée jusqu'ici. On filtre les valeurs sentinelles.
+                    // Sentinelles connues : 0xFFFF (-0,1 °C), 0x8000, 0x7FFF,
+                    // 0x050A (« 129 » utilisé par Connect.cpp). Sans ce filtre,
+                    // une chaudière sans sonde extérieure publierait -0,1 °C en
+                    // continu et polluerait les statistiques long terme.
+                    const uint16_t rawExt = ((uint16_t)donneesZones->temperatureExterieure.bytes[0] << 8)
+                                          |  (uint16_t)donneesZones->temperatureExterieure.bytes[1];
+                    const bool sentinelle = rawExt == 0xFFFF || rawExt == 0x8000
+                                         || rawExt == 0x7FFF || rawExt == 0x050A;
+                    const float tExt = donneesZones->temperatureExterieure.toFloat();
+                    if (!sentinelle && tExt > -40.0f && tExt < 60.0f) {
+                        _chaudiere.setTemperatureExterieure(tExt);
+                        debug("[SATELLITE Z%d] Température extérieure : %.1f", getNumeroZone(), tExt);
+                    }
                 }
 
-                setIdAssociation(header->idAssociation);
-                setIdMessage(header->idMessage);
-                _zone.setTemperatureAmbiante(donneesSatellite->temperatureAmbiante.toFloat());
-                
                 if(! getEcrasement()) {
-                    const auto modeDemande = _zone.getMode();
-                    const byte optionsDemandees = _zone.getModeOptions();
-                    const bool commandeConnectEnAttente = _zone.getSource() == Zone::SOURCE::CONNECT
-                        && _zone.getLastChange() > _zone.getLastEnvoi();
-                    setModeFromRaw(donneesSatellite->mode);
-                    if(_zone.getSource() == Zone::SOURCE::SATELLITE_PHYSIQUE) {
-                        _zone.desactiverBoost();
-                        _zone.confirmerMode();
-                    }
-                    if(commandeConnectEnAttente) {
-                        _zone.setMode(modeDemande);
-                        _zone.setModeOptions(optionsDemandees);
-                    }
-                    _zone.setTemperatureConsigne(donneesSatellite->temperatureConsigne.toFloat());
-                    saveConfig();
-                    _zone.saveConfig();
-                    publishMqtt();
-                    _zone.publishMqtt();
+                    // Ambiante, consigne et mode sont déjà appliqués et publiés
+                    // avant l'attente de la réponse : ne pas refaire les écritures
+                    // NVS ni les publications une seconde fois.
                     return true;
                 }
 

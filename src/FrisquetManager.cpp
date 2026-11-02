@@ -1,6 +1,8 @@
 #include "FrisquetManager.h"
 #include "Version.h"
 #include "Buffer.h"
+#include "CrashTrace.h"
+#include "Sniffer.h"
 
 FrisquetManager::FrisquetManager(FrisquetRadio &radio, Config &cfg, MqttManager &mqtt)
     :   _radio(radio), _cfg(cfg), _mqtt(mqtt),
@@ -102,9 +104,26 @@ void FrisquetManager::begin()
 void FrisquetManager::loop()
 {
     uint32_t now = millis();
+    Sniffer::loop();
+
+    // Chasse au NetworkID : tant qu'il est inconnu, on réessaie périodiquement.
+    // 30 s d'écoute broadcast, puis 60 s de répit pour laisser respirer portail et MQTT.
+    if (_hunt && !_cfg.hasNetworkID() && now - _lastHunt > 90000UL) {
+        _lastHunt = now;
+        if (recupererNetworkID()) {
+            _hunt = false;
+            info("[DEVICE] NetworkID capturé, chasse terminée.");
+        }
+    }
 
     if (FrisquetRadio::receivedFlag || _radio.hasReceivedPacket() || _radio.hasBufferedPacket()) {
+        CrashTrace::rxIrq();
         onRadioReceive();
+    }
+
+    if (now - _lastRssiSample > 5000) {   // niveau de bruit : 1 mesure / 5 s
+        _lastRssiSample = now;
+        CrashTrace::rssiSample(_radio.rssiInst());
     }
 
     if(_cfg.useZone1()) _zone1.loop();
@@ -181,10 +200,12 @@ void FrisquetManager::onRadioReceive()
     // pouvait effacer le drapeau d'une autre trame encore présente dans le SX1262.
     if (_radio.hasReceivedPacket()) {
         FrisquetRadio::receivedFlag = false;
+        CrashTrace::mark(CrashTrace::S_RX_READ);
         err = _radio.readData(buff, 0);
 
         if (err != RADIOLIB_ERR_NONE)
         {
+            if (_radio.lastRawLen() > 0) CrashTrace::lastFrame(_radio.lastRaw(), _radio.lastRawLen());
             _radio.startReceive();
             FrisquetRadio::interruptReceive = false;
             return;
@@ -203,6 +224,15 @@ void FrisquetManager::onRadioReceive()
 
     info("[RADIO] Réception données radio : %d bytes", length);
 
+    CrashTrace::rxFrame();
+    CrashTrace::lastFrame(buff, length);
+    if (Sniffer::active()) {          // mode écoute brute : on ne décode pas
+        Sniffer::onPacket(buff, length);
+        CrashTrace::mark(CrashTrace::S_MANAGER);
+        FrisquetRadio::interruptReceive = false;
+        return;
+    }
+    CrashTrace::mark(CrashTrace::S_RX_LOG);
     logRadio(true, buff, length, rssi);
 
     if (length < sizeof(FrisquetRadio::RadioTrameHeader))
@@ -211,6 +241,7 @@ void FrisquetManager::onRadioReceive()
         return;
     }
 
+    CrashTrace::mark(CrashTrace::S_RX_DISPATCH);
     FrisquetRadio::RadioTrameHeader *header = (FrisquetRadio::RadioTrameHeader *)buff;
     if (_cfg.useConnect() &&
         (header->idDestinataire == _connect.getId() ||
@@ -237,6 +268,7 @@ void FrisquetManager::onRadioReceive()
         _satelliteZ3.onReceive(buff, length);
     }
 
+    CrashTrace::mark(CrashTrace::S_MANAGER);
     FrisquetRadio::interruptReceive = false;
 }
 
@@ -283,5 +315,9 @@ bool FrisquetManager::recupererNetworkID() {
         }
     } while(millis() < timeout);
 
+    // Échec : restaurer le réseau réel. Sans cela la carte reste calée sur le
+    // broadcast et n'entend plus la chaudière jusqu'au prochain redémarrage.
+    radio().setNetworkID(config().getNetworkID());
+    radio().startReceive();
     return false;
 }

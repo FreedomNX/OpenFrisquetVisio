@@ -19,6 +19,7 @@ public:
 
   void begin();
   void loop();
+  void afficherEcran();
 
 private:
   // Dépendances et services

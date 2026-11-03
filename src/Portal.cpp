@@ -528,6 +528,7 @@ void Portal::handleDashboard() {
   json.reserve(2400);
   json = "{\"ok\":true,";
   json += "\"developerMode\":" + String(cfg.developerMode() ? "true" : "false") + ",";
+  json += "\"defaultPortalPassword\":" + String(cfg.portalPassword() == "admin" ? "true" : "false") + ",";
   json += "\"version\":\"" + jsonEscape(String(OPENFRISQUETVISIO_VERSION)) + "\",";
   json += "\"uptimeSec\":" + String(millis() / 1000) + ",";
   json += "\"connectivity\":{";

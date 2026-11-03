@@ -19,6 +19,7 @@ html[data-theme="dark"] .zone-value{border-color:var(--border)}
 html[data-theme="dark"] .status{background:var(--soft);color:var(--muted)}
 html[data-theme="dark"] :is(.status.ok,.message){background:#183e32;color:var(--green)}
 html[data-theme="dark"] .status.warn{background:#45341e;color:var(--orange)}
+html[data-theme="dark"] .notice .btn{background:#fff}
 html[data-theme="dark"] :is(.status.bad,.message.error){background:#49282b;color:var(--red)}
 html[data-theme="dark"] :is(.error,.msg.err){color:var(--red)}
 html[data-theme="dark"] .btn.comfort{background:#514023}

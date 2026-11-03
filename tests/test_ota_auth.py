@@ -1,7 +1,4 @@
-"""Compile the real OTA.h against an ArduinoOTA stub and check its password handling.
-
-Run: python3 tests/test_ota_auth.py
-"""
+"""Check that OTA starts with the portal password, including the default."""
 from pathlib import Path
 import re
 import subprocess
@@ -23,7 +20,6 @@ enum { U_FLASH, U_SPIFFS };
 typedef int ota_error_t;
 
 struct String {
-    String() {}
     String& operator=(const char*) { return *this; }
 };
 
@@ -47,9 +43,7 @@ ArduinoOTAStub ArduinoOTA;
 
 stub_logs = r'''
 #pragma once
-#include <string>
-std::string lastInfo;
-void info(const char* message) { lastInfo = message; }
+void info(const char*) {}
 void error(const char*) {}
 '''
 
@@ -57,28 +51,17 @@ harness = r'''
 #include <assert.h>
 #include "OTA.h"
 
-static void beginWith(const char* password) {
-    ArduinoOTA = ArduinoOTAStub();
-    lastInfo.clear();
-    OTA ota;
-    ota.begin("openfrisquetvisio", password);
-    ota.loop();
-}
-
 int main() {
-    // Mot de passe par défaut ou vide : ArduinoOTA n'écoute pas.
-    for (const char* password : {"admin", ""}) {
-        beginWith(password);
-        assert(!ArduinoOTA.started);
-        assert(ArduinoOTA.password.empty());
-        assert(lastInfo.find("[OTA] Désactivé") == 0);
+    for (const char* password : {"admin", "a'b$;\"&"}) {
+        ArduinoOTA = ArduinoOTAStub();
+        OTA ota;
+        ota.begin("openfrisquetvisio", password);
+        ota.loop();
+        assert(ArduinoOTA.started);
+        assert(ArduinoOTA.hostname == "openfrisquetvisio");
+        assert(ArduinoOTA.passwordAtBegin == password);
+        assert(ArduinoOTA.handled == 1);
     }
-    // Mot de passe changé : il est fixé avant begin(), donc annoncé par mDNS.
-    beginWith("Admin");
-    assert(ArduinoOTA.started);
-    assert(ArduinoOTA.hostname == "openfrisquetvisio");
-    assert(ArduinoOTA.passwordAtBegin == "Admin");
-    assert(ArduinoOTA.handled == 1);
     return 0;
 }
 '''

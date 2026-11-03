@@ -48,6 +48,7 @@
     .zone-value span{display:block;color:var(--muted);font-size:12px}.zone-value strong{display:block;margin-top:3px;color:var(--navy);font-size:19px}.zone-source{margin-top:13px;color:var(--muted);font-size:12px}
     .empty{grid-column:1/-1;padding:28px;text-align:center;color:var(--muted);background:#fff;border:1px dashed #bfc9d6;border-radius:18px}
     .diagnostics{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-top:14px}.diagnostic{padding:16px 18px;border:1px solid var(--border);border-radius:16px;background:#fff;color:var(--navy);font-weight:750}.diagnostic span{margin-right:8px}
+    .notice{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:14px 20px;margin-bottom:18px;padding:20px 24px;border-radius:16px;background:#b42318;color:#fff;box-shadow:0 12px 32px rgba(180,35,24,.3)}.notice p{margin:0;max-width:760px}.notice strong{display:block;margin-bottom:4px;font-size:20px}.notice .btn{border-color:#fff;color:#b42318}
     footer{padding:18px 0 34px;color:var(--muted);font-size:12px;text-align:center}.skeleton{color:#a2acba}
     @media(max-width:900px){.hero{grid-template-columns:1fr}.metrics{grid-template-columns:repeat(2,1fr)}.zones{grid-template-columns:1fr}.diagnostics{grid-template-columns:1fr}}
     @media(max-width:560px){.shell{width:min(100% - 20px,1180px)}.topbar-inner{min-height:66px}.logo{width:190px}.btn-label{display:none}.hero-main,.boiler-state{padding:20px}.metrics{grid-template-columns:1fr 1fr;gap:10px}.metric{padding:15px;min-height:126px}.metric-value{font-size:22px}}
@@ -62,6 +63,7 @@
   </div></header>
 
   <main class="shell">
+    <div class="notice" id="defaultPasswordNotice" role="alert" hidden><p><strong>⚠️ Mot de passe par défaut</strong> Le portail utilise encore « admin » : toute personne ayant accès à votre réseau peut modifier les réglages ou installer un autre firmware.</p><a class="btn" href="/settings#system">Changer le mot de passe</a></div>
     <section class="hero">
       <div class="panel hero-main"><p class="eyebrow">Tableau de bord</p><h1>Votre chauffage en un coup d’œil</h1><p class="lead">Températures, modes et état de la chaudière sont actualisés automatiquement.</p>
         <div class="status-row"><span class="status" id="wifiStatus">Wi‑Fi…</span><span class="status" id="mqttStatus">MQTT…</span><span class="status" id="uptimeStatus">Démarrage…</span></div>
@@ -103,6 +105,7 @@
     }
     function render(data){
       document.querySelectorAll("[data-developer-only]").forEach(element=>element.hidden=data.developerMode!==true);
+      $("#defaultPasswordNotice").hidden=data.defaultPortalPassword!==true;
       const network=data.connectivity||{},boiler=data.boiler||{},probe=data.outdoorProbe||{};
       setStatus("#wifiStatus",network.wifiConnected?`Wi‑Fi · ${network.ssid||network.ip||"connecté"}`:"Wi‑Fi déconnecté",network.wifiConnected?"ok":"bad");
       setStatus("#mqttStatus",network.mqttConnected?"MQTT connecté":"MQTT déconnecté",network.mqttConnected?"ok":"warn");setStatus("#uptimeStatus","Actif depuis "+formatUptime(data.uptimeSec),"ok");

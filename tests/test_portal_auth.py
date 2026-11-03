@@ -37,6 +37,10 @@ assert re.findall(r'_srv\.on\("([^"]+)"', begin) == ["/theme.css", "/theme.js", 
 assert 'if (!requireAuthentication()) return;' in begin
 assert '"Cookie"' in begin
 assert "portalPassword" not in extract("void Portal::handleGetConfig(")
+# The dashboard only says whether the default password is still in use.
+dashboard = source[source.index("void Portal::handleDashboard("):source.index("void Portal::handleGetConfig(")]
+assert dashboard.count("portalPassword()") == 1
+assert 'String(cfg.portalPassword() == "admin" ? "true" : "false")' in dashboard
 assert "authenticate(" not in source  # No username/HTTP Basic login.
 
 password_load = re.search(r'  _portalPassword = .*\n  if \(_portalPassword.*\n', config)[0]

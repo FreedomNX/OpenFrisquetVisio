@@ -15,6 +15,7 @@ tests/*
 !tests/radio_crc_test.cpp
 !tests/test_portal_auth.py
 !tests/portal-password.test.mjs
+!tests/test_ota_auth.py
 
 !tests/test_zone_modes.py
 !tests/test_satellite_mode.py

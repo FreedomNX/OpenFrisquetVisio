@@ -76,7 +76,19 @@ Les tests du codage des demi-heures et de la sauvegarde se lancent avec
 `python3 tests/test_programming_state.py` (compilateur C++ requis).
 
 ### 🔁 Mise à jour OTA
-- Mise à jour du firmware directement via WiFi
+- Portail : **Paramètres → Système → Mise à jour du firmware**.
+- ArduinoOTA (port 3232) utilise le mot de passe du portail. Changez `admin`
+  pour protéger les deux accès.
+
+Avec `espota.py` (`tools/` du paquet `framework-arduinoespressif32`), sous Bash :
+
+```bash
+IFS= read -rs -p 'Mot de passe du portail : ' OTA_PASSWORD; echo
+python3 /chemin/vers/espota.py -i 192.168.1.184 --auth="$OTA_PASSWORD" -f .pio/build/heltec_wifi_lora_32_V3/firmware.bin
+unset OTA_PASSWORD
+```
+
+Adaptez le chemin, l’adresse et l’environnement de compilation.
 
 ---
 

@@ -5,8 +5,9 @@
 
 class OTA {
     public: 
-        void begin(const char* hostname) {
+        void begin(const char* hostname, const char* password) {
             ArduinoOTA.setHostname(hostname);
+            ArduinoOTA.setPassword(password);
             ArduinoOTA.setTimeout(25000);
             ArduinoOTA
                 .onStart([]() {

@@ -67,6 +67,8 @@ void Chaudiere::begin(std::function<void(const String&)> modeEcsCommandCb) {
     _mqttEntities.tempExterieure.set("device_class", "temperature");
     _mqttEntities.tempExterieure.set("state_class", "measurement");
     _mqttEntities.tempExterieure.set("unit_of_measurement", "°C");
+    _mqtt.removeEntityDiscovery(*device, _mqttEntities.tempExterieure,
+        _mqttEntities.tempExterieure.component == "number" ? "sensor" : "number");
     _mqtt.registerEntity(*device, _mqttEntities.tempExterieure, true);
 
     _mqttEntities.puissanceInstantaneeECS.id = "puissanceInstantaneeECS";

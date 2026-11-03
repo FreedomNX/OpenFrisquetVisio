@@ -117,6 +117,8 @@ void Zone::begin() {
             }
         });
     }
+    mqtt().removeEntityDiscovery(*device, _mqttEntities.temperatureAmbiante,
+        _mqttEntities.temperatureAmbiante.component == "number" ? "sensor" : "number");
     mqtt().registerEntity(*device, _mqttEntities.temperatureAmbiante, true);
 
     // SENSOR: Température consigne

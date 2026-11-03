@@ -77,6 +77,16 @@ public:
     publishRaw(topic, "", 0, true);
   }
 
+  // À appeler avant registerEntity() pour retirer l'ancien type d'une entité.
+  // Conserver l'identité et le domaine sans modifier le composant actif.
+  void removeEntityDiscovery(MqttDevice& d, const MqttEntity& e, const String& component) {
+    MqttEntity obsolete;
+    obsolete.id = e.id;
+    obsolete.domain = e.domain;
+    obsolete.component = component;
+    removeEntityDiscovery(d, obsolete);
+  }
+
   // Command router
   using CommandCallback = std::function<void(const String&)>;
   bool onCommand(const MqttEntity& e, CommandCallback cb) {

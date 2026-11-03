@@ -77,6 +77,11 @@ Les tests du codage des demi-heures et de la sauvegarde se lancent avec
 
 ### 🔁 Mise à jour OTA
 - Mise à jour du firmware directement via WiFi
+- Depuis le portail : **Paramètres → Système → Mise à jour du firmware**
+- Depuis PlatformIO (`espota`, port 3232) : protégé par le mot de passe du
+  portail, à ajouter aux `upload_flags` ou via
+  `PLATFORMIO_UPLOAD_FLAGS="--auth=<mot de passe>" pio run -t upload`.
+  Désactivé tant que le mot de passe par défaut `admin` n'a pas été changé.
 
 ---
 

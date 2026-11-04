@@ -141,7 +141,7 @@ struct WebServer {
     void send(int status,const char* =nullptr,const String& content=String()){code=status;body=content;}
     void prepare(const char* uri,HTTPMethod method,const String& cookies=String()){
         requestUri=uri;requestMethod=method;cookie=cookies;
-        code=0;body=String();location=String();cookieOut=String();
+        code=0;body=String();location=String();cookieOut=String();cache=String();
         password=String();newPassword=String();confirmation=String();
     }
     Route* find(const char* uri,HTTPMethod method){for(size_t i=0;i<count;++i)if(routes[i].uri==uri&&routes[i].method==method)return &routes[i];return nullptr;}
@@ -187,8 +187,8 @@ int main(){
     assert(strstr(p._srv.cookieOut.c_str(),"HttpOnly"));assert(strstr(p._srv.cookieOut.c_str(),"SameSite=Strict"));
     assert(authenticated(p,"other=123; "+cookie));assert(!authenticated(p,"ofv_session="));
     assert(!authenticated(p,"fake_ofv_session="+cookie.substring(12)));
-    p._srv.prepare("/api/config",HTTP_GET);p._srv.dispatch();assert(p._srv.code==401);
-    p._srv.prepare("/api/config",HTTP_GET,cookie);int before=p.handled;p._srv.dispatch();assert(p.handled==before+1);
+    p._srv.prepare("/api/config",HTTP_GET);p._srv.dispatch();assert(p._srv.code==401&&p._srv.cache=="no-store");
+    p._srv.prepare("/api/config",HTTP_GET,cookie);int before=p.handled;p._srv.dispatch();assert(p.handled==before+1&&p._srv.cache=="no-store");
     p._srv.prepare("/unknown",HTTP_GET);p._srv.dispatch();assert(p._srv.code==303);
     p._srv.prepare("/unknown",HTTP_GET,cookie);p._srv.dispatch();assert(p._srv.code==404);
     // Upload callbacks execute before the final HTTP handler: all are gated.

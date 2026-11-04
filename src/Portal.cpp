@@ -614,7 +614,7 @@ void Portal::handleGetConfig() {
   }
   json += "\"wifiHostname\":\"" + jsonEscape(String(w.hostname)) + "\",";
   json += "\"wifiSsid\":\"" + jsonEscape(String(w.ssid)) + "\",";
-  json += "\"wifiPass\":\"" + jsonEscape(String(w.password)) + "\",";
+  json += "\"wifiPassSet\":" + String(w.password.isEmpty() ? "false" : "true") + ",";
   json += "\"wifiStatic\":" + String(w.useStaticIp ? "true" : "false") + ",";
   json += "\"wifiIp\":\"" + jsonEscape(w.localIp.toString()) + "\",";
   json += "\"wifiGw\":\"" + jsonEscape(w.gateway.toString()) + "\",";
@@ -624,7 +624,7 @@ void Portal::handleGetConfig() {
   json += "\"mqttHost\":\"" + jsonEscape(String(m.host)) + "\",";
   json += "\"mqttPort\":" + jsonEscape(String(m.port)) + ",";
   json += "\"mqttUser\":\"" + jsonEscape(String(m.username)) + "\",";
-  json += "\"mqttPass\":\"" + jsonEscape(String(m.password)) + "\",";
+  json += "\"mqttPassSet\":" + String(m.password.isEmpty() ? "false" : "true") + ",";
   json += "\"mqttClientId\":\"" + jsonEscape(String(m.clientId)) + "\",";
   json += "\"mqttBaseTopic\":\"" + jsonEscape(String(m.baseTopic)) + "\",";
 
@@ -725,6 +725,7 @@ void Portal::handlePostConfig() {
   auto& m = _frisquetManager.config().getMQTTOptions();
 
   // Champs WiFi
+  // Mot de passe absent : conserver ; présent : remplacer, même si vide.
   if (_srv.hasArg("wifiHostname")) w.hostname = _srv.arg("wifiHostname");
   if (_srv.hasArg("wifiSsid"))     w.ssid     = _srv.arg("wifiSsid");
   if (_srv.hasArg("wifiPass"))     w.password = _srv.arg("wifiPass");

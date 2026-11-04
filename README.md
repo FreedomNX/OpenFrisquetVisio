@@ -66,6 +66,14 @@ Les pages du portail se trouvent dans le dossier **`web/`**. Lors d'une compilat
 PlatformIO, `tools/generate_web_assets.py` les transforme automatiquement en
 ressources C++ stockées dans le firmware.
 
+Les mots de passe Wi-Fi et MQTT enregistrés ne sont pas renvoyés au navigateur.
+Dans les paramètres, laissez le champ vide pour conserver le mot de passe actuel,
+saisissez une nouvelle valeur pour le remplacer, ou cochez « Supprimer le mot de
+passe à l’enregistrement » pour le supprimer. Pour ces mots de passe, l’API
+`GET /api/config` expose uniquement `wifiPassSet` et `mqttPassSet` ; pour
+`POST /api/config`, un champ
+`wifiPass` ou `mqttPass` absent conserve la valeur, et un champ vide la supprime.
+
 La programmation est envoyée avec le bloc complet de configuration de la zone au
 prochain cycle du Connect. Son utilisation nécessite le mode Auto ; enregistrer
 la semaine ne change pas le mode de chauffage. Les zones en écoute passive ou

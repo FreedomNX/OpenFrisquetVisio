@@ -27,3 +27,4 @@ tests/*
 !tests/portal-theme.test.mjs
 !tests/test_config_migration.py
 !tests/test_mqtt_discovery_cleanup.py
+!tests/test_portal_logs.py

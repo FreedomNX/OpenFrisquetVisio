@@ -155,7 +155,6 @@ const btnSend    = $("#btnSend");
 const msgBox     = $("#msg");
 
 let pollInFlight = false;
-let pollStopped = false;
 
 function showMsg(text, ok){
   if(!msgBox) return;
@@ -189,8 +188,9 @@ function render(){
 }
 
 async function reload(){
-  if(pollInFlight || pollStopped) return;
+  if(pollInFlight) return;
   pollInFlight = true;
+  stopPolling();
   try{
     const limitParam = selLimit.value === "0" ? "500" : selLimit.value;
     const qs =
@@ -205,38 +205,31 @@ async function reload(){
     elLog.textContent = "Erreur chargement logs: " + e;
   } finally {
     pollInFlight = false;
+    scheduleNextPoll();
   }
 }
 
 function stopPolling(){
-  pollStopped = true;
   if(timer){ clearTimeout(timer); timer = null; }
 }
 
-function startPolling(){
-  pollStopped = false;
-  scheduleNextPoll();
-}
-
 function scheduleNextPoll(){
-  if(pollStopped) return;
+  stopPolling();
+  if(document.hidden) return;
   const v = parseInt(selRef.value||"0",10);
   if(v>0){
-    if(timer){ clearTimeout(timer); timer = null; }
-    timer = setTimeout(async ()=>{
-      await reload();
-      scheduleNextPoll();
-    }, v);
+    timer = setTimeout(reload, v);
   }
 }
 
 function updateRefreshTimer(){
-  stopPolling();
-  const v = parseInt(selRef.value||"0",10);
-  if(v>0){
-    startPolling();
-  }
+  scheduleNextPoll();
 }
+
+document.addEventListener("visibilitychange", ()=>{
+  stopPolling();
+  if(!document.hidden && parseInt(selRef.value||"0",10)>0) reload();
+});
 
 async function sendPayload(){
   const hex = (inpPayload.value || "").trim();
@@ -302,7 +295,7 @@ document.addEventListener("DOMContentLoaded", ()=>{
     btnSend.addEventListener("click", sendPayload);
   }
 
-  reload().then(updateRefreshTimer);
+  if(!document.hidden) reload();
 });
 </script>
 

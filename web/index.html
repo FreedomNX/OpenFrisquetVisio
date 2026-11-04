@@ -115,8 +115,19 @@
       setText("#hotWaterTemp",value(boiler.hotWaterTemperature,"°C"));setText("#heatingBodyTemp",value(boiler.heatingBodyTemperature,"°C"));setText("#flueTemp",value(boiler.flueTemperature,"°C"));setText("#pressure",value(boiler.pressure,"bar",2));setText("#heatingPower",value(boiler.heatingPower,"kW"));setText("#hotWaterPower",value(boiler.hotWaterPower,"kW"));
       const heatingGas=integer(boiler.heatingConsumption,"kWh"),hotWaterGas=integer(boiler.hotWaterConsumption,"kWh");setText("#gasConsumption",heatingGas==="—"&&hotWaterGas==="—"?"—":heatingGas+" / "+hotWaterGas);renderZones(data.zones);$("#lastUpdate").textContent="Mis à jour à "+new Date().toLocaleTimeString("fr-FR",{hour:"2-digit",minute:"2-digit",second:"2-digit"})
     }
-    async function loadDashboard(){const button=$("#refreshBtn");if(button)button.disabled=true;try{const response=await fetch("/api/dashboard",{cache:"no-store"});if(!response.ok)throw new Error("HTTP "+response.status);render(await response.json())}catch(error){setStatus("#wifiStatus","Données indisponibles","bad");$("#lastUpdate").textContent="Impossible d’actualiser le tableau de bord"}finally{if(button)button.disabled=false}}
-    $("#refreshBtn").addEventListener("click",loadDashboard);loadDashboard();setInterval(loadDashboard,5000);
+    let dashboardInFlight=false,dashboardTimer=null;
+    function scheduleDashboard(){clearTimeout(dashboardTimer);dashboardTimer=null;if(!document.hidden)dashboardTimer=setTimeout(loadDashboard,5000)}
+    async function loadDashboard(){
+      if(dashboardInFlight)return;
+      dashboardInFlight=true;clearTimeout(dashboardTimer);dashboardTimer=null;
+      const button=$("#refreshBtn");if(button)button.disabled=true;
+      try{const response=await fetch("/api/dashboard",{cache:"no-store"});if(!response.ok)throw new Error("HTTP "+response.status);render(await response.json())}
+      catch(error){setStatus("#wifiStatus","Données indisponibles","bad");$("#lastUpdate").textContent="Impossible d’actualiser le tableau de bord"}
+      finally{dashboardInFlight=false;if(button)button.disabled=false;scheduleDashboard()}
+    }
+    $("#refreshBtn").addEventListener("click",loadDashboard);
+    document.addEventListener("visibilitychange",()=>{clearTimeout(dashboardTimer);dashboardTimer=null;if(!document.hidden)loadDashboard()});
+    if(!document.hidden)loadDashboard();
   </script>
 </body>
 </html>

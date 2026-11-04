@@ -29,7 +29,9 @@ methods = [extract(signature) for signature in (
     "bool Portal::requireAuthentication(", "void Portal::createSession(",
     "void Portal::clearSessions(", "void Portal::sendLoginPage(",
     "void Portal::handleLoginPage(", "void Portal::handleLogin(",
-    "void Portal::handleLogout(", "void Portal::onAuthenticated(", "void Portal::begin(",
+    "void Portal::handleLogout(", "void Portal::onAuthenticated(",
+    "void Portal::sendStaticAsset(", "void Portal::handleLogo(", "void Portal::handleIndex(",
+    "void Portal::begin(",
 )]
 begin = methods[-1]
 # Only login and shared visual resources are public registrations.
@@ -57,7 +59,7 @@ post_auth = "void Portal::handlePostConfig() {\n" + validation + "\n" + "\n".joi
     ))
 ) + "\n}"
 methods.append(post_auth)
-handlers = sorted(set(re.findall(r'&Portal::(\w+)', begin)) - {"handleLogout", "handlePostConfig"})
+handlers = sorted(set(re.findall(r'&Portal::(\w+)', begin)) - {"handleLogout", "handlePostConfig", "handleLogo", "handleIndex"})
 session_members = header[header.index('  static constexpr uint32_t SESSION_DURATION_MS'):header.index('  // Handlers')]
 
 prefix = r'''
@@ -115,16 +117,22 @@ struct Callback {
 };
 struct WebServer {
     struct Route { String uri;HTTPMethod method=HTTP_GET;Callback handler,upload; } routes[40];
-    size_t count=0;Callback notFound;bool cookiesCollected=false;
-    String requestUri,cookie,password,newPassword,confirmation,location,cookieOut,cache,body;
-    int code=0;HTTPMethod requestMethod=HTTP_GET;
-    void collectHeaders(const char** keys,size_t n){cookiesCollected=n==1&&!strcmp(keys[0],"Cookie");}
+    size_t count=0;Callback notFound;bool cookiesCollected=false,etagsCollected=false;
+    String requestUri,cookie,ifNoneMatch,password,newPassword,confirmation,location,cookieOut,cache,etag,encoding,type,body;
+    int code=0;size_t contentLength=0;HTTPMethod requestMethod=HTTP_GET;
+    void collectHeaders(const char** keys,size_t n){
+        for(size_t i=0;i<n;++i){cookiesCollected|=!strcmp(keys[i],"Cookie");etagsCollected|=!strcmp(keys[i],"If-None-Match");}
+    }
     template<class F> void on(const char* uri,HTTPMethod method,F f){auto& r=routes[count++];r.uri=uri;r.method=method;r.handler.set(f);}
     template<class F,class G> void on(const char* uri,HTTPMethod method,F f,G g){on(uri,method,f);routes[count-1].upload.set(g);}
     template<class F> void onNotFound(F f){notFound.set(f);}
     void begin(){}
     String uri(){return requestUri;}
-    String header(const char* name){return !strcmp(name,"Cookie")?cookie:String();}
+    String header(const char* name){
+        if(!strcmp(name,"Cookie"))return cookie;
+        if(!strcmp(name,"If-None-Match"))return ifNoneMatch;
+        return String();
+    }
     HTTPMethod method(){return requestMethod;}
     String arg(const char* name){
         if(!strcmp(name,"password"))return password;
@@ -136,12 +144,19 @@ struct WebServer {
         if(!strcmp(name,"Location"))location=value;
         if(!strcmp(name,"Set-Cookie"))cookieOut=value;
         if(!strcmp(name,"Cache-Control"))cache=value;
+        if(!strcmp(name,"ETag"))etag=value;
+        if(!strcmp(name,"Content-Encoding"))encoding=value;
     }
-    void send_P(int status,const char* type,const char* content){send(status,type,content);}
-    void send(int status,const char* =nullptr,const String& content=String()){code=status;body=content;}
+    void setContentLength(size_t length){contentLength=length;}
+    void send_P(int status,const char* type,const char* content,size_t length){
+        char copy[1024]={};assert(length<sizeof(copy));memcpy(copy,content,length);send(status,type,copy);
+    }
+    void send(int status,const char* contentType=nullptr,const String& content=String()){
+        code=status;type=contentType?contentType:"";body=content;
+    }
     void prepare(const char* uri,HTTPMethod method,const String& cookies=String()){
-        requestUri=uri;requestMethod=method;cookie=cookies;
-        code=0;body=String();location=String();cookieOut=String();
+        requestUri=uri;requestMethod=method;cookie=cookies;ifNoneMatch=String();
+        code=0;contentLength=0;type=String();body=String();location=String();cookieOut=String();cache=String();etag=String();encoding=String();
         password=String();newPassword=String();confirmation=String();
     }
     Route* find(const char* uri,HTTPMethod method){for(size_t i=0;i<count;++i)if(routes[i].uri==uri&&routes[i].method==method)return &routes[i];return nullptr;}
@@ -153,8 +168,17 @@ uint64_t nowMs=100;uint32_t millis(){return static_cast<uint32_t>(nowMs);}
 int64_t esp_timer_get_time(){return nowMs*1000;}
 void esp_fill_random(void* buffer,size_t n){static uint8_t seed=1;auto* p=static_cast<uint8_t*>(buffer);for(size_t i=0;i<n;++i)p[i]=seed+i;++seed;}
 void info(const char*,...){}
-namespace WebAssets { const char* THEME_CSS="theme css"; const char* THEME_JS="theme js"; const char* LOGIN_HTML="<form><input type=password name=password>{{LOGIN_ERROR}}</form>"; }
+namespace WebAssets {
+struct StaticAsset{const uint8_t* gzipData;size_t gzipSize;const char* etag;const char* contentType;};
+const uint8_t* bytes(const char* text){return reinterpret_cast<const uint8_t*>(text);}
+const StaticAsset THEME_CSS={bytes("theme css"),9,"\"css\"","text/css; charset=utf-8"};
+const StaticAsset THEME_JS={bytes("theme js"),8,"\"js\"","application/javascript; charset=utf-8"};
+const StaticAsset LOGO_PNG={bytes("logo png"),8,"\"png\"","image/png"};
+const StaticAsset INDEX_HTML={bytes("index"),5,"\"html\"","text/html; charset=utf-8"};
+const char* LOGIN_HTML="<form><input type=password name=password>{{LOGIN_ERROR}}</form>";
+}
 #define FPSTR(x) x
+typedef const char* PGM_P;
 '''
 declarations = "\n".join(method.split("{", 1)[0].replace("Portal::", "", 1).strip() + ";" for method in methods)
 declarations = declarations.replace("void (Portal::*uploadHandler)()", "void (Portal::*uploadHandler)() = nullptr")
@@ -172,14 +196,21 @@ int main(){
     Config config;assert(config.portalPassword()=="admin");config.load();assert(config.portalPassword()=="admin");
     config.portalPassword("changed");config.save();config.portalPassword("temporary");config.load();assert(config.portalPassword()=="changed");
     config._preferences.stored="";config.load();assert(config.portalPassword()=="admin");
-    FrisquetManager fm;Portal p(fm);p.begin(false);assert(p._srv.cookiesCollected);
+    FrisquetManager fm;Portal p(fm);p.begin(false);assert(p._srv.cookiesCollected&&p._srv.etagsCollected);
     for(size_t i=0;i<p._srv.count;++i){
         auto& r=p._srv.routes[i];if(r.uri=="/login"||r.uri=="/theme.css"||r.uri=="/theme.js")continue;
         p._srv.prepare(r.uri.c_str(),r.method);int before=p.handled;r.handler.run();
         assert(p.handled==before);assert(p._srv.code==(r.uri.startsWith("/api/")?401:303));
     }
-    p._srv.prepare("/theme.css",HTTP_GET);p._srv.dispatch();assert(p._srv.code==200&&p._srv.body=="theme css");
-    p._srv.prepare("/theme.js",HTTP_GET);p._srv.dispatch();assert(p._srv.code==200&&p._srv.body=="theme js");
+    p._srv.prepare("/theme.css",HTTP_GET);p._srv.dispatch();
+    assert(p._srv.code==200&&p._srv.body=="theme css"&&p._srv.cache=="no-cache"&&p._srv.etag=="\"css\""&&p._srv.encoding=="gzip");
+    p._srv.prepare("/theme.js",HTTP_GET);p._srv.dispatch();assert(p._srv.code==200&&p._srv.body=="theme js"&&p._srv.etag=="\"js\"");
+    // A cached copy of the same version is confirmed without a body. Caches copy the 304 headers
+    // onto their stored response, so type and length describe the 200 it stands for.
+    p._srv.prepare("/theme.css",HTTP_GET);p._srv.ifNoneMatch="\"css\"";p._srv.dispatch();
+    assert(p._srv.code==304&&p._srv.body.isEmpty()&&p._srv.contentLength==9&&p._srv.type=="text/css; charset=utf-8");
+    assert(p._srv.cache=="no-cache"&&p._srv.etag=="\"css\""&&p._srv.encoding=="gzip");
+    p._srv.prepare("/theme.css",HTTP_GET);p._srv.ifNoneMatch="\"stale\"";p._srv.dispatch();assert(p._srv.code==200&&p._srv.body=="theme css");
     p._srv.prepare("/login",HTTP_GET);p._srv.dispatch();assert(p._srv.code==200);
     for(int i=0;i<5;++i){p._srv.prepare("/login",HTTP_POST);p._srv.password="wrong";p._srv.dispatch();assert(p._srv.code==(i==4?429:401));assert(p._srv.cookieOut.isEmpty());}
     p._srv.prepare("/login",HTTP_POST);p._srv.password="admin";p._srv.dispatch();assert(p._srv.code==429);
@@ -189,6 +220,14 @@ int main(){
     assert(!authenticated(p,"fake_ofv_session="+cookie.substring(12)));
     p._srv.prepare("/api/config",HTTP_GET);p._srv.dispatch();assert(p._srv.code==401);
     p._srv.prepare("/api/config",HTTP_GET,cookie);int before=p.handled;p._srv.dispatch();assert(p.handled==before+1);
+    p._srv.prepare("/logo.png",HTTP_GET,cookie);p._srv.dispatch();
+    assert(p._srv.code==200&&p._srv.body=="logo png"&&p._srv.etag=="\"png\""&&p._srv.type=="image/png");
+    p._srv.prepare("/logo.png",HTTP_GET,cookie);p._srv.ifNoneMatch="\"png\"";p._srv.dispatch();assert(p._srv.code==304&&p._srv.contentLength==8);
+    p._srv.prepare("/logo.png",HTTP_GET);p._srv.ifNoneMatch="\"png\"";p._srv.dispatch();assert(p._srv.code==303);
+    // Pages are fixed at build time, so they revalidate like the shared resources.
+    p._srv.prepare("/",HTTP_GET,cookie);p._srv.dispatch();
+    assert(p._srv.code==200&&p._srv.body=="index"&&p._srv.etag=="\"html\""&&p._srv.type=="text/html; charset=utf-8"&&p._srv.encoding=="gzip");
+    p._srv.prepare("/",HTTP_GET,cookie);p._srv.ifNoneMatch="\"html\"";p._srv.dispatch();assert(p._srv.code==304&&p._srv.contentLength==5);
     p._srv.prepare("/unknown",HTTP_GET);p._srv.dispatch();assert(p._srv.code==303);
     p._srv.prepare("/unknown",HTTP_GET,cookie);p._srv.dispatch();assert(p._srv.code==404);
     // Upload callbacks execute before the final HTTP handler: all are gated.
@@ -211,7 +250,7 @@ int main(){
     nowMs+=(1ULL<<32);assert(!authenticated(p,cookie));
     p.clearSessions();nowMs=1000;cookie=login(p,"changed");
     for(int i=0;i<4;++i){++nowMs;login(p,"changed");}assert(!authenticated(p,cookie));
-    puts("OK: password-only login, persistence, protected routes/uploads, sessions, logout, expiry and password changes");
+    puts("OK: password-only login, persistence, protected routes/uploads, sessions, logout, expiry, password changes and asset and page revalidation");
 }
 '''
 with tempfile.TemporaryDirectory(prefix="frisquet-auth-") as temp:

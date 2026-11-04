@@ -3,6 +3,8 @@ import re
 from datetime import datetime
 
 
+Import("env")
+
 try:
     script_dir = os.path.dirname(__file__)
     ROOT = os.path.abspath(os.path.join(script_dir, ".."))
@@ -66,6 +68,8 @@ def main():
     version = generate_version()
     update_version_header(version)
     update_readme(version)
+    # Lu par generate_web_assets.py, qui l’inscrit dans les pages du portail.
+    env["OPENFRISQUETVISIO_VERSION"] = version
 
 
 main()

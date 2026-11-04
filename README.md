@@ -63,8 +63,11 @@ Deux modes possibles :
 - Lecture de zones mémoire (debug)
 
 Les pages du portail se trouvent dans le dossier **`web/`**. Lors d'une compilation
-PlatformIO, `tools/generate_web_assets.py` les transforme automatiquement en
-ressources C++ stockées dans le firmware.
+PlatformIO, le script `tools/generate_web_assets.py` les transforme en ressources
+C++ stockées dans le firmware : il y remplace le marqueur
+`{{OPENFRISQUETVISIO_VERSION}}` par la version du firmware, c’est-à-dire la date
+et l’heure de compilation au format `AA.MM.JJ.HHmm`, puis les compresse en gzip.
+Cette version s’affiche en bas des pages.
 
 La programmation est envoyée avec le bloc complet de configuration de la zone au
 prochain cycle du Connect. Son utilisation nécessite le mode Auto ; enregistrer

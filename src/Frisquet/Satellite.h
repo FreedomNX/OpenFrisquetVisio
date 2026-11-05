@@ -23,7 +23,8 @@ class Satellite : public FrisquetDevice {
         static constexpr uint8_t MODE_BIT_DEROGATION = 0x02;
         static constexpr uint8_t MODE_BIT_ETAT_INTERNE = 0x04;
         static constexpr uint8_t MODE_BIT_AUTO = 0x20;
-        static constexpr uint8_t MODE_BITS_CONNUS = MODE_BIT_CONFORT | MODE_BIT_DEROGATION | MODE_BIT_ETAT_INTERNE | MODE_BIT_AUTO;
+        static constexpr uint8_t MODE_BIT_BOOST = 0x40;
+        static constexpr uint8_t MODE_BITS_CONNUS = MODE_BIT_CONFORT | MODE_BIT_DEROGATION | MODE_BIT_ETAT_INTERNE | MODE_BIT_AUTO | MODE_BIT_BOOST;
 
         // Valeurs émises : celles observées sur un satellite physique en régime
         // établi (Auto, Confort permanent, Réduit permanent, dérogation réduit) ;
@@ -57,7 +58,7 @@ class Satellite : public FrisquetDevice {
 
         MODE getMode();
         void setMode(MODE mode);
-        void setModeFromRaw(uint8_t rawMode);
+        bool setModeFromRaw(uint8_t rawMode);
         String getNomMode();
 
         void setEcrasement(bool ecrasement) {

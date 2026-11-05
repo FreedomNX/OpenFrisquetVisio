@@ -537,9 +537,8 @@ bool Satellite::onReceive(byte* donnees, size_t length) {
                     const byte optionsDemandees = _zone.getModeOptions();
                     const bool commandeConnectEnAttente = _zone.getSource() == Zone::SOURCE::CONNECT
                         && _zone.getLastChange() > _zone.getLastEnvoi();
-                    setModeFromRaw(donneesSatellite->mode);
-                    if(_zone.getSource() == Zone::SOURCE::SATELLITE_PHYSIQUE) {
-                        _zone.desactiverBoost();
+                    const bool modeValide = setModeFromRaw(donneesSatellite->mode);
+                    if(_zone.getSource() == Zone::SOURCE::SATELLITE_PHYSIQUE && modeValide) {
                         _zone.confirmerMode();
                     }
                     if(commandeConnectEnAttente) {
@@ -662,6 +661,13 @@ Satellite::MODE Satellite::decodeModeFromRaw(uint8_t rawMode) const {
         return MODE::INCONNU;
     }
 
+    // Boost observé en Confort permanent (0x45). Ne pas accepter des
+    // combinaisons Auto/dérogation/réduit dont le sens n'est pas établi.
+    if ((rawMode & MODE_BIT_BOOST)
+        && (rawMode & ~(MODE_BIT_BOOST | MODE_BIT_ETAT_INTERNE)) != MODE_BIT_CONFORT) {
+        return MODE::INCONNU;
+    }
+
     // Le bit 0x04 est un état interne du satellite : il ne distingue pas
     // Auto de permanent et n'est pas interprété.
     const bool confort = (rawMode & MODE_BIT_CONFORT) != 0;
@@ -678,15 +684,17 @@ uint8_t Satellite::encodeModeForSend(Satellite::MODE mode) const {
     return (uint8_t)mode;
 }
 
-void Satellite::setModeFromRaw(uint8_t rawMode) {
+bool Satellite::setModeFromRaw(uint8_t rawMode) {
     MODE decodedMode = decodeModeFromRaw(rawMode);
 
     if (decodedMode == MODE::INCONNU) {
         char hexMode[5];
         snprintf(hexMode, sizeof(hexMode), "%02X", rawMode);
         warning(String("[SATELLITE Z") + String(getNumeroZone()) + "] Mode satellite inconnu: 0x" + String(hexMode));
-        return;
+        return false;
     }
 
     setMode(decodedMode);
+    _zone.setModeOptions((_zone.getModeOptions() & ~MODE_BIT_BOOST) | (rawMode & MODE_BIT_BOOST));
+    return true;
 }

@@ -472,6 +472,7 @@ bool Satellite::onReceive(byte* donnees, size_t length) {
                 
                 size_t lengthRx = 0;
                 byte buffZones[RADIOLIB_SX126X_MAX_PACKET_LENGTH];
+                byte modeObserve = MODE::INCONNU;
 
                 if(! getEcrasement()) {
                     delay(300);
@@ -505,22 +506,30 @@ bool Satellite::onReceive(byte* donnees, size_t length) {
                         temperature16 temperatureAmbianteZ1;    // Début 5°C -> 0 = 50 = 5°C - MAX 30°C
                         temperature16 temperatureConsigneZ1;    // Début 5°C -> 0 = 50 = 5°C - MAX 30°C
                         byte i2 = 0x00;
-                        uint8_t modeZ1 = 0x00;                       // 0x05 auto - 0x06 confort - 0x07 reduit - 0x08 hors gel
+                        uint8_t modeZ1 = 0x00;                       // Options A02F : Auto 0x20, Confort 0x01, Boost 0x40
                         byte i3[4] = {0x00, 0xC6, 0x00, 0xC6};
                         temperature16 temperatureAmbianteZ2;    // Début 5°C -> 0 = 50 = 5°C - MAX 30°C
                         temperature16 temperatureConsigneZ2;    // Début 5°C -> 0 = 50 = 5°C - MAX 30°C
                         byte i4 = 0x00;
-                        uint8_t modeZ2 = 0x00;                       // 0x05 auto - 0x06 confort - 0x07 reduit - 0x08 hors gel
+                        uint8_t modeZ2 = 0x00;                       // Même format A02F pour la zone 2
                         byte i5[4] = {0x00, 0x00, 0x00, 0x00};
                         temperature16 temperatureAmbianteZ3;    // Début 5°C -> 0 = 50 = 5°C - MAX 30°C
                         temperature16 temperatureConsigneZ3;    // Début 5°C -> 0 = 50 = 5°C - MAX 30°C
                         byte i6 = 0x00;
-                        uint8_t modeZ3 = 0x00;                       // 0x05 auto - 0x06 confort - 0x07 reduit - 0x08 hors gel
+                        uint8_t modeZ3 = 0x00;                       // Même format A02F pour la zone 3
                         byte i7[4] = {0x00, 0x00, 0x00, 0x00};
                     }* donneesZones = (donneesZones_t*)readBuffer.getBytes(sizeof(donneesZones_t));
 
                     if(lengthRx < sizeof(donneesZones_t)) {
                         return false;
+                    }
+
+                    // Ces octets utilisent le format A02F (ex. 0x25 = Auto
+                    // Confort), pas l'énumération Zone::MODE_ZONE d'A154.
+                    switch(getNumeroZone()) {
+                        case 1: modeObserve = donneesZones->modeZ1; break;
+                        case 2: modeObserve = donneesZones->modeZ2; break;
+                        case 3: modeObserve = donneesZones->modeZ3; break;
                     }
 
                     setEtatChaudiere(donneesZones->etatChaudiere);
@@ -537,8 +546,11 @@ bool Satellite::onReceive(byte* donnees, size_t length) {
                     const byte optionsDemandees = _zone.getModeOptions();
                     const bool commandeConnectEnAttente = _zone.getSource() == Zone::SOURCE::CONNECT
                         && _zone.getLastChange() > _zone.getLastEnvoi();
-                    const bool modeValide = setModeFromRaw(donneesSatellite->mode);
-                    if(_zone.getSource() == Zone::SOURCE::SATELLITE_PHYSIQUE && modeValide) {
+                    // La réponse chaudière confirme aussi une zone Connect,
+                    // sans attendre une nouvelle écriture de configuration A154.
+                    const byte modeConfirme = _zone.getSource() == Zone::SOURCE::CONNECT
+                        ? modeObserve : donneesSatellite->mode;
+                    if(setModeFromRaw(modeConfirme)) {
                         _zone.confirmerMode();
                     }
                     if(commandeConnectEnAttente) {

@@ -6,6 +6,12 @@
 #include "Logs.h"
 #include "FrisquetManager.h"
 
+// Déclaration anticipée (forward declaration) : seul Portal.cpp inclut
+// generated/WebAssets.h, sinon chaque .cpp incluant Portal.h recompilerait
+// les pages du portail.
+// @see https://en.cppreference.com/w/cpp/language/class#Forward_declaration
+namespace WebAssets { struct StaticAsset; }
+
 // Portail Web de configuration + logs (adapté à ton Config)
 class Portal {
 public:
@@ -76,15 +82,10 @@ private:
   void createSession();
   void clearSessions();
   void sendLoginPage(int status, const char* message);
+  void sendStaticAsset(const WebAssets::StaticAsset& asset);
   void onAuthenticated(const char* uri, HTTPMethod method, void (Portal::*handler)(),
                        void (Portal::*uploadHandler)() = nullptr);
   bool requireDeveloperMode();
-  static String html();
-  static String settingsHtml();
-  static String programmationHtml();
-  static String logsHtml();
-  static String memoryHtml();
-  String logsRadioHtml();
   void scheduleReboot(uint32_t delayMs = 800);
   bool hexStringToBufferRaw(const String& hex, uint8_t* buffer, size_t maxLen, size_t& outLen);
 

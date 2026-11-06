@@ -300,16 +300,21 @@ void Portal::begin(bool startApFallbackIfNoWifi) {
     startAp();
   }
 
-  const char* headerKeys[] = {"Cookie"};
-  _srv.collectHeaders(headerKeys, 1);
+  // Le serveur web ignore les en-têtes de requête qui ne sont pas listés ici.
+  // Cookie : identifiant de session. If-None-Match : ETag (empreinte de la
+  // ressource) de la copie que le navigateur a en cache ; si elle est encore
+  // à jour, le serveur répond 304 Not Modified sans corps au lieu de renvoyer
+  // la page.
+  // @see https://developer.mozilla.org/fr/docs/Web/HTTP/Reference/Headers/ETag
+  // @see https://developer.mozilla.org/fr/docs/Web/HTTP/Reference/Status/304
+  const char* headerKeys[] = {"Cookie", "If-None-Match"};
+  _srv.collectHeaders(headerKeys, sizeof(headerKeys) / sizeof(headerKeys[0]));
   // Ressources visuelles publiques : nécessaires avant l’authentification.
   _srv.on("/theme.css", HTTP_GET, [this] {
-    _srv.sendHeader("Cache-Control", "no-cache");
-    _srv.send_P(200, "text/css; charset=utf-8", WebAssets::THEME_CSS);
+    sendStaticAsset(WebAssets::THEME_CSS);
   });
   _srv.on("/theme.js", HTTP_GET, [this] {
-    _srv.sendHeader("Cache-Control", "no-cache");
-    _srv.send_P(200, "application/javascript; charset=utf-8", WebAssets::THEME_JS);
+    sendStaticAsset(WebAssets::THEME_JS);
   });
   _srv.on("/login", HTTP_GET, [this] { handleLoginPage(); });
   _srv.on("/login", HTTP_POST, [this] { handleLogin(); });
@@ -405,15 +410,15 @@ void Portal::handleUpdateUpload() {
 // -------------------- API --------------------
 
 void Portal::handleIndex() {
-  _srv.send(200, "text/html; charset=utf-8", html());
+  sendStaticAsset(WebAssets::INDEX_HTML);
 }
 
 void Portal::handleSettingsPage() {
-  _srv.send(200, "text/html; charset=utf-8", settingsHtml());
+  sendStaticAsset(WebAssets::SETTINGS_HTML);
 }
 
 void Portal::handleProgrammationPage() {
-  _srv.send(200, "text/html; charset=utf-8", programmationHtml());
+  sendStaticAsset(WebAssets::PROGRAMMING_HTML);
 }
 
 static String programmationHex(const Zone::Programmation& programmation) {
@@ -510,9 +515,30 @@ void Portal::handlePostProgrammation() {
 }
 
 void Portal::handleLogo() {
-  _srv.send_P(200, "image/png",
-              reinterpret_cast<const char*>(WebAssets::LOGO_PNG),
-              WebAssets::LOGO_PNG_SIZE);
+  sendStaticAsset(WebAssets::LOGO_PNG);
+}
+
+// Le navigateur revalide la ressource à chaque usage : tant que le fichier ne
+// change pas, même après une mise à jour du firmware, l’ETag réduit cet échange
+// à une réponse 304 sans corps.
+void Portal::sendStaticAsset(const WebAssets::StaticAsset& asset) {
+  _srv.sendHeader("Cache-Control", "no-cache");
+  _srv.sendHeader("ETag", asset.etag);
+  // Le firmware ne garde que la version compressée, et tous les navigateurs
+  // acceptent gzip : Accept-Encoding n’est donc pas consulté.
+  // @see https://developer.mozilla.org/fr/docs/Web/HTTP/Reference/Headers/Content-Encoding
+  _srv.sendHeader("Content-Encoding", "gzip");
+  if (_srv.header("If-None-Match") == asset.etag) {
+    // À la réception d’une 304, le navigateur garde sa copie et en remplace
+    // les en-têtes par ceux de la 304 : type et encodage doivent donc être
+    // exacts. Content-Length doit être celui de la réponse 200, soit gzipSize ;
+    // sans setContentLength, la bibliothèque enverrait 0.
+    // @see https://developer.mozilla.org/fr/docs/Web/HTTP/Reference/Status/304
+    _srv.setContentLength(asset.gzipSize);
+    _srv.send(304, asset.contentType);
+    return;
+  }
+  _srv.send_P(200, asset.contentType, reinterpret_cast<PGM_P>(asset.gzipData), asset.gzipSize);
 }
 
 void Portal::handlePing() {
@@ -995,7 +1021,7 @@ void Portal::handleGetLogs() {
 
 
 void Portal::handleLogsPage() {
-  _srv.send(200, "text/html; charset=utf-8", logsHtml());
+  sendStaticAsset(WebAssets::LOGS_HTML);
 }
 
 void Portal::handleStatus() {
@@ -1111,7 +1137,7 @@ bool Portal::requireDeveloperMode() {
 
 void Portal::handleRadioLogsPage() {
   if (!requireDeveloperMode()) return;
-  _srv.send(200, "text/html; charset=utf-8", logsRadioHtml());
+  sendStaticAsset(WebAssets::RADIO_LOGS_HTML);
 }
 
 void Portal::handleMemoryRead() {
@@ -1399,7 +1425,7 @@ void Portal::handleMemoryScan() {
 
 void Portal::handleMemoryPage() {
   if (!requireDeveloperMode()) return;
-  _srv.send(200, "text/html; charset=utf-8", memoryHtml());
+  sendStaticAsset(WebAssets::MEMORY_HTML);
 }
 
 void Portal::handlePairConnect() {
@@ -1662,36 +1688,6 @@ void Portal::startAp() {
   } else {
     error("[PORTAIL] AP fallback: échec du démarrage");
   }
-}
-
-String Portal::html() {
-  String page(FPSTR(WebAssets::INDEX_HTML));
-  page.replace("{{OPENFRISQUETVISIO_VERSION}}", OPENFRISQUETVISIO_VERSION);
-  return page;
-}
-
-String Portal::settingsHtml() {
-  String page(FPSTR(WebAssets::SETTINGS_HTML));
-  page.replace("{{OPENFRISQUETVISIO_VERSION}}", OPENFRISQUETVISIO_VERSION);
-  return page;
-}
-
-String Portal::programmationHtml() {
-  String page(FPSTR(WebAssets::PROGRAMMING_HTML));
-  page.replace("{{OPENFRISQUETVISIO_VERSION}}", OPENFRISQUETVISIO_VERSION);
-  return page;
-}
-
-String Portal::logsHtml() {
-  return String(FPSTR(WebAssets::LOGS_HTML));
-}
-
-String Portal::memoryHtml() {
-  return String(FPSTR(WebAssets::MEMORY_HTML));
-}
-
-String Portal::logsRadioHtml() {
-  return String(FPSTR(WebAssets::RADIO_LOGS_HTML));
 }
 
 bool Portal::hexStringToBufferRaw(const String& hex, uint8_t* buffer, size_t maxLen, size_t& outLen) {

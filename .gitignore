@@ -9,6 +9,7 @@ platformio.ini
 docs/
 tools/*
 !tools/generate_web_assets.py
+!tools/web_assets.py
 !tools/version.py
 tests/*
 !tests/test_radio_crc.py
@@ -16,6 +17,7 @@ tests/*
 !tests/test_portal_auth.py
 !tests/portal-password.test.mjs
 !tests/test_ota_auth.py
+!tests/test_web_assets.py
 
 !tests/test_zone_modes.py
 !tests/test_satellite_mode.py

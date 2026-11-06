@@ -170,7 +170,7 @@ void Chaudiere::publishMqtt() {
     if (!isnan(getTemperatureFumees())) {
         _mqtt.publishState(_mqttEntities.tempFumees, getTemperatureFumees());
     }
-    if (!isnan(getTemperatureExterieure())) {
+    if (!_cfg.useSondeExterieure() && !isnan(getTemperatureExterieure())) {
         _mqtt.publishState(_mqttEntities.tempExterieure, getTemperatureExterieure());
     }
     if (!isnan(getPuissanceInstantaneeECS())) {

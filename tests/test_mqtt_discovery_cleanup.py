@@ -32,6 +32,7 @@ for filename, entity, mqtt in (
 
 code = r'''
 #include <cassert>
+#include <cstdint>
 #include <string>
 #include <map>
 #include <vector>

@@ -83,15 +83,17 @@ Les tests du codage des demi-heures et de la sauvegarde se lancent avec
 - ArduinoOTA (port 3232) utilise le mot de passe du portail. Changez `admin`
   pour protéger les deux accès.
 
-Avec `espota.py` (`tools/` du paquet `framework-arduinoespressif32`), sous Bash :
+Téléchargez [`espota.py`](https://github.com/espressif/arduino-esp32/blob/master/tools/espota.py)
+avec le bouton **Download raw file**, puis lancez-le depuis un terminal.
+Le script demande le mot de passe du portail :
 
 ```bash
-IFS= read -rs -p 'Mot de passe du portail : ' OTA_PASSWORD; echo
-python3 /chemin/vers/espota.py -i 192.168.1.184 --auth="$OTA_PASSWORD" -f .pio/build/heltec_wifi_lora_32_V3/firmware.bin
-unset OTA_PASSWORD
+python3 /chemin/vers/espota.py -i 192.168.1.184 -f .pio/build/heltec_wifi_lora_32_V3/firmware.bin
 ```
 
 Adaptez le chemin, l’adresse et l’environnement de compilation.
+`pio run -t upload` utilise le script fourni par PlatformIO ; les anciennes
+versions ne proposent pas cette saisie du mot de passe.
 
 ---
 

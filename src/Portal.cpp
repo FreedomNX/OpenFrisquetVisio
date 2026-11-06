@@ -953,16 +953,21 @@ void Portal::handleGetLogs() {
   size_t outCount = logs.getLines(s_logLines, kMaxQueryLines, limit,
                                   level.length() > 0 ? level.c_str() : nullptr);
 
-  auto sendEscapedJson = [this](const char* text) {
-    char buffer[128];
-    size_t pos = 0;
-    auto flush = [&]() {
-      if (pos > 0) {
-        buffer[pos] = '\0';
-        _srv.sendContent(buffer);
-        pos = 0;
-      }
-    };
+  // Regrouper la syntaxe JSON et les lignes dans des blocs bornés. Chaque
+  // sendContent() produit un chunk HTTP et plusieurs écritures réseau.
+  char buffer[1024];
+  size_t pos = 0;
+  auto flush = [&]() {
+    if (pos > 0) {
+      _srv.sendContent(buffer, pos);
+      pos = 0;
+    }
+  };
+  auto append = [&](char c) {
+    buffer[pos++] = c;
+    if (pos == sizeof(buffer)) flush();
+  };
+  auto sendEscapedJson = [&](const char* text) {
 
     for (const char* p = text; p && *p; ++p) {
       const char* esc = nullptr;
@@ -984,39 +989,31 @@ void Portal::handleGetLogs() {
       }
 
       if (!esc) {
-        if (pos + 1 >= sizeof(buffer)) {
-          flush();
-        }
-        buffer[pos++] = *p;
+        append(*p);
       } else {
-        size_t len = strlen(esc);
-        if (pos + len >= sizeof(buffer)) {
-          flush();
-        }
-        memcpy(buffer + pos, esc, len);
-        pos += len;
+        while (*esc) append(*esc++);
       }
     }
-    flush();
   };
 
   _srv.setContentLength(CONTENT_LENGTH_UNKNOWN);
   _srv.send(200, "application/json; charset=utf-8", "");
-  _srv.sendContent("[");
+  append('[');
   bool first = true;
   for (size_t i = 0; i < outCount; ++i) {
     if (!first) {
-      _srv.sendContent(",");
+      append(',');
     }
     first = false;
 
     char formatted[Logs::kMaxFormattedLen];
     s_logLines[i].format(formatted, sizeof(formatted));
-    _srv.sendContent("\"");
+    append('"');
     sendEscapedJson(formatted);
-    _srv.sendContent("\"");
+    append('"');
   }
-  _srv.sendContent("]");
+  append(']');
+  flush();
 }
 
 

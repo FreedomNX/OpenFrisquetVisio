@@ -133,7 +133,6 @@ const $ = s => document.querySelector(s);
 let raw = "";
 let timer = null;
 let pollInFlight = false;
-let pollStopped = false;
 
 const elLog     = $("#log");
 const selRef    = $("#refresh");
@@ -175,8 +174,9 @@ function render(){
 }
 
 async function reload(){
-  if(pollInFlight || pollStopped) return;
+  if(pollInFlight) return;
   pollInFlight = true;
+  stopPolling();
   try{
     // On envoie la limite et éventuellement le niveau au backend
     const limitParam = selLimit.value === "0" ? "500" : selLimit.value;
@@ -194,38 +194,31 @@ async function reload(){
     elLog.textContent = "Erreur chargement logs: " + e;
   } finally {
     pollInFlight = false;
+    scheduleNextPoll();
   }
 }
 
 function stopPolling(){
-  pollStopped = true;
   if(timer){ clearTimeout(timer); timer = null; }
 }
 
-function startPolling(){
-  pollStopped = false;
-  scheduleNextPoll();
-}
-
 function scheduleNextPoll(){
-  if(pollStopped) return;
+  stopPolling();
+  if(document.hidden) return;
   const v = parseInt(selRef.value||"0",10);
   if(v>0){
-    if(timer){ clearTimeout(timer); timer = null; }
-    timer = setTimeout(async ()=>{
-      await reload();
-      scheduleNextPoll();
-    }, v);
+    timer = setTimeout(reload, v);
   }
 }
 
 function updateRefreshTimer(){
-  stopPolling();
-  const v = parseInt(selRef.value||"0",10);
-  if(v>0){
-    startPolling();
-  }
+  scheduleNextPoll();
 }
+
+document.addEventListener("visibilitychange", ()=>{
+  stopPolling();
+  if(!document.hidden && parseInt(selRef.value||"0",10)>0) reload();
+});
 
 document.addEventListener("DOMContentLoaded", ()=>{
   btnReload.addEventListener("click", reload);
@@ -245,7 +238,7 @@ document.addEventListener("DOMContentLoaded", ()=>{
 
   selRef.addEventListener("change", updateRefreshTimer);
 
-  reload().then(updateRefreshTimer);
+  if(!document.hidden) reload();
 });
 </script>
 

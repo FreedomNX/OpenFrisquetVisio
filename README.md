@@ -82,7 +82,7 @@ Les tests du codage des demi-heures et de la sauvegarde se lancent avec
 
 Téléchargez [`espota.py`](https://github.com/espressif/arduino-esp32/blob/master/tools/espota.py)
 avec le bouton **Download raw file**, puis lancez-le depuis un terminal.
-Le script demande le mot de passe du portail si nécessaire :
+Le script demande le mot de passe du portail :
 
 ```bash
 python3 /chemin/vers/espota.py -i 192.168.1.184 -f .pio/build/heltec_wifi_lora_32_V3/firmware.bin

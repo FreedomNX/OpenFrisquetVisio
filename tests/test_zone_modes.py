@@ -112,16 +112,52 @@ code += '\n'.join(extract(method) for method in methods)
 code += r'''
 struct Config {
     bool connect=false,passive=false;
+    bool virtualZ1=false;
     bool useConnect(){return connect;}
     bool useConnectPassive(){return passive;}
+    bool useSatelliteVirtualZ1(){return virtualZ1;}
+    bool useSatelliteVirtualZ2(){return false;}
+    bool useSatelliteVirtualZ3(){return false;}
+    bool useSatelliteZ1(){return true;}
+    bool useSatelliteZ2(){return false;}
+    bool useSatelliteZ3(){return false;}
 };
-struct Connect {bool associated=false;bool estAssocie(){return associated;}};
+constexpr int RADIOLIB_ERR_NONE=0, RADIOLIB_SX126X_MAX_PACKET_LENGTH=255;
+constexpr byte ID_ZONE_1=8, ID_ZONE_2=9, ID_ZONE_3=10, ID_CHAUDIERE=0x80;
+void delay(unsigned){}
+void error(const char*,...){}
+struct temperature8 {
+    byte value=0;
+    temperature8& operator=(float v){value=static_cast<byte>((v-5)*10);return *this;}
+};
+struct Radio {
+    int16_t result=RADIOLIB_ERR_NONE;
+    unsigned calls=0;
+    byte sentMode=0,sentOptions=0;
+    int16_t sendInit(byte,byte,byte,byte,byte,uint16_t,uint16_t,uint16_t,uint16_t,
+                     byte* payload,uint8_t count,byte*,size_t&){
+        ++calls;assert(count==48);sentMode=payload[3];sentOptions=payload[4];
+        return result;
+    }
+};
+struct Connect {
+    bool associated=false;Config config;Radio transport;
+    bool estAssocie(){return associated;}
+    Config& getConfig(){return config;}
+    Radio& radio(){return transport;}
+    byte getId(){return 0x7E;}
+    byte getIdAssociation(){return 0xAC;}
+    byte incrementIdMessage(){return 1;}
+    bool envoyerZone(Zone&);
+};
 '''
+code += extract('bool Connect::envoyerZone(', (ROOT/'src/Frisquet/Connect.cpp').read_text())
 code += extract('static String programmationReadOnlyReason(', (ROOT/'src/Portal.cpp').read_text())
 code += r'''
 void Zone::saveConfig(){++saves;}
 void Zone::publishMqtt(){++publishes;actualiserDecouverte();publierMode();}
 uint8_t Zone::getNumeroZone(){return 1;}
+uint8_t Zone::getIdZone(){return _idZone;}
 void initialize(Zone& z,Zone::SOURCE source){
     z.setSource(source);z.setPilotageActif(true);z._mqttPret=true;
     z.setTemperatureConfort(20);z.setTemperatureReduit(17);z.setTemperatureHorsGel(8);z.setTemperatureBoost(2);
@@ -140,6 +176,25 @@ int main(){
         assert(ZoneProgram::nextTransition(bytes,slot,1799)==1);
     }
     MqttManager mqtt;
+    // Sortie d'Auto : ne pas conserver le bit 0x20 dans les options A154.
+    Zone transition(8,mqtt);
+    for(byte rawAuto : {0x20, 0x21, 0x24, 0x25, 0x27}) {
+        transition.setModeOptions(rawAuto);
+        transition.setMode(Zone::CONFORT);
+        assert(transition.getModeOptions()==0x01);
+        transition.setModeOptions(rawAuto);
+        transition.setMode(Zone::REDUIT);
+        assert(transition.getModeOptions()==0x00);
+        transition.setModeOptions(rawAuto);
+        transition.setMode(Zone::HORS_GEL);
+        assert(transition.getModeOptions()==0x10);
+    }
+    transition.setModeOptions(0xED); // Auto, Boost et bits non interprétés.
+    transition.setMode(Zone::CONFORT);
+    assert(transition.getModeOptions()==0xC9);
+    transition.setModeOptions(0x25);
+    transition.setMode(Zone::AUTO, true);
+    assert(transition.getModeOptions()==0x25);
     Zone unknown(8,mqtt);unknown.setSource(Zone::SATELLITE_VIRTUEL);unknown.setPilotageActif(true);
     assert(!unknown.appliquerPreset("Confort permanent"));assert(unknown.getMode()==Zone::INCONNU);
     Zone z(8,mqtt);initialize(z,Zone::SATELLITE_VIRTUEL);
@@ -215,6 +270,28 @@ int main(){
     remote.confirmerMode(Zone::AUTO,7);assert(remote._mqttEntities.mode.value=="Dérogation Confort");
     remote.loop();assert(remote.derogationActive());
     remote.confirmerMode(Zone::CONFORT,1);assert(remote._mqttEntities.thermostat.value=="heat");
+    // HA mode commands are confirmed on a successful A154 response alone.
+    Connect sender;sender.associated=true;
+    remote.setProgrammation(program,true);
+    for(const char* preset : {"Confort", "Réduit", "Auto", "Dérogation Confort", "Boost", "Hors Gel"}) {
+        assert(remote.appliquerPreset(preset));
+        sender.transport.result=-1;
+        const String previous=remote._mqttEntities.mode.value;
+        assert(!sender.envoyerZone(remote));
+        assert(remote._mqttEntities.mode.value==previous);
+        sender.transport.result=RADIOLIB_ERR_NONE;
+        assert(sender.envoyerZone(remote));
+        assert(remote._mqttEntities.mode.value==preset);
+        assert(remote._modeObserve==sender.transport.sentMode);
+        assert(remote._optionsObservees==sender.transport.sentOptions);
+    }
+    assert(remote.appliquerPreset("Confort"));
+    sender.associated=false;assert(!sender.envoyerZone(remote));
+    assert(remote._mqttEntities.mode.value=="Hors Gel");
+    sender.associated=true;sender.config.virtualZ1=true;
+    const unsigned calls=sender.transport.calls;
+    assert(sender.envoyerZone(remote));assert(sender.transport.calls==calls);
+    assert(remote._mqttEntities.mode.value=="Hors Gel");
     // Physical override uses local programme timing, passive physical is read-only.
     Zone physical(8,mqtt);initialize(physical,Zone::SATELLITE_PHYSIQUE);
     physical.setPilotageActif(false);assert(!physical.appliquerPreset("Boost"));

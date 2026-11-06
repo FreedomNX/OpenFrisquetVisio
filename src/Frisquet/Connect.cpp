@@ -114,7 +114,10 @@ bool Connect::envoyerZone(Zone& zone) {
             delay(100);
             continue;
         }
-        
+
+        // La réponse attendue confirme l'écriture A154. Publier le mode
+        // envoyé sans attendre un prochain échange du satellite physique.
+        zone.confirmerMode((Zone::MODE_ZONE)payload.mode, payload.modeOptions);
         return true;
     } while(retry++ < 1);
 

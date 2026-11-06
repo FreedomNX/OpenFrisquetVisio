@@ -437,6 +437,9 @@ void Zone::setMode(MODE_ZONE mode, bool confort, bool derogation) {
     // Même codage que Satellite::MODE pour les bits Confort, Dérogation,
     // Auto et Hors Gel. Préserver le Boost et les bits non interprétés.
     _modeOptions = (_modeOptions & ~0x17) | optionsMode;
+    // Le bit Auto reçu précédemment ne doit pas survivre à un passage
+    // en Confort/Réduit permanent ou en Hors Gel.
+    if(mode != MODE_ZONE::AUTO) _modeOptions &= ~0x20;
 }
 void Zone::setMode(const String& mode, bool confort, bool derogation) {
   if (mode.equalsIgnoreCase("Auto")) {

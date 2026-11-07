@@ -59,10 +59,18 @@ code += extract(source, 'String Chaudiere::getNomEtatChaudiere(') + r'''
 int main(){
     Chaudiere b;
     assert(b.getNomEtatChaudiere()=="Inconnu");b.publish();
+    assert(!strcmp(b._mqtt.states[0],"Inconnu"));
     assert(!strcmp(b._mqtt.states[1],"None"));
+    // Issue #44 : satellite seul, état reçu sans mode détaillé Connect.
+    b.setEtatChaudiere(0x08);assert(b.getNomEtatChaudiere()=="Fonctionnement");
+    b.publish();assert(!strcmp(b._mqtt.states[0],"Fonctionnement"));
+    assert(!strcmp(b._mqtt.states[1],"OFF"));
+    b.setEtatChaudiere(0x09);b.publish();
+    assert(!strcmp(b._mqtt.states[0],"Fonctionnement"));assert(!strcmp(b._mqtt.states[1],"ON"));
+    b.setEtatChaudiere(0x00);assert(b.getNomEtatChaudiere()=="Veille");
     b.setEtatChaudiere(0x20);assert(b.getNomEtatChaudiere()=="Veille");
     b.publish();assert(!strcmp(b._mqtt.states[1],"OFF"));
-    b.setEtatChaudiere(0x28);assert(b.getNomEtatChaudiere()=="Inconnu");
+    b.setEtatChaudiere(0x28);assert(b.getNomEtatChaudiere()=="Fonctionnement");
     b.setModeFonctionnement(0x05);assert(b.getNomEtatChaudiere()=="Chauffage");
     b.setModeFonctionnement(0x07);assert(b.getNomEtatChaudiere()=="Chauffage ECS");
     b.setEtatChaudiere(0x2D); // anomaly + heating disabled: ECS can still operate
@@ -80,7 +88,7 @@ int main(){
         assert(!strcmp(b._mqtt.states[0],"Chauffage"));assert(!strcmp(b._mqtt.states[1],"ON"));
         b.setModeFonctionnement(0x07);assert(b.getNomEtatChaudiere()=="Chauffage ECS");
         b.setEtatChaudiere(0x20);assert(b.getNomEtatChaudiere()=="Veille");
-        b.setEtatChaudiere(0x28);b.setModeFonctionnement(0);assert(b.getNomEtatChaudiere()=="Inconnu");
+        b.setEtatChaudiere(0x28);b.setModeFonctionnement(0);assert(b.getNomEtatChaudiere()=="Fonctionnement");
     }
     b.setEtatChaudiere(0x20);b.publish();assert(!strcmp(b._mqtt.states[1],"OFF"));
     puts("OK: heating/DHW/idle/unknown, powers ignored, independent anomaly and recovery");

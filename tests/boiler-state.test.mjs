@@ -18,7 +18,7 @@ test('boiler activity and anomaly stay independent on the dashboard', () => {
     },
   });
   vm.runInContext(script.slice(0, script.indexOf('    async function loadDashboard')), context);
-  for (const state of ['Chauffage', 'Chauffage ECS', 'Veille', 'Inconnu']) {
+  for (const state of ['Fonctionnement', 'Chauffage', 'Chauffage ECS', 'Veille', 'Inconnu']) {
     for (const anomaly of [true, false, null]) {
       context.render({ boiler: { enabled: true, state, anomaly, hotWaterMode: 'Eco' } });
       assert.equal(elements.get('#boilerState').textContent, state);

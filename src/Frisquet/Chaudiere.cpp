@@ -259,7 +259,9 @@ String Chaudiere::getNomEtatChaudiere() const {
         case MODE_FONCTIONNEMENT::CHAUFFAGE_RADIATEURS:
             return etatChaudiereConnu() && _etatChaudiere.arretChauffage ? "Veille" : "Chauffage";
         default:
-            return "Inconnu";
+            // Sans Connect, le satellite reçoit l'état général mais pas
+            // le mode détaillé permettant de distinguer chauffage et ECS.
+            return etatChaudiereConnu() && _etatChaudiere.fonctionnement ? "Fonctionnement" : "Inconnu";
     }
 }
 

@@ -70,6 +70,7 @@
           <button class="btn small" type="button" id="btnLogout">Se déconnecter</button>
         </div>
         <div class="subsection"><h3>Mise à jour du firmware</h3><p class="hint">Sélectionnez le fichier <code>.bin</code> correspondant à votre carte.</p><div class="input-row"><input id="fwFile" type="file" accept=".bin"><button class="btn primary" type="button" id="fwBtn">Mettre à jour</button></div><div class="message" id="fwMsg"></div></div>
+        <div class="subsection"><h3>Puissance instantanée</h3><label><input id="puissanceKwEntiers" type="checkbox"> Valeur chaudière en kW entiers (×10)</label><p class="hint">Désactivé : la valeur lue est interprétée en dixièmes de kW (comportement d'origine). Activé : en kW entiers. À activer si les puissances instantanées paraissent dix fois trop faibles par rapport aux consommations journalières.</p></div>
         <div class="subsection"><h3>Mode développeur</h3><label><input id="developerMode" type="checkbox"> Activer le mode développeur</label><p class="hint">Donne accès aux trames radio et à la mémoire chaudière après enregistrement.</p></div>
         <div class="subsection" data-developer-only hidden>
           <h3>Réglages radio</h3>
@@ -88,7 +89,7 @@
 
   <script>
     const $=selector=>document.querySelector(selector);
-    const fieldIds=["wifiHostname","wifiSsid","wifiPass","wifiStatic","wifiIp","wifiGw","wifiMask","wifiDns1","wifiDns2","mqttHost","mqttPort","mqttUser","mqttPass","mqttClientId","mqttBaseTopic","networkID","developerMode","radioRxBandwidth","radioLnaBypass"];
+    const fieldIds=["wifiHostname","wifiSsid","wifiPass","wifiStatic","wifiIp","wifiGw","wifiMask","wifiDns1","wifiDns2","mqttHost","mqttPort","mqttUser","mqttPass","mqttClientId","mqttBaseTopic","networkID","developerMode","puissanceKwEntiers","radioRxBandwidth","radioLnaBypass"];
     function showMessage(text,error=false,target="#message"){const box=$(target);if(!box)return;box.textContent=text;box.className="message show"+(error?" error":"")}
     function openTab(name){document.querySelectorAll(".tab").forEach(tab=>tab.classList.toggle("active",tab.dataset.tab===name));document.querySelectorAll(".panel").forEach(panel=>panel.classList.toggle("active",panel.dataset.panel===name));history.replaceState(null,"","#"+name);if(name==="system")loadStatus()}
     function updateStatic(){const enabled=$("#wifiStatic").checked;$("#staticFields").style.display=enabled?"block":"none";["wifiIp","wifiGw","wifiMask","wifiDns1","wifiDns2"].forEach(id=>$("#"+id).disabled=!enabled)}

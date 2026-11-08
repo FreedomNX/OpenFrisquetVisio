@@ -16,6 +16,7 @@ class Config {
 
         bool _useConnect = false;
         bool _developerMode = false;
+        bool _puissanceKwEntiers = false;
         String _portalPassword = "admin";
         float _radioRxBandwidth = RadioSettings::DEFAULT_RX_BANDWIDTH;
         bool _radioLnaBypass = RadioSettings::DEFAULT_LNA_BYPASS;
@@ -38,6 +39,10 @@ class Config {
 
         bool developerMode() const { return _developerMode; }
         void developerMode(bool enabled) { _developerMode = enabled; }
+        // Unité de la puissance instantanée lue dans la chaudière : dixièmes de kW
+        // (défaut) ou kW entiers (certains modèles, voir issue #22).
+        bool puissanceKwEntiers() const { return _puissanceKwEntiers; }
+        void puissanceKwEntiers(bool enabled) { _puissanceKwEntiers = enabled; }
         const String& portalPassword() const { return _portalPassword; }
         void portalPassword(const String& password) { _portalPassword = password; }
         float radioRxBandwidth() const { return _radioRxBandwidth; }

@@ -265,6 +265,13 @@ String Chaudiere::getNomEtatChaudiere() const {
     }
 }
 
+float Chaudiere::convertirPuissance(float puissance) const {
+    // La trame expose la puissance comme une température (÷10). Sur plusieurs
+    // modèles la valeur brute est en kW entiers : l'option rétablit le ×10.
+    if (!isfinite(puissance)) return puissance;
+    return _cfg.puissanceKwEntiers() ? puissance * 10.0f : puissance;
+}
+
 void Chaudiere::setTemperatureECS(float temperature) {
     // 0x04F6 en dixièmes = 127 °C : sentinelle indiquant une ECS non gérée.
     _temperatureECS = temperature == 127.0f ? NAN : temperature;

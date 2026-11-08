@@ -623,6 +623,7 @@ void Portal::handleGetConfig() {
 
   String json = "{";
   json += "\"developerMode\":" + String(_frisquetManager.config().developerMode() ? "true" : "false") + ",";
+  json += "\"puissanceKwEntiers\":" + String(_frisquetManager.config().puissanceKwEntiers() ? "true" : "false") + ",";
   if (_frisquetManager.config().developerMode()) {
     const auto& cfg = _frisquetManager.config();
     json += "\"radioRxBandwidth\":" + String(cfg.radioRxBandwidth(), 1) + ",";
@@ -901,6 +902,10 @@ void Portal::handlePostConfig() {
   if (_srv.hasArg("developerMode")) {
     auto& cfg = _frisquetManager.config();
     cfg.developerMode(parseBoolArg(_srv.arg("developerMode"), cfg.developerMode()));
+  }
+  if (_srv.hasArg("puissanceKwEntiers")) {
+    auto& cfg = _frisquetManager.config();
+    cfg.puissanceKwEntiers(parseBoolArg(_srv.arg("puissanceKwEntiers"), cfg.puissanceKwEntiers()));
   }
 
   if (changePortalPassword) cfg.portalPassword(portalPassword);

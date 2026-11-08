@@ -70,8 +70,9 @@ public:
     void setTemperatureECS(float temperature);
     void setTemperatureCDC(float temperature);
     void setTemperatureFumees(float temperature) { _temperatureFumees = temperature; }
-    void setPuissanceInstantaneeECS(float puissance) { _puissanceInstantaneeECS = puissance; }
-    void setPuissanceInstantaneeChauffage(float puissance) { _puissanceInstantaneeChauffage = puissance; }
+    // Valeur brute de la chaudière (mot 16 bits lu en dixièmes), convertie selon Config::puissanceKwEntiers().
+    void setPuissanceInstantaneeECS(float puissance) { _puissanceInstantaneeECS = convertirPuissance(puissance); }
+    void setPuissanceInstantaneeChauffage(float puissance) { _puissanceInstantaneeChauffage = convertirPuissance(puissance); }
 
     float getTemperatureExterieure() const { return _temperatureExterieure; }
     float getTemperatureECS() const { return _temperatureECS; }
@@ -100,6 +101,7 @@ public:
     uint16_t getModeFonctionnementRaw() const { return _modeFonctionnementRaw; }
     String getNomModeFonctionnement() const;
     String getNomEtatChaudiere() const;
+    float convertirPuissance(float puissance) const;
     bool etatChaudiereConnu() const { return _etatChaudiereConnu; }
 
     void setPression(float pression);

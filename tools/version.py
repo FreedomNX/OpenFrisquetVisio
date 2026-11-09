@@ -20,6 +20,12 @@ README_PATH = os.path.join(ROOT, "README.md")
 
 
 def generate_version():
+    # La CI fournit une version commune aux quatre compilations parallèles.
+    version = os.environ.get("OPENFRISQUETVISIO_VERSION")
+    if version is not None:
+        if not re.fullmatch(r"\d{2}\.\d{2}\.\d{2}(?:\.\d{4})?", version):
+            raise ValueError("OPENFRISQUETVISIO_VERSION doit être au format AA.MM.JJ ou AA.MM.JJ.HHmm")
+        return version
     # Format: YY.MM.DD.HHmm
     return datetime.now().strftime("%y.%m.%d.%H%M")
 

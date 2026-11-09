@@ -13,6 +13,25 @@ permissions:
   contents: read
 
 jobs:
+  version:
+    name: Version des firmwares
+    runs-on: ubuntu-24.04
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+    steps:
+      - name: Définir une version commune aux quatre cartes
+        id: version
+        run: |
+          python3 - <<'PY'
+          import os
+          from datetime import datetime
+          from zoneinfo import ZoneInfo
+
+          version = datetime.now(ZoneInfo('Europe/Paris')).strftime('%y.%m.%d.%H%M')
+          with open(os.environ['GITHUB_OUTPUT'], 'a', encoding='utf-8') as output:
+              print(f'version={version}', file=output)
+          PY
+
   tests:
     name: Tests Python et Node
     runs-on: ubuntu-24.04
@@ -44,7 +63,10 @@ jobs:
 
   firmware:
     name: Compilation ${{ matrix.board }}
+    needs: version
     runs-on: ubuntu-24.04
+    env:
+      OPENFRISQUETVISIO_VERSION: ${{ needs.version.outputs.version }}
     strategy:
       fail-fast: false
       matrix:
@@ -92,7 +114,7 @@ jobs:
 
   release:
     name: Publication des firmwares
-    needs: [tests, firmware]
+    needs: [tests, firmware, version]
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-24.04
     permissions:
@@ -127,15 +149,16 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
+          FIRMWARE_VERSION: ${{ needs.version.outputs.version }}
         run: |
-          release_tag="main-${GITHUB_RUN_NUMBER}-${GITHUB_RUN_ATTEMPT}"
+          release_tag="$FIRMWARE_VERSION"
           latest=false
           current_main=$(gh api "repos/$GH_REPO/git/ref/heads/main" --jq '.object.sha')
           if [ "$current_main" = "$GITHUB_SHA" ]; then
             latest=true
           fi
           cat > "$RUNNER_TEMP/release-notes.md" <<EOF
-          Firmwares compilés depuis main, commit $GITHUB_SHA.
+          Version $FIRMWARE_VERSION, compilée depuis main, commit $GITHUB_SHA.
           Tests Python et Node et compilations des quatre cartes réussis.
 
           Exécution CI : $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID
@@ -148,6 +171,6 @@ jobs:
           EOF
           gh release create "$release_tag" firmware/*.bin firmware/SHA256SUMS \
             --target "$GITHUB_SHA" \
-            --title "Firmwares main #${GITHUB_RUN_NUMBER} (${GITHUB_SHA:0:7})" \
+            --title "$FIRMWARE_VERSION" \
             --notes-file "$RUNNER_TEMP/release-notes.md" \
             --latest="$latest"

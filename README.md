@@ -154,8 +154,11 @@ utilisent un contrôle séparé.
 
 Après un push sur `main`, la CI publie automatiquement une Release uniquement
 si les tests et les quatre compilations réussissent. Les PR et les pushes sur
-`develop` ne publient pas de Release. Chaque publication possède un tag
-`main-<numéro CI>-<tentative>`, attaché au commit exact compilé.
+`develop` ne publient pas de Release. Le titre et le tag reprennent la version
+des firmwares, par exemple `26.11.09.1830`, et le tag pointe vers le commit exact
+compilé. La CI fixe cette version une seule fois, à l'heure de Paris, pour les
+quatre cartes : elle correspond aussi à la version embarquée et affichée dans
+le portail. Une Release existante portant ce tag n'est pas écrasée.
 
 Les fichiers sont accessibles dans [Releases](https://github.com/FreedomNX/OpenFrisquetVisio/releases) :
 

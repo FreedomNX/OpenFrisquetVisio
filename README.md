@@ -175,7 +175,7 @@ pio run -e ttgo_lora32_v21 -t upload
 | Radio DIO0 / DIO1 | 26 / 33 |
 | DS18B20 | 13 (microSD inutilisée) |
 
-La bande RX par défaut est **250 kHz** sur SX1276 ; les paramètres du portail proposent les bandes propres à cette puce. Le journal contient au maximum **120 lignes**, pour limiter la RAM statique de l'ESP32 classique.
+La bande RX par défaut est **250 kHz** sur SX1276 ; les paramètres du portail proposent les bandes propres à cette puce. Le journal contient au maximum **80 lignes**, et le tampon d'affichage est limité à cette même capacité pour conserver une marge de RAM statique sur l'ESP32 classique, y compris avec la chaîne GCC 14 utilisée par la CI.
 
 La FIFO FSK du SX1276 ne contient que **64 octets**. La réception utilise donc le format variable : un octet de longueur et jusqu'à **63 octets de données**, avec validation matérielle du CRC CCITT (init `0x1D0F`, polynôme `0x1021`, complémenté). Les trames CRC invalides sont journalisées et rejetées. Le CRC reçu est retiré par la puce : la capture brute de 68 octets et la réparation logicielle du SX1262 ne sont pas disponibles sur cette variante. Voir la [documentation Semtech, sections FIFO et CRC](https://cdn.sparkfun.com/assets/7/7/3/2/2/SX1276_Datasheet.pdf).
 

@@ -13,7 +13,8 @@
 #define RADIO_MOSI GPIO_NUM_27
 // GPIO33 est DIO1 ; GPIO13 est aussi CS de la microSD, inutilisée ici.
 #define DS18B20_PIN GPIO_NUM_13
-#define LOGS_MAX_LINES 120
+// Garder une marge de DRAM sur ESP32 classique, y compris avec GCC 14.
+#define LOGS_MAX_LINES 80
 #else
 #include <heltec.h>
 #define BOARD_HELTEC

@@ -27,26 +27,30 @@ expected = {
     "radio_allowed": (200, ["frame"]),
 }
 
-with tempfile.TemporaryDirectory(prefix="ofv-portal-logs-") as tmp:
-    # Include the actual handler without pulling in ESP32-only dependencies.
-    (Path(tmp) / "portal_logs_handler.inc").write_text(source[start:end])
-    binary = Path(tmp) / "portal_logs_test"
-    subprocess.run([
-        "c++", "-std=c++17", "-Wall", "-Wextra", "-Werror",
-        "-fsanitize=address,undefined", "-fno-omit-frame-pointer", "-g",
-        "-I", tmp, str(ROOT / "tests/portal_logs_test.cpp"), "-o", str(binary),
-    ], check=True)
-    rows = subprocess.check_output([str(binary)], text=True).splitlines()
-    assert len(rows) == len(expected)
-    for row, (name, (expected_status, expected_body)) in zip(rows, expected.items()):
-        actual_name, status, count, largest, body = row.split(' ', 4)
-        assert actual_name == name and int(status) == expected_status
-        assert json.loads(body) == expected_body, name
-        if expected_status == 200:
-            assert 0 < int(largest) <= 1024
-            # Reject tiny per-token writes, especially for escaped lines.
-            assert int(count) <= (len(body.encode()) + 511) // 512, name
-        else:
-            assert int(count) == 0
+# Exercise the smaller LilyGo buffer as well as the Heltec limit.
+for capacity in (80, 120):
+    with tempfile.TemporaryDirectory(prefix="ofv-portal-logs-") as tmp:
+        # Include the actual handler without pulling in ESP32-only dependencies.
+        (Path(tmp) / "portal_logs_handler.inc").write_text(source[start:end])
+        binary = Path(tmp) / "portal_logs_test"
+        subprocess.run([
+            "c++", "-std=c++17", "-Wall", "-Wextra", "-Werror",
+            "-fsanitize=address,undefined", "-fno-omit-frame-pointer", "-g",
+            "-DTEST_LOG_QUERY_LINES=" + str(capacity), "-I", tmp,
+            str(ROOT / "tests/portal_logs_test.cpp"), "-o", str(binary),
+        ], check=True)
+        rows = subprocess.check_output([str(binary)], text=True).splitlines()
+        assert len(rows) == len(expected)
+        for row, (name, (expected_status, expected_body)) in zip(rows, expected.items()):
+            actual_name, status, count, largest, body = row.split(' ', 4)
+            assert actual_name == name and int(status) == expected_status
+            bounded_body = expected_body[-capacity:] if isinstance(expected_body, list) else expected_body
+            assert json.loads(body) == bounded_body, (capacity, name)
+            if expected_status == 200:
+                assert 0 < int(largest) <= 1024
+                # Reject tiny per-token writes, especially for escaped lines.
+                assert int(count) <= (len(body.encode()) + 511) // 512, name
+            else:
+                assert int(count) == 0
 
-print('OK: JSON escaping, UTF-8, chunk boundaries, limits, filtering, access checks and bounded writes')
+print('OK: JSON escaping, UTF-8, chunk boundaries, limits, filtering, access checks and bounded writes (80/120 lines)')

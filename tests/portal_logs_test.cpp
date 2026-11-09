@@ -71,7 +71,10 @@ struct Logs {
     }
 } logs;
 
-static constexpr size_t kMaxQueryLines = 120;
+#ifndef TEST_LOG_QUERY_LINES
+#define TEST_LOG_QUERY_LINES 120
+#endif
+static constexpr size_t kMaxQueryLines = TEST_LOG_QUERY_LINES;
 static Logs::Line s_logLines[kMaxQueryLines];
 static volatile bool s_logsBusy = false;
 

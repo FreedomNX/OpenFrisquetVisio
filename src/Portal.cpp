@@ -13,7 +13,8 @@
 // Déclaration du logger global défini dans Logs.cpp
 extern Logs logs;
 
-static constexpr size_t kMaxQueryLines = 120;
+// Le tampon d'affichage ne peut pas contenir plus de lignes que le journal.
+static constexpr size_t kMaxQueryLines = Logs::kMaxLines < 120 ? Logs::kMaxLines : 120;
 static Logs::Line s_logLines[kMaxQueryLines];
 static volatile bool s_logsBusy = false;
 static uint8_t s_memoryMessageId = 0x10;

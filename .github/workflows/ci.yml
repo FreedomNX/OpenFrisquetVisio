@@ -7,7 +7,8 @@ on:
 
 # GitHub donne au workflow un token d’accès au repo qui,
 # selon les réglages du repo, peut modifier le code.
-# Ce workflow n’a rien à écrire, on limite donc son token à la lecture :
+# Les tests et compilations restent en lecture seule. Seul le job de publication
+# reçoit le droit d'écrire pour créer une Release après validation de main.
 permissions:
   contents: read
 
@@ -72,3 +73,81 @@ jobs:
         run: pip install platformio==6.2.0
       - name: Compilation ${{ matrix.board }}
         run: pio run -e ${{ matrix.environment }}
+      - name: Préparer le binaire pour la Release
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        env:
+          PIO_ENVIRONMENT: ${{ matrix.environment }}
+        run: |
+          mkdir -p release
+          cp ".pio/build/$PIO_ENVIRONMENT/firmware.bin" "release/firmware-$PIO_ENVIRONMENT.bin"
+      # Stockage intermédiaire pour le job release, limité aux builds main.
+      - name: Transférer le binaire au job de publication
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        uses: actions/upload-artifact@v7
+        with:
+          name: firmware-${{ matrix.environment }}
+          path: release/*.bin
+          if-no-files-found: error
+          retention-days: 7
+
+  release:
+    name: Publication des firmwares
+    needs: [tests, firmware]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - name: Récupérer les quatre binaires validés
+        uses: actions/download-artifact@v8
+        with:
+          pattern: firmware-*
+          path: firmware
+          merge-multiple: true
+      - name: Vérifier les binaires et calculer leurs sommes SHA-256
+        working-directory: firmware
+        run: |
+          python3 - <<'PY'
+          import hashlib
+          from pathlib import Path
+
+          environments = (
+              'heltec_wifi_lora_32_V3', 'heltec_wifi_lora_32_V4',
+              'heltec_wifi_lora_32_V4_3', 'ttgo_lora32_v21',
+          )
+          checksums = []
+          for environment in environments:
+              binary = Path(f'firmware-{environment}.bin')
+              if not binary.is_file() or binary.stat().st_size == 0:
+                  raise SystemExit(f'Binaire manquant ou vide : {binary}')
+              checksums.append(f'{hashlib.sha256(binary.read_bytes()).hexdigest()}  {binary.name}\n')
+          Path('SHA256SUMS').write_text(''.join(checksums), encoding='utf-8')
+          PY
+      - name: Publier dans GitHub Releases
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          release_tag="main-${GITHUB_RUN_NUMBER}-${GITHUB_RUN_ATTEMPT}"
+          latest=false
+          current_main=$(gh api "repos/$GH_REPO/git/ref/heads/main" --jq '.object.sha')
+          if [ "$current_main" = "$GITHUB_SHA" ]; then
+            latest=true
+          fi
+          cat > "$RUNNER_TEMP/release-notes.md" <<EOF
+          Firmwares compilés depuis main, commit $GITHUB_SHA.
+          Tests Python et Node et compilations des quatre cartes réussis.
+
+          Exécution CI : $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID
+
+          Télécharger le fichier firmware-<environnement>.bin correspondant à la carte.
+          Ces fichiers sont destinés aux mises à jour applicatives (OTA).
+          Un premier flash USB nécessite aussi le bootloader et la table de partitions ;
+          les fichiers firmware.bin seuls ne les contiennent pas.
+          SHA256SUMS permet de vérifier l'intégrité des quatre binaires.
+          EOF
+          gh release create "$release_tag" firmware/*.bin firmware/SHA256SUMS \
+            --target "$GITHUB_SHA" \
+            --title "Firmwares main #${GITHUB_RUN_NUMBER} (${GITHUB_SHA:0:7})" \
+            --notes-file "$RUNNER_TEMP/release-notes.md" \
+            --latest="$latest"

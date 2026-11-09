@@ -152,6 +152,24 @@ La CI compile les quatre variantes sur les PR et les pushes vers `main` et
 leur propre contrôle GitHub, dans une même matrice. Les tests Python et Node
 utilisent un contrôle séparé.
 
+Après un push sur `main`, la CI publie automatiquement une Release uniquement
+si les tests et les quatre compilations réussissent. Les PR et les pushes sur
+`develop` ne publient pas de Release. Chaque publication possède un tag
+`main-<numéro CI>-<tentative>`, attaché au commit exact compilé.
+
+Les fichiers sont accessibles dans [Releases](https://github.com/FreedomNX/OpenFrisquetVisio/releases) :
+
+| Carte | Binaire |
+|---|---|
+| Heltec V3 | `firmware-heltec_wifi_lora_32_V3.bin` |
+| Heltec V4 | `firmware-heltec_wifi_lora_32_V4.bin` |
+| Heltec V4.3 | `firmware-heltec_wifi_lora_32_V4_3.bin` |
+| LilyGo LoRa32 V2.1 | `firmware-ttgo_lora32_v21.bin` |
+
+Le fichier `SHA256SUMS` accompagne les binaires. Ils sont destinés aux mises à
+jour applicatives (OTA) ; ils ne contiennent ni le bootloader ni la table de
+partitions nécessaires pour un premier flash USB.
+
 ---
 
 ### Variante LilyGo/TTGO LoRa32 V2.1 (SX1276)
@@ -279,4 +297,4 @@ Mais bon, si ça marche, vous pouvez toujours m’offrir un café ☕ 😉
 **Année :** 2025  
 **Plateforme :** ESP32 (Heltec WiFi LoRa 32, SX1262)  
 **Compatibilité :** Home Assistant, MQTT, Frisquet Chaudière série Eco Radio Visio  
-**Version :** 26.11.09.1934
+**Version :** 26.11.09.2010

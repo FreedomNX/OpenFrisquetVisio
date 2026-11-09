@@ -13,7 +13,7 @@ permissions:
 
 jobs:
   tests:
-    name: Compilation Heltec V3, tests Python et Node
+    name: Tests Python et Node
     runs-on: ubuntu-24.04
     steps:
       - name: Checkout
@@ -33,17 +33,42 @@ jobs:
           node-version: "24"
       - name: PlatformIO
         run: pip install platformio==6.2.0
-      # V4.3 exclue (8 nov. 2026)
-      #   firmware               1,53 Mo
-      #   partition par défaut   1,25 Mo
-      #   flash de la carte        16 Mo
-      - name: Compilation Heltec V3
-        id: firmware-v3
-        background: true
-        run: pio run -e heltec_wifi_lora_32_V3
+      # Le test SX1276 utilise les en-têtes RadioLib présents dans .pio/libdeps.
+      - name: Dépendances pour les tests Python
+        run: pio pkg install -e heltec_wifi_lora_32_V3
       - name: Tests Node
         run: node --test tests/*.test.mjs
-      - name: RadioLib (tests Python)
-        wait: firmware-v3
       - name: Tests Python
         run: for test in tests/test_*.py; do python3 "$test"; done
+
+  firmware:
+    name: Compilation ${{ matrix.board }}
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - board: Heltec V3
+            environment: heltec_wifi_lora_32_V3
+          - board: Heltec V4
+            environment: heltec_wifi_lora_32_V4
+          - board: Heltec V4.3
+            environment: heltec_wifi_lora_32_V4_3
+          - board: LilyGo LoRa32 V2.1
+            environment: ttgo_lora32_v21
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+      - name: Cache PlatformIO
+        uses: actions/cache@v6
+        with:
+          path: ~/.platformio
+          key: platformio-${{ hashFiles('platformio.ini') }}
+      - name: Python
+        uses: actions/setup-python@v7
+        with:
+          python-version: "3.13"
+      - name: PlatformIO
+        run: pip install platformio==6.2.0
+      - name: Compilation ${{ matrix.board }}
+        run: pio run -e ${{ matrix.environment }}

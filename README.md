@@ -139,17 +139,33 @@ Avant le flash :
 - Compiler et téléverser avec **PlatformIO**
 - Au premier démarrage, le module crée un **point d’accès WiFi**
 
+Les environnements Heltec sont `heltec_wifi_lora_32_V3`,
+`heltec_wifi_lora_32_V4` et `heltec_wifi_lora_32_V4_3`. Pour compiler une seule
+variante, utiliser `pio run -e <environnement>`. La V4.3 active le front-end
+KCT8103L. Les V4 et V4.3 utilisent explicitement `default_16MB.csv`, avec deux
+partitions applicatives pour les mises à jour OTA. Si la carte utilise un autre
+partitionnement, effectuer un flash USB pour installer cette table avant les
+mises à jour OTA.
+
+La CI compile les quatre variantes sur les PR et les pushes vers `main` et
+`develop`. Les compilations Heltec V3, V4, V4.3 et LilyGo LoRa32 V2.1 ont chacune
+leur propre contrôle GitHub, dans une même matrice. Les tests Python et Node
+utilisent un contrôle séparé.
+
 ---
 
 ### Variante LilyGo/TTGO LoRa32 V2.1 (SX1276)
 
 Le support reprend le brochage de la [PR #20 de Julien Hammer](https://github.com/FreedomNX/OpenFrisquetVisio/pull/20), adapté à RadioLib 7.8.1 et à la gestion actuelle de réception. Il cible la LoRa32 V2.1 avec **SX1276 en 868 MHz** ; les autres cartes LilyGo peuvent avoir un brochage différent.
 
-La configuration [platformio.lilygo.ini](platformio.lilygo.ini) importe les réglages communs de votre `platformio.ini` local et remplace la carte, les dépendances Heltec et le mode de téléversement. Elle utilise un partitionnement avec OTA et un premier flash USB :
+L'environnement `ttgo_lora32_v21` est défini dans [platformio.ini](platformio.ini).
+Il partage les réglages communs et remplace la carte, les dépendances Heltec et
+le mode de téléversement. Il utilise un partitionnement avec OTA et un premier
+flash USB. La Heltec V3 reste l'environnement par défaut :
 
 ```sh
-pio run --project-conf platformio.lilygo.ini -e ttgo_lora32_v21
-pio run --project-conf platformio.lilygo.ini -e ttgo_lora32_v21 -t upload
+pio run -e ttgo_lora32_v21
+pio run -e ttgo_lora32_v21 -t upload
 ```
 
 | Signal | GPIO LilyGo |
@@ -263,4 +279,4 @@ Mais bon, si ça marche, vous pouvez toujours m’offrir un café ☕ 😉
 **Année :** 2025  
 **Plateforme :** ESP32 (Heltec WiFi LoRa 32, SX1262)  
 **Compatibilité :** Home Assistant, MQTT, Frisquet Chaudière série Eco Radio Visio  
-**Version :** 26.11.09.1632
+**Version :** 26.11.09.1934

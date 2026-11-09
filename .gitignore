@@ -32,3 +32,4 @@ tests/*
 !tests/test_portal_logs.py
 !tests/portal_logs_test.cpp
 !tests/portal-polling.test.mjs
+!tests/test_boiler_firmware.py

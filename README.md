@@ -27,6 +27,16 @@ de récupérer les informations en temps réel et de les exposer à **Home Assis
     - Confort
   - **Sélection du mode actif** (Auto, Confort, Réduit, Hors Gel)
 
+En Connect virtuel actif, la version du firmware chaudière est lue une seule
+fois au démarrage (après association), à l'adresse `0x7541` sur deux mots BCD.
+Les puissances instantanées ECS et chauffage sont divisées par 10 avant
+`19.02.0000`, et interprétées directement en kW à partir de cette version.
+Une lecture impossible ou invalide conserve la division par 10 et produit un
+message dans les journaux. Cette règle de version reste à confirmer sur matériel ;
+en mode Connect passif, la même règle est appliquée dès que la lecture de
+`0x7541` par la box physique est captée. En attendant, la division par 10 est
+conservée. Aucune requête supplémentaire n’est émise en passif.
+
 ### 🌡️ Emulation de la sonde extérieure
 Deux modes possibles :
 - Lecture **réelle** via une sonde **DS18B20**
@@ -253,4 +263,4 @@ Mais bon, si ça marche, vous pouvez toujours m’offrir un café ☕ 😉
 **Année :** 2025  
 **Plateforme :** ESP32 (Heltec WiFi LoRa 32, SX1262)  
 **Compatibilité :** Home Assistant, MQTT, Frisquet Chaudière série Eco Radio Visio  
-**Version :** 26.11.07.1944
+**Version :** 26.11.09.1632

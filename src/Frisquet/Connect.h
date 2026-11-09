@@ -6,6 +6,7 @@
 #include "Zone.h"
 #include "Chaudiere.h"
 #include "RadioSchedule.h"
+#include "BoilerFirmware.h"
 
 class Connect : public FrisquetDevice {
     
@@ -73,6 +74,9 @@ class Connect : public FrisquetDevice {
         void setConsommationECS(int16_t consommation);
         void setConsommationChauffage(int16_t consommation);
         bool setConsommationAnnuelle(const byte* donnees, size_t length);
+        bool recupererVersionFirmware();
+        bool setVersionFirmware(const byte* response, size_t length);
+        BoilerFirmware _boilerFirmware;
 
         void setPression(float pression);
         float getPression();

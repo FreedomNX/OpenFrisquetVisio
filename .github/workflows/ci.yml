@@ -1,0 +1,49 @@
+name: CI
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+
+# GitHub donne au workflow un token d’accès au repo qui,
+# selon les réglages du repo, peut modifier le code.
+# Ce workflow n’a rien à écrire, on limite donc son token à la lecture :
+permissions:
+  contents: read
+
+jobs:
+  tests:
+    name: Compilation Heltec V3, tests Python et Node
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+      - name: Cache PlatformIO
+        uses: actions/cache@v6
+        with:
+          path: ~/.platformio
+          key: platformio-${{ hashFiles('platformio.ini') }} # cache tant que platformio.ini ne change pas
+      - name: Python
+        uses: actions/setup-python@v7
+        with:
+          python-version: "3.13"
+      - name: Node
+        uses: actions/setup-node@v7
+        with:
+          node-version: "24"
+      - name: PlatformIO
+        run: pip install platformio==6.2.0
+      # V4.3 exclue (8 nov. 2026)
+      #   firmware               1,53 Mo
+      #   partition par défaut   1,25 Mo
+      #   flash de la carte        16 Mo
+      - name: Compilation Heltec V3
+        id: firmware-v3
+        background: true
+        run: pio run -e heltec_wifi_lora_32_V3
+      - name: Tests Node
+        run: node --test tests/*.test.mjs
+      - name: RadioLib (tests Python)
+        wait: firmware-v3
+      - name: Tests Python
+        run: for test in tests/test_*.py; do python3 "$test"; done

@@ -64,10 +64,15 @@ bool FrisquetDevice::associer(NetworkID& networkId, uint8_t& idAssociation) {
             radio().setNetworkID(networkId);
 
             delay(5000); // Attente 5 secondes
+            radio().startReceive();
             return true;
         }
     } while(millis() < timeout);
 
+    // La tentative sur le réseau broadcast ne doit pas interrompre l'écoute
+    // du réseau configuré si aucune association n'a abouti.
+    radio().setNetworkID(getConfig().getNetworkID());
+    radio().startReceive();
     return false;
 }
 

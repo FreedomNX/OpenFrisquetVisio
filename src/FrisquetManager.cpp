@@ -279,9 +279,13 @@ bool FrisquetManager::recupererNetworkID() {
             config().setNetworkID(donnees.networkID);
             radio().setNetworkID(donnees.networkID);
             config().save();
+            radio().startReceive();
             return true;
         }
     } while(millis() < timeout);
 
+    // Reprendre l'écoute du réseau configuré après une tentative sans résultat.
+    radio().setNetworkID(config().getNetworkID());
+    radio().startReceive();
     return false;
 }

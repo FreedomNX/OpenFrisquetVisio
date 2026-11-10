@@ -73,6 +73,10 @@ int main(){
     b.setEtatChaudiere(0x28);assert(b.getNomEtatChaudiere()=="Fonctionnement");
     b.setModeFonctionnement(0x05);assert(b.getNomEtatChaudiere()=="Chauffage");
     b.setModeFonctionnement(0x07);assert(b.getNomEtatChaudiere()=="Chauffage ECS");
+    // Production ECS observée en conditions réelles : corps de chauffe à 87 °C,
+    // puissance ECS non nulle, bit fonctionnement à 0 (zone chauffage au repos).
+    b.setEtatChaudiere(0x20);assert(b.getNomEtatChaudiere()=="Chauffage ECS");
+    b.publish();assert(!strcmp(b._mqtt.states[0],"Chauffage ECS"));
     b.setEtatChaudiere(0x2D); // anomaly + heating disabled: ECS can still operate
     assert(b.getNomEtatChaudiere()=="Chauffage ECS");b.publish();
     assert(!strcmp(b._mqtt.states[0],"Chauffage ECS"));assert(!strcmp(b._mqtt.states[1],"ON"));
@@ -87,7 +91,9 @@ int main(){
         assert(b.getNomEtatChaudiere()=="Chauffage");b.publish();
         assert(!strcmp(b._mqtt.states[0],"Chauffage"));assert(!strcmp(b._mqtt.states[1],"ON"));
         b.setModeFonctionnement(0x07);assert(b.getNomEtatChaudiere()=="Chauffage ECS");
-        b.setEtatChaudiere(0x20);assert(b.getNomEtatChaudiere()=="Veille");
+        // Relance ECS : le bit fonctionnement (zone chauffage) reste à 0.
+        b.setEtatChaudiere(0x20);assert(b.getNomEtatChaudiere()=="Chauffage ECS");
+        b.setModeFonctionnement(0x05);assert(b.getNomEtatChaudiere()=="Veille");
         b.setEtatChaudiere(0x28);b.setModeFonctionnement(0);assert(b.getNomEtatChaudiere()=="Fonctionnement");
     }
     b.setEtatChaudiere(0x20);b.publish();assert(!strcmp(b._mqtt.states[1],"OFF"));

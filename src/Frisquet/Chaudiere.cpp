@@ -251,11 +251,12 @@ String Chaudiere::getNomModeFonctionnement() const {
 }
 
 String Chaudiere::getNomEtatChaudiere() const {
-    // Utiliser uniquement les indicateurs de fonctionnement et le mode radio.
+    // Le bit "fonctionnement" du satellite ne reflète que la zone chauffage :
+    // pendant une relance ECS il reste à 0. On donne donc la priorité au mode
+    // radio (trame Connect) quand il indique une production d'eau chaude.
+    if(getModeFonctionnement() == MODE_FONCTIONNEMENT::CHAUFFAGE_ECS) return "Chauffage ECS";
     if(etatChaudiereConnu() && !_etatChaudiere.fonctionnement) return "Veille";
     switch(getModeFonctionnement()) {
-        case MODE_FONCTIONNEMENT::CHAUFFAGE_ECS:
-            return "Chauffage ECS";
         case MODE_FONCTIONNEMENT::CHAUFFAGE_RADIATEURS:
             return etatChaudiereConnu() && _etatChaudiere.arretChauffage ? "Veille" : "Chauffage";
         default:

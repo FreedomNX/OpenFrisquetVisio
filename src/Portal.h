@@ -60,6 +60,7 @@ private:
   void handleLogsPage();         // GET /logs
   void handleClearLogs();        // GET /logs/clear
   void handleMemoryRead();       // GET /api/memory
+  bool requireRadioAvailable(bool cancelPending = false);
   void handleMemoryScan();       // GET /api/memory/scan
   void handleMemoryPage();       // GET /memory
   void handleStatus();

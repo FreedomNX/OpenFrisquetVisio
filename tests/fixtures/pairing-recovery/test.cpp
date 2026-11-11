@@ -81,7 +81,9 @@ struct FrisquetRadio : Radio {
     // Déclarations extraites de FrisquetRadio.h par le lanceur Python.
     #include "radio_types.inc"
 
-    void cancelOperations() {}
+    bool occupied = false;
+    bool busy() const { return occupied; }
+    void cancelOperations() { occupied = false; }
     void setNetworkID(NetworkID networkID);
 };
 
@@ -103,9 +105,9 @@ struct FrisquetDevice {
 };
 
 struct FrisquetManager {
-    FrisquetRadio& r;
+    FrisquetRadio& _radio;
     Config& cfg;
-    FrisquetRadio& radio() { return r; }
+    FrisquetRadio& radio() { return _radio; }
     Config& config() { return cfg; }
     bool recupererNetworkID();
 };
@@ -120,6 +122,18 @@ Radio::Packet announcement() {
 int main(int argc, char** argv) {
     assert(argc == 2);
     const bool manager = std::string(argv[1]) == "manager";
+    {
+        FrisquetRadio radio;
+        radio.occupied = true;
+        Config cfg;
+        NetworkID output{9, 10, 11, 12};
+        byte association = 99;
+        const bool ok = manager
+            ? FrisquetManager{radio, cfg}.recupererNetworkID()
+            : FrisquetDevice{radio, cfg}.associer(output, association);
+        assert(!ok && radio.busy() && radio.receives == 0 && radio.rearms == 0);
+        assert(same(output, NetworkID(9, 10, 11, 12)) && association == 99 && cfg.saves == 0);
+    }
     for (unsigned scenario = 0; scenario < 6; ++scenario) {
         clockMs = 0;
         FrisquetRadio radio;

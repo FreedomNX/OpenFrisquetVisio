@@ -43,3 +43,4 @@ tests/fixtures/*
 !tests/fixtures/cooperative-radio/
 !tests/fixtures/pairing-recovery/
 !tests/fixtures/ota-auth/
+!tests/test_cooperative_portal.py

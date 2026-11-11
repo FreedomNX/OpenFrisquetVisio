@@ -9,3 +9,10 @@ python3 tests/test_cooperative_receive.py
 ```
 
 Les trames sont synthétiques ; aucun appareil ni service réseau n’est sollicité.
+
+`portal.cpp` vérifie les refus pendant une réservation, la priorité du mode
+développeur et la préemption par une association valide :
+
+```sh
+python3 tests/test_cooperative_portal.py
+```

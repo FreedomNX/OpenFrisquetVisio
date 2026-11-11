@@ -1074,6 +1074,7 @@ void Portal::handleStatus() {
 
 void Portal::handleSendRadio() {
   if (!requireDeveloperMode()) return;
+  if (!requireRadioAvailable()) return;
   if (_srv.method() != HTTP_POST) {
     _srv.send(405, "application/json; charset=utf-8",
               "{\"ok\":false,\"err\":\"Méthode non autorisée\"}");
@@ -1147,6 +1148,18 @@ void Portal::handleSendRadio() {
   _srv.send(200, "application/json; charset=utf-8", "{\"ok\":true}");
 }
 
+bool Portal::requireRadioAvailable(bool cancelPending) {
+  // L'association peut interrompre une observation, jamais une mise à jour ou
+  // un redémarrage. Appeler après validation de la demande d'association.
+  if (cancelPending && !_frisquetManager.radio().suspended())
+    _frisquetManager.radio().cancelOperations();
+  if (!_frisquetManager.radio().busy()) return true;
+  _srv.sendHeader("Retry-After", "1");
+  _srv.send(503, "application/json; charset=utf-8",
+            "{\"ok\":false,\"err\":\"Radio occupée, réessayez dans un instant\"}");
+  return false;
+}
+
 bool Portal::requireDeveloperMode() {
   if (_frisquetManager.config().developerMode()) return true;
   _srv.send(403, "application/json; charset=utf-8",
@@ -1161,6 +1174,7 @@ void Portal::handleRadioLogsPage() {
 
 void Portal::handleMemoryRead() {
   if (!requireDeveloperMode()) return;
+  if (!requireRadioAvailable()) return;
   if (_srv.method() != HTTP_GET) {
     _srv.send(405, "application/json; charset=utf-8",
               "{\"ok\":false,\"err\":\"Méthode non autorisée\"}");
@@ -1313,6 +1327,7 @@ void Portal::handleMemoryRead() {
 
 void Portal::handleMemoryScan() {
   if (!requireDeveloperMode()) return;
+  if (!requireRadioAvailable()) return;
   if (_srv.method() != HTTP_GET) {
     _srv.send(405, "application/json; charset=utf-8",
               "{\"ok\":false,\"err\":\"Méthode non autorisée\"}");
@@ -1465,6 +1480,8 @@ void Portal::handlePairConnect() {
     return;
   }
 
+  if (!requireRadioAvailable(true)) return;
+
   info("[PORTAIL] Demande d'association du module Connect");
 
   bool ok = false;
@@ -1506,6 +1523,8 @@ void Portal::handlePairSondeExt() {
     return;
   }
 
+  if (!requireRadioAvailable(true)) return;
+
   info("[PORTAIL] Demande d'association de la sonde extérieure");
 
   bool ok = false;
@@ -1545,6 +1564,8 @@ void Portal::handlePairSatelliteZ1() {
               "{\"ok\":false,\"err\":\"Satellite Z1 désactivé dans la configuration\"}");
     return;
   }
+
+  if (!requireRadioAvailable(true)) return;
 
   info("[PORTAIL] Demande d'association du Satellite Z1");
 
@@ -1588,6 +1609,8 @@ void Portal::handlePairSatelliteZ2() {
     return;
   }
 
+  if (!requireRadioAvailable(true)) return;
+
   info("[PORTAIL] Demande d'association du Satellite Z2");
 
   bool ok = false;
@@ -1629,6 +1652,8 @@ void Portal::handlePairSatelliteZ3() {
     return;
   }
 
+  if (!requireRadioAvailable(true)) return;
+
   info("[PORTAIL] Demande d'association du Satellite Z3");
 
   bool ok = false;
@@ -1663,6 +1688,8 @@ void Portal::handleRecupNetworkId() {
               "{\"ok\":false,\"err\":\"Méthode non autorisée\"}");
     return;
   }
+
+  if (!requireRadioAvailable(true)) return;
 
   info("[PORTAIL] Demande de récupération du NetworkID");
 

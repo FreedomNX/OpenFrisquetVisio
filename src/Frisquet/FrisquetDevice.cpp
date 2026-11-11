@@ -2,6 +2,7 @@
 #include "../Buffer.h"
 
 bool FrisquetDevice::associer(NetworkID& networkId, uint8_t& idAssociation) {
+    if (radio().busy()) return false;
 
     byte buff[RADIOLIB_SX126X_MAX_PACKET_LENGTH];
     size_t buffLength = 0;

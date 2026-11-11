@@ -242,6 +242,7 @@ void FrisquetManager::onRadioReceive()
 
 
 bool FrisquetManager::recupererNetworkID() {
+    if (_radio.busy()) return false;
     byte buff[RADIOLIB_SX126X_MAX_PACKET_LENGTH];
     size_t buffLength = 0;
     int16_t err;

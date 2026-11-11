@@ -1,3 +1,2 @@
 #pragma once
-void info(const char*) {}
-void error(const char*) {}
+// Les fonctions de journalisation sont fournies par la fixture radio.

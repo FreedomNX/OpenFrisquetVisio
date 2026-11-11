@@ -282,14 +282,16 @@ void Portal::handleLogout() {
 
 void Portal::onAuthenticated(const char* uri, HTTPMethod method, void (Portal::*handler)(),
                              void (Portal::*uploadHandler)()) {
-  auto authenticatedHandler = [this, handler]() {
+  auto authenticatedHandler = [this, handler, uploadHandler]() {
     if (requireAuthentication()) (this->*handler)();
+    else if (uploadHandler) cancelHttpUpdate();
   };
   if (uploadHandler) {
     _srv.on(uri, method, authenticatedHandler, [this, uploadHandler]() {
       // L'upload est traité AVANT le handler final : vérifier chaque callback
       // avant toute écriture flash. Le handler final refuse la requête non authentifiée.
       if (isAuthenticated()) (this->*uploadHandler)();
+      else cancelHttpUpdate();
     });
   } else {
     _srv.on(uri, method, authenticatedHandler);
@@ -368,28 +370,48 @@ void Portal::handleClearLogs() {
   _srv.send(200, "text/plain; charset=utf-8", "OK");
 }
 
+void Portal::cancelHttpUpdate() {
+  if (!_httpUpdateActive) return;
+  Update.abort();
+  _httpUpdateActive = false;
+  if (_lastUpdateError.length() == 0) _lastUpdateError = "Upload interrompu";
+  _frisquetManager.radio().suspend(FrisquetRadio::Pause::HttpOta, false);
+}
+
 void Portal::handleUpdate() {
-  if (_lastUpdateError.length() > 0 || Update.hasError()) {
+  if (!_httpUpdateActive || _lastUpdateError.length() > 0 || Update.hasError()) {
+    cancelHttpUpdate();
     String err = _lastUpdateError.length() > 0 ? _lastUpdateError : "Erreur pendant la mise à jour";
     error("[PORTAIL] OTA HTTP: %s", err.c_str());
     _srv.send(500, "application/json; charset=utf-8", "{\"ok\":false,\"err\":\"Mise à jour échouée\"}");
     return;
   }
 
+  const bool rebootScheduled = scheduleReboot(1500);
+  _httpUpdateActive = false;
+  _frisquetManager.radio().suspend(FrisquetRadio::Pause::HttpOta, false);
+  if (!rebootScheduled) {
+    _srv.send(500, "application/json; charset=utf-8", "{\"ok\":false,\"err\":\"Redémarrage indisponible\"}");
+    return;
+  }
   _srv.send(200, "application/json; charset=utf-8", "{\"ok\":true}");
   info("[PORTAIL] OTA HTTP: OK, redémarrage...");
-  scheduleReboot(1500);
 }
 
 void Portal::handleUpdateUpload() {
   HTTPUpload& upload = _srv.upload();
   if (upload.status == UPLOAD_FILE_START) {
+    _httpUpdateActive = true;
+    _frisquetManager.radio().suspend(FrisquetRadio::Pause::HttpOta, true);
     _lastUpdateError = "";
     info("[PORTAIL] OTA HTTP: début upload (%s, %u bytes)", upload.filename.c_str(), upload.totalSize);
     if (!Update.begin(UPDATE_SIZE_UNKNOWN, U_FLASH)) {
       _lastUpdateError = "Update.begin a échoué";
       Update.printError(Serial);
     }
+  } else if (!_httpUpdateActive) {
+    // Une session expirée ne peut pas reprendre un upload déjà annulé.
+    return;
   } else if (upload.status == UPLOAD_FILE_WRITE) {
     if (Update.write(upload.buf, upload.currentSize) != upload.currentSize) {
       _lastUpdateError = "Update.write a échoué";
@@ -403,8 +425,7 @@ void Portal::handleUpdateUpload() {
       info("[PORTAIL] OTA HTTP: upload terminé (%u bytes)", upload.totalSize);
     }
   } else if (upload.status == UPLOAD_FILE_ABORTED) {
-    _lastUpdateError = "Upload interrompu";
-    Update.abort();
+    cancelHttpUpdate();
   }
 }
 
@@ -1053,6 +1074,7 @@ void Portal::handleStatus() {
 
 void Portal::handleSendRadio() {
   if (!requireDeveloperMode()) return;
+  if (!requireRadioAvailable()) return;
   if (_srv.method() != HTTP_POST) {
     _srv.send(405, "application/json; charset=utf-8",
               "{\"ok\":false,\"err\":\"Méthode non autorisée\"}");
@@ -1126,6 +1148,18 @@ void Portal::handleSendRadio() {
   _srv.send(200, "application/json; charset=utf-8", "{\"ok\":true}");
 }
 
+bool Portal::requireRadioAvailable(bool cancelPending) {
+  // L'association peut interrompre une observation, jamais une mise à jour ou
+  // un redémarrage. Appeler après validation de la demande d'association.
+  if (cancelPending && !_frisquetManager.radio().suspended())
+    _frisquetManager.radio().cancelOperations();
+  if (!_frisquetManager.radio().busy()) return true;
+  _srv.sendHeader("Retry-After", "1");
+  _srv.send(503, "application/json; charset=utf-8",
+            "{\"ok\":false,\"err\":\"Radio occupée, réessayez dans un instant\"}");
+  return false;
+}
+
 bool Portal::requireDeveloperMode() {
   if (_frisquetManager.config().developerMode()) return true;
   _srv.send(403, "application/json; charset=utf-8",
@@ -1140,6 +1174,7 @@ void Portal::handleRadioLogsPage() {
 
 void Portal::handleMemoryRead() {
   if (!requireDeveloperMode()) return;
+  if (!requireRadioAvailable()) return;
   if (_srv.method() != HTTP_GET) {
     _srv.send(405, "application/json; charset=utf-8",
               "{\"ok\":false,\"err\":\"Méthode non autorisée\"}");
@@ -1292,6 +1327,7 @@ void Portal::handleMemoryRead() {
 
 void Portal::handleMemoryScan() {
   if (!requireDeveloperMode()) return;
+  if (!requireRadioAvailable()) return;
   if (_srv.method() != HTTP_GET) {
     _srv.send(405, "application/json; charset=utf-8",
               "{\"ok\":false,\"err\":\"Méthode non autorisée\"}");
@@ -1444,6 +1480,8 @@ void Portal::handlePairConnect() {
     return;
   }
 
+  if (!requireRadioAvailable(true)) return;
+
   info("[PORTAIL] Demande d'association du module Connect");
 
   bool ok = false;
@@ -1485,6 +1523,8 @@ void Portal::handlePairSondeExt() {
     return;
   }
 
+  if (!requireRadioAvailable(true)) return;
+
   info("[PORTAIL] Demande d'association de la sonde extérieure");
 
   bool ok = false;
@@ -1524,6 +1564,8 @@ void Portal::handlePairSatelliteZ1() {
               "{\"ok\":false,\"err\":\"Satellite Z1 désactivé dans la configuration\"}");
     return;
   }
+
+  if (!requireRadioAvailable(true)) return;
 
   info("[PORTAIL] Demande d'association du Satellite Z1");
 
@@ -1567,6 +1609,8 @@ void Portal::handlePairSatelliteZ2() {
     return;
   }
 
+  if (!requireRadioAvailable(true)) return;
+
   info("[PORTAIL] Demande d'association du Satellite Z2");
 
   bool ok = false;
@@ -1608,6 +1652,8 @@ void Portal::handlePairSatelliteZ3() {
     return;
   }
 
+  if (!requireRadioAvailable(true)) return;
+
   info("[PORTAIL] Demande d'association du Satellite Z3");
 
   bool ok = false;
@@ -1643,6 +1689,8 @@ void Portal::handleRecupNetworkId() {
     return;
   }
 
+  if (!requireRadioAvailable(true)) return;
+
   info("[PORTAIL] Demande de récupération du NetworkID");
 
   if (_frisquetManager.recupererNetworkID()) {
@@ -1662,13 +1710,20 @@ void Portal::handleRecupNetworkId() {
 
 // -------------------- Utils --------------------
 
-void Portal::scheduleReboot(uint32_t delayMs) {
-  xTaskCreatePinnedToCore([](void* d){
-    uint32_t ms = (uint32_t)d;
+bool Portal::scheduleReboot(uint32_t delayMs) {
+  _frisquetManager.radio().suspend(FrisquetRadio::Pause::Reboot, true);
+  const auto result = xTaskCreatePinnedToCore([](void* d){
+    uint32_t ms = static_cast<uint32_t>(reinterpret_cast<uintptr_t>(d));
     vTaskDelay(ms / portTICK_PERIOD_MS);
     ESP.restart();
     vTaskDelete(NULL);
-  }, "rebooter", 2048, (void*)delayMs, 1, nullptr, ARDUINO_RUNNING_CORE);
+  }, "rebooter", 2048, reinterpret_cast<void*>(static_cast<uintptr_t>(delayMs)), 1, nullptr, ARDUINO_RUNNING_CORE);
+  if (result != pdPASS) {
+    _frisquetManager.radio().suspend(FrisquetRadio::Pause::Reboot, false);
+    error("[PORTAIL] Impossible de créer la tâche de redémarrage");
+    return false;
+  }
+  return true;
 }
 
 void Portal::startAp() {

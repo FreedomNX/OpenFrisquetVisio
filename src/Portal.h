@@ -60,6 +60,7 @@ private:
   void handleLogsPage();         // GET /logs
   void handleClearLogs();        // GET /logs/clear
   void handleMemoryRead();       // GET /api/memory
+  bool requireRadioAvailable(bool cancelPending = false);
   void handleMemoryScan();       // GET /api/memory/scan
   void handleMemoryPage();       // GET /memory
   void handleStatus();
@@ -86,10 +87,12 @@ private:
   void onAuthenticated(const char* uri, HTTPMethod method, void (Portal::*handler)(),
                        void (Portal::*uploadHandler)() = nullptr);
   bool requireDeveloperMode();
-  void scheduleReboot(uint32_t delayMs = 800);
+  bool scheduleReboot(uint32_t delayMs = 800);
   bool hexStringToBufferRaw(const String& hex, uint8_t* buffer, size_t maxLen, size_t& outLen);
 
   // AP
 
+  void cancelHttpUpdate();
+  bool _httpUpdateActive = false;
   String _lastUpdateError;
 };

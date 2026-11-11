@@ -421,7 +421,7 @@ bool Satellite::envoyerConsigne() {
     return false;
 }
 
-bool Satellite::onReceive(byte* donnees, size_t length) { 
+bool Satellite::onReceive(byte* donnees, size_t length) {
     if(length < sizeof(FrisquetRadio::RadioTrameHeader)) {
         return false;
     }
@@ -457,136 +457,18 @@ bool Satellite::onReceive(byte* donnees, size_t length) {
             FrisquetRadio::RadioTrameInit* requete = (FrisquetRadio::RadioTrameInit*) readBuffer.getBytes(sizeof(FrisquetRadio::RadioTrameInit));
             if(requete->adresseMemoireEcriture.toUInt16() == 0xA02F && requete->tailleMemoireEcriture.toUInt16() == 0x0004) { // Envoi consigne
 
-                struct donneesSatellite_t {
-                    temperature16 temperatureAmbiante; 
-                    temperature16 temperatureConsigne;
-                    uint8_t i1 = 0x00; 
-                    uint8_t mode = 0x00; // 0x01 Confort, 0x02 Reduit, etc.
-                    uint8_t i2[2] = {0};
-                }* donneesSatellite = (donneesSatellite_t*) readBuffer.getBytes(sizeof(*donneesSatellite));
-                
-                //info("[SATELLITE Z%d] Interception envoi consigne.", getNumeroZone());
-
-                uint8_t retry = 0;
-                int16_t err;
-                
-                size_t lengthRx = 0;
-                byte buffZones[RADIOLIB_SX126X_MAX_PACKET_LENGTH];
-                byte modeObserve = MODE::INCONNU;
-
-                if(! getEcrasement()) {
-                    delay(300);
-
-                    err = radio().receiveExpected(
-                        ID_CHAUDIERE,
-                        this->getId(),
-                        header->idAssociation, 
-                        header->idMessage,
-                        header->idReception|0x80,
-                        header->type,
-                        (byte*) buffZones,
-                        lengthRx,
-                        15, true
-                    );
-                    
-                    if(err != RADIOLIB_ERR_NONE) {
-                        return false;
-                    }
-
-                    readBuffer = ReadBuffer(buffZones, lengthRx);
-
-                    struct donneesZones_t {
-                        FrisquetRadio::RadioTrameHeader header;
-                        uint8_t longueur;
-                        temperature16 temperatureExterieure;
-                        byte i1[2];
-                        uint8_t date[6];  // format reçu "YY MM DD hh mm ss"
-                        byte etatChaudiere; // mode chaudière à valider
-                        uint8_t jourSemaine; // format wday
-                        temperature16 temperatureAmbianteZ1;    // Début 5°C -> 0 = 50 = 5°C - MAX 30°C
-                        temperature16 temperatureConsigneZ1;    // Début 5°C -> 0 = 50 = 5°C - MAX 30°C
-                        byte i2 = 0x00;
-                        uint8_t modeZ1 = 0x00;                       // Options A02F : Auto 0x20, Confort 0x01, Boost 0x40
-                        byte i3[4] = {0x00, 0xC6, 0x00, 0xC6};
-                        temperature16 temperatureAmbianteZ2;    // Début 5°C -> 0 = 50 = 5°C - MAX 30°C
-                        temperature16 temperatureConsigneZ2;    // Début 5°C -> 0 = 50 = 5°C - MAX 30°C
-                        byte i4 = 0x00;
-                        uint8_t modeZ2 = 0x00;                       // Même format A02F pour la zone 2
-                        byte i5[4] = {0x00, 0x00, 0x00, 0x00};
-                        temperature16 temperatureAmbianteZ3;    // Début 5°C -> 0 = 50 = 5°C - MAX 30°C
-                        temperature16 temperatureConsigneZ3;    // Début 5°C -> 0 = 50 = 5°C - MAX 30°C
-                        byte i6 = 0x00;
-                        uint8_t modeZ3 = 0x00;                       // Même format A02F pour la zone 3
-                        byte i7[4] = {0x00, 0x00, 0x00, 0x00};
-                    }* donneesZones = (donneesZones_t*)readBuffer.getBytes(sizeof(donneesZones_t));
-
-                    if(lengthRx < sizeof(donneesZones_t)) {
-                        return false;
-                    }
-
-                    // Ces octets utilisent le format A02F (ex. 0x25 = Auto
-                    // Confort), pas l'énumération Zone::MODE_ZONE d'A154.
-                    switch(getNumeroZone()) {
-                        case 1: modeObserve = donneesZones->modeZ1; break;
-                        case 2: modeObserve = donneesZones->modeZ2; break;
-                        case 3: modeObserve = donneesZones->modeZ3; break;
-                    }
-
-                    setEtatChaudiere(donneesZones->etatChaudiere);
-                    Date date = donneesZones->date;
-                    setDate(date);
-                }
-
-                setIdAssociation(header->idAssociation);
-                setIdMessage(header->idMessage);
-                _zone.setTemperatureAmbiante(donneesSatellite->temperatureAmbiante.toFloat());
-                
-                if(! getEcrasement()) {
-                    const auto modeDemande = _zone.getMode();
-                    const byte optionsDemandees = _zone.getModeOptions();
-                    const bool commandeConnectEnAttente = _zone.getSource() == Zone::SOURCE::CONNECT
-                        && _zone.getLastChange() > _zone.getLastEnvoi();
-                    // La réponse chaudière confirme aussi une zone Connect,
-                    // sans attendre une nouvelle écriture de configuration A154.
-                    const byte modeConfirme = _zone.getSource() == Zone::SOURCE::CONNECT
-                        ? modeObserve : donneesSatellite->mode;
-                    if(setModeFromRaw(modeConfirme)) {
-                        _zone.confirmerMode();
-                    }
-                    if(commandeConnectEnAttente) {
-                        _zone.setMode(modeDemande);
-                        _zone.setModeOptions(optionsDemandees);
-                    }
-                    _zone.setTemperatureConsigne(donneesSatellite->temperatureConsigne.toFloat());
-                    saveConfig();
-                    _zone.saveConfig();
-                    publishMqtt();
-                    _zone.publishMqtt();
+                if (!getEcrasement()) {
+                    auto expected = *header;
+                    expected.idExpediteur = ID_CHAUDIERE;
+                    expected.idDestinataire = getId();
+                    expected.idReception |= 0x80;
+                    if (!radio().beginObservation(getId(), expected)) return false;
+                    memcpy(_observationPacket, donnees, sizeof(_observationPacket));
+                    _observationLastChange = _zone.getLastChange();
+                    _observationPending = true;
                     return true;
                 }
-
-                if(getMode() == MODE::INCONNU) {
-                    setModeFromRaw(donneesSatellite->mode);
-                }
-                if(isnan(_zone.getTemperatureConsigne())) {
-                    _zone.setTemperatureConsigne(donneesSatellite->temperatureConsigne.toFloat());
-                }
-
-                info("[SATELLITE Z%d] Écrasement de données.", getNumeroZone());
-
-                incrementIdMessage(3);
-
-                if(!this->envoyerConsigne()) {
-                    error("[SATELLITE Z%d] Échec de l'écrasement.", getNumeroZone());
-                } else {
-                    info("[SATELLITE Z%d] Écrasement réussie.", getNumeroZone());
-                }
-
-                saveConfig();
-                _zone.saveConfig();
-                publishMqtt();
-                _zone.publishMqtt();
-                return true;
+                return applyObservation(donnees, nullptr, 0);
             }
         }
     } else {
@@ -599,6 +481,135 @@ bool Satellite::onReceive(byte* donnees, size_t length) {
     }
 
     return false;
+}
+
+void Satellite::pollObservation() {
+    if (!_observationPending) return;
+    if (!radio().ownsObservation(getId())) {
+        _observationPending = false; // Annulée par OTA/configuration/écrasement.
+        return;
+    }
+    if (!radio().observationReady(getId())) return;
+    byte reply[RADIOLIB_SX126X_MAX_PACKET_LENGTH];
+    size_t length = sizeof(reply);
+    const int16_t result = radio().takeObservation(getId(), reply, length);
+    _observationPending = false;
+    if (result == RADIOLIB_ERR_NONE) applyObservation(_observationPacket, reply, length);
+}
+
+bool Satellite::applyObservation(byte* request, byte* buffZones, size_t lengthRx) {
+    ReadBuffer readBuffer(request, sizeof(_observationPacket));
+    auto* header = (FrisquetRadio::RadioTrameHeader*)readBuffer.getBytes(sizeof(FrisquetRadio::RadioTrameHeader));
+    readBuffer.getBytes(sizeof(FrisquetRadio::RadioTrameInit));
+    struct donneesSatellite_t {
+        temperature16 temperatureAmbiante;
+        temperature16 temperatureConsigne;
+        uint8_t i1 = 0x00;
+        uint8_t mode = 0x00; // 0x01 Confort, 0x02 Reduit, etc.
+        uint8_t i2[2] = {0};
+    }* donneesSatellite = (donneesSatellite_t*) readBuffer.getBytes(sizeof(*donneesSatellite));
+
+    byte modeObserve = MODE::INCONNU;
+    if(! getEcrasement()) {
+        readBuffer = ReadBuffer(buffZones, lengthRx);
+
+        struct donneesZones_t {
+            FrisquetRadio::RadioTrameHeader header;
+            uint8_t longueur;
+            temperature16 temperatureExterieure;
+            byte i1[2];
+            uint8_t date[6];  // format reçu "YY MM DD hh mm ss"
+            byte etatChaudiere; // mode chaudière à valider
+            uint8_t jourSemaine; // format wday
+            temperature16 temperatureAmbianteZ1;    // Début 5°C -> 0 = 50 = 5°C - MAX 30°C
+            temperature16 temperatureConsigneZ1;    // Début 5°C -> 0 = 50 = 5°C - MAX 30°C
+            byte i2 = 0x00;
+            uint8_t modeZ1 = 0x00;                       // Options A02F : Auto 0x20, Confort 0x01, Boost 0x40
+            byte i3[4] = {0x00, 0xC6, 0x00, 0xC6};
+            temperature16 temperatureAmbianteZ2;    // Début 5°C -> 0 = 50 = 5°C - MAX 30°C
+            temperature16 temperatureConsigneZ2;    // Début 5°C -> 0 = 50 = 5°C - MAX 30°C
+            byte i4 = 0x00;
+            uint8_t modeZ2 = 0x00;                       // Même format A02F pour la zone 2
+            byte i5[4] = {0x00, 0x00, 0x00, 0x00};
+            temperature16 temperatureAmbianteZ3;    // Début 5°C -> 0 = 50 = 5°C - MAX 30°C
+            temperature16 temperatureConsigneZ3;    // Début 5°C -> 0 = 50 = 5°C - MAX 30°C
+            byte i6 = 0x00;
+            uint8_t modeZ3 = 0x00;                       // Même format A02F pour la zone 3
+            byte i7[4] = {0x00, 0x00, 0x00, 0x00};
+        }* donneesZones = (donneesZones_t*)readBuffer.getBytes(sizeof(donneesZones_t));
+
+        if(lengthRx < sizeof(donneesZones_t)) {
+            return false;
+        }
+
+        // Ces octets utilisent le format A02F (ex. 0x25 = Auto
+        // Confort), pas l'énumération Zone::MODE_ZONE d'A154.
+        switch(getNumeroZone()) {
+            case 1: modeObserve = donneesZones->modeZ1; break;
+            case 2: modeObserve = donneesZones->modeZ2; break;
+            case 3: modeObserve = donneesZones->modeZ3; break;
+        }
+
+        setEtatChaudiere(donneesZones->etatChaudiere);
+        Date date = donneesZones->date;
+        setDate(date);
+    }
+
+    setIdAssociation(header->idAssociation);
+    setIdMessage(header->idMessage);
+    _zone.setTemperatureAmbiante(donneesSatellite->temperatureAmbiante.toFloat());
+
+    if(! getEcrasement()) {
+        const auto modeDemande = _zone.getMode();
+        const byte optionsDemandees = _zone.getModeOptions();
+        const float consigneDemandee = _zone.getTemperatureConsigne();
+        const bool commandeConnectEnAttente = _zone.getSource() == Zone::SOURCE::CONNECT
+            && _zone.getLastChange() > _zone.getLastEnvoi();
+        // La réponse chaudière confirme aussi une zone Connect,
+        // sans attendre une nouvelle écriture de configuration A154.
+        const byte modeConfirme = _zone.getSource() == Zone::SOURCE::CONNECT
+            ? modeObserve : donneesSatellite->mode;
+        if(setModeFromRaw(modeConfirme)) {
+            _zone.confirmerMode();
+        }
+        if(commandeConnectEnAttente) {
+            _zone.setMode(modeDemande);
+            _zone.setModeOptions(optionsDemandees);
+        }
+        // Seule une commande arrivée pendant cet échange protège la consigne.
+        const bool nouvelleConsigne = commandeConnectEnAttente
+            && _zone.getLastChange() != _observationLastChange;
+        _zone.setTemperatureConsigne(nouvelleConsigne ? consigneDemandee
+            : donneesSatellite->temperatureConsigne.toFloat());
+        saveConfig();
+        _zone.saveConfig();
+        publishMqtt();
+        _zone.publishMqtt();
+        return true;
+    }
+
+    if(getMode() == MODE::INCONNU) {
+        setModeFromRaw(donneesSatellite->mode);
+    }
+    if(isnan(_zone.getTemperatureConsigne())) {
+        _zone.setTemperatureConsigne(donneesSatellite->temperatureConsigne.toFloat());
+    }
+
+    info("[SATELLITE Z%d] Écrasement de données.", getNumeroZone());
+
+    incrementIdMessage(3);
+
+    if(!this->envoyerConsigne()) {
+        error("[SATELLITE Z%d] Échec de l'écrasement.", getNumeroZone());
+    } else {
+        info("[SATELLITE Z%d] Écrasement réussie.", getNumeroZone());
+    }
+
+    saveConfig();
+    _zone.saveConfig();
+    publishMqtt();
+    _zone.publishMqtt();
+    return true;
 }
 
 String Satellite::getNomMode() {

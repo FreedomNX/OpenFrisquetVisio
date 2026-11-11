@@ -55,6 +55,7 @@ class Satellite : public FrisquetDevice {
         bool recupererTemperatureCDC();
 
         bool onReceive(byte* donnees, size_t length);
+        void pollObservation();
 
         MODE getMode();
         void setMode(MODE mode);
@@ -62,6 +63,7 @@ class Satellite : public FrisquetDevice {
         String getNomMode();
 
         void setEcrasement(bool ecrasement) {
+            if (_ecrasement != ecrasement && radio().ownsObservation(getId())) radio().cancelObservation();
             _ecrasement = ecrasement;
             if(_zone.getSource() == Zone::SOURCE::SATELLITE_PHYSIQUE) _zone.setPilotageActif(ecrasement);
         }
@@ -84,6 +86,10 @@ class Satellite : public FrisquetDevice {
         bool _initialReadPending = true;
         bool _modeVirtuel = false;
         bool _ecrasement = false;
+        bool _observationPending = false;
+        uint32_t _observationLastChange = 0;
+        byte _observationPacket[23] = {};
+        bool applyObservation(byte* request, byte* reply, size_t length);
 
         MODE decodeModeFromRaw(uint8_t rawMode) const;
         uint8_t encodeModeForSend(MODE mode) const;

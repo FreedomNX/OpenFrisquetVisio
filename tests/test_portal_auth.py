@@ -183,7 +183,7 @@ typedef const char* PGM_P;
 declarations = "\n".join(method.split("{", 1)[0].replace("Portal::", "", 1).strip() + ";" for method in methods)
 declarations = declarations.replace("void (Portal::*uploadHandler)()", "void (Portal::*uploadHandler)() = nullptr")
 handler_stubs = "\n".join("void " + name + "(){++handled;}" for name in handlers)
-portal = "class Portal { public:\nWebServer _srv;FrisquetManager& _frisquetManager;int handled=0;\n" + session_members + "\nexplicit Portal(FrisquetManager& f):_frisquetManager(f){}\nvoid startAp(){}\n" + declarations + "\n" + handler_stubs + "\n};\n"
+portal = "class Portal { public:\nWebServer _srv;FrisquetManager& _frisquetManager;int handled=0;\n" + session_members + "\nexplicit Portal(FrisquetManager& f):_frisquetManager(f){}\nvoid startAp(){}\n" + declarations + "\n" + handler_stubs + (ROOT / "tests/fixtures/ota-auth/auth-cleanup.inc").read_text() + "\n};\n"
 
 checks = r'''
 String cookiePair(const String& header){return header.substring(0,header.indexOf(';'));}

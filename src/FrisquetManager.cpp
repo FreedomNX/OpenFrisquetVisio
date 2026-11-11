@@ -103,9 +103,16 @@ void FrisquetManager::loop()
 {
     uint32_t now = millis();
 
+    _radio.pollObservation();
+    _satelliteZ1.pollObservation();
+    _satelliteZ2.pollObservation();
+    _satelliteZ3.pollObservation();
+    if (_radio.busy()) return;
+
     if (FrisquetRadio::receivedFlag || _radio.hasReceivedPacket() || _radio.hasBufferedPacket()) {
         onRadioReceive();
     }
+    if (_radio.busy()) return;
 
     if(_cfg.useZone1()) _zone1.loop();
     if(_cfg.useZone2()) _zone2.loop();
@@ -237,11 +244,12 @@ void FrisquetManager::onRadioReceive()
         _satelliteZ3.onReceive(buff, length);
     }
 
-    FrisquetRadio::interruptReceive = false;
+    if (!_radio.busy()) FrisquetRadio::interruptReceive = false;
 }
 
 
 bool FrisquetManager::recupererNetworkID() {
+    if (_radio.busy()) return false;
     byte buff[RADIOLIB_SX126X_MAX_PACKET_LENGTH];
     size_t buffLength = 0;
     int16_t err;

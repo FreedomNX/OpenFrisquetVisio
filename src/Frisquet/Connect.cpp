@@ -483,12 +483,30 @@ void Connect::handleModeEcsCommand(const String& payload) {
         error("[CONNECT] Mode ECS invalide : %s", payload.c_str());
         return;
     }
+    if (radio().busy()) {
+        // Une seule consigne différée : la plus récente remplace la précédente.
+        // Aucune tentative ni delay() depuis le callback MQTT pendant RX.
+        _requestedModeEcs = getModeECS();
+        _modeEcsCommandPending = true;
+        return;
+    }
+    _modeEcsCommandPending = false;
     if (envoyerModeECS()) {
         _chaudiere.publishModeEcs();
     }
 }
 
+bool Connect::sendPendingModeEcs() {
+    if (!_modeEcsCommandPending || radio().busy()) return false;
+    _modeEcsCommandPending = false;
+    if (getConfig().useConnectPassive() || !estAssocie()) return false;
+    setModeECS(_requestedModeEcs);
+    if (envoyerModeECS()) _chaudiere.publishModeEcs();
+    return true;
+}
+
 bool Connect::envoyerModeECS() {
+    if (radio().busy()) return false;
     if(! estAssocie()) {
         return false;
     }
@@ -880,6 +898,7 @@ void Connect::begin() {
 }
 
 void Connect::loop() {
+    if (sendPendingModeEcs()) return;
     if (getConfig().useConnectPassive() || !estAssocie()) return;
 
     // Exception au planning : une collecte complète au démarrage, même dans

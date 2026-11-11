@@ -72,6 +72,12 @@ public:
         const auto* bytes = static_cast<const uint8_t*>(value);
         nvs[current][key] = Bytes(bytes, bytes + size); return size;
     }
+    uint8_t getUChar(const char* key, uint8_t fallback) const {
+        uint8_t value = fallback;
+        if (isKey(key)) getBytes(key, &value, sizeof(value));
+        return value;
+    }
+    void putUChar(const char* key, uint8_t value) { putBytes(key, &value, sizeof(value)); }
     bool getBool(const char* key, bool fallback) const {
         bool value = fallback;
         if (isKey(key)) getBytes(key, &value, sizeof(value));
@@ -92,6 +98,7 @@ unsigned Preferences::legacyOpens = 0;
 '''
 code += without_includes(ROOT / 'src/Frisquet/NetworkID.h') + '\n'
 code += without_includes(ROOT / 'src/RadioSettings.h') + '\n'
+code += without_includes(ROOT / 'src/Frisquet/BoilerIdentity.h') + '\n'
 code += without_includes(ROOT / 'src/Config.h') + '\n'
 code += without_includes(ROOT / 'src/Config.cpp') + '\n'
 code += r'''
@@ -122,6 +129,18 @@ int main() {
     Config pairedReboot; pairedReboot.load(); expect(pairedReboot, pairedId);
     assert(Preferences::legacyOpens == 1);
     assert(Preferences::nvs.at("net-conf").count("net_id") == 1);
+    // Boiler identity defaults, validation, persistence and settings saves.
+    assert(!pairedReboot.boilerIdKnown() && pairedReboot.boilerId()==0x80);
+    assert(!pairedReboot.boilerId(0x20) && !pairedReboot.boilerIdKnown());
+    assert(pairedReboot.boilerId(0x84)); pairedReboot.save();
+    Config boilerReboot; boilerReboot.load();
+    assert(boilerReboot.boilerIdKnown() && boilerReboot.boilerId()==0x84 && boilerReboot.boilerMemoryOffset()==0xC8);
+    assert(!boilerReboot.boilerId(0x84)); boilerReboot.save();
+    Config settingsReboot; settingsReboot.load();assert(settingsReboot.boilerId()==0x84);
+    Preferences::nvs["sysconfig"]["boilerId"] = Preferences::Bytes(1,0x42);
+    Config invalidBoiler;invalidBoiler.load();assert(!invalidBoiler.boilerIdKnown() && invalidBoiler.boilerId()==0x80);
+    assert(invalidBoiler.boilerId(0x80));invalidBoiler.save();
+    Config defaultConfirmed;defaultConfirmed.load();assert(defaultConfirmed.boilerIdKnown() && defaultConfirmed.boilerMemoryOffset()==0);
     // Current installations and fresh installations without a legacy ID.
     reset(); seed("sysconfig", "networkID", pairedId);
     Config current; current.load(); expect(current, pairedId);

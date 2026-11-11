@@ -33,7 +33,9 @@ bool FrisquetDevice::associer(NetworkID& networkId, uint8_t& idAssociation) {
         ReadBuffer readBuffer = ReadBuffer(buff, buffLength);
         readBuffer.getBytes((byte*)&donnees, sizeof(donnees));
 
-        if(donnees.header.idExpediteur == ID_CHAUDIERE && donnees.header.type == FrisquetRadio::MessageType::ASSOCIATION) {
+        if(BoilerIdentity::valid(donnees.header.idExpediteur) &&
+           donnees.header.type == FrisquetRadio::MessageType::ASSOCIATION &&
+           donnees.length == 4 && !donnees.header.isAck() && !donnees.networkID.isBroadcast()) {
             info("[DEVICE] Réception trame d'association");
 
             struct {
@@ -60,56 +62,59 @@ bool FrisquetDevice::associer(NetworkID& networkId, uint8_t& idAssociation) {
 
             idAssociation = donnees.header.idAssociation;
             networkId = confirmPayload.networkID;
+            // Le point d'entrée d'association sauvegarde ensuite le réseau et l'identité ensemble.
+            getConfig().boilerId(donnees.header.idExpediteur);
             
             radio().setNetworkID(networkId);
 
             delay(5000); // Attente 5 secondes
+            radio().startReceive();
             return true;
         }
     } while(millis() < timeout);
 
+    radio().setNetworkID(getConfig().getNetworkID());
+    radio().startReceive();
     return false;
 }
 
-bool FrisquetDevice::recupererDate() {
-    if(! estAssocie()) {
-        return false;
+void FrisquetDevice::confirmerChaudiere(uint8_t id) {
+    if (getConfig().boilerId(id)) {
+        getConfig().save();
+        info("[RADIO] Identifiant chaudière confirmé : 0x%02X.", id);
     }
+}
 
-    struct {
+bool FrisquetDevice::recupererDate() {
+    if (!estAssocie() || getConfig().getNetworkID().isBroadcast()
+        || (getId() == ID_CONNECT && getConfig().useConnectPassive())) return false;
+
+    struct Response {
         FrisquetRadio::RadioTrameHeader header;
         uint8_t longueur;
-        byte date[6] = {0};
-    } donnees;
-    
-    size_t length;
-    int16_t err;
+        byte date[6];
+    };
 
-    uint8_t retry = 0;
-    do {
-        length = 0;
-        err = this->radio().sendAsk(
-            this->getId(), 
-            ID_CHAUDIERE, 
-            this->getIdAssociation(),
-            this->incrementIdMessage(),
-            0x01,
-            0xA02B,
-            0x0003,
-            (byte*)&donnees,
-            length
-        );
+    const uint8_t preferred = getConfig().boilerId();
+    const uint8_t candidates[] = {preferred, BoilerIdentity::alternate(preferred)};
+    for (uint8_t candidate : candidates) {
+        Response donnees = {};
+        size_t length = sizeof(donnees);
+        const uint8_t message = incrementIdMessage();
+        const int16_t err = radio().sendAsk(getId(), candidate, getIdAssociation(), message,
+            0x01, 0xA02B, 0x0003, (byte*)&donnees, length, 2);
 
-        if(err != RADIOLIB_ERR_NONE || length < sizeof(donnees)) {
-            delay(100);
-            continue;
-        }
+        if (err != RADIOLIB_ERR_NONE || length != sizeof(donnees) || donnees.longueur != 6
+            || donnees.header.idExpediteur != candidate || donnees.header.idDestinataire != getId()
+            || donnees.header.idAssociation != getIdAssociation() || donnees.header.idMessage != message
+            || donnees.header.idReception != 0x81 || donnees.header.type != FrisquetRadio::MessageType::READ
+            || !BoilerIdentity::validDate(donnees.date)) continue;
 
+        confirmerChaudiere(candidate);
         Date date = donnees.date;
         setDate(date);
-        
         return true;
-    } while(retry++ < 10);
-
+    }
+    error("[RADIO] Lecture de l'heure sans réponse valide de 0x80 ou 0x84 ; identifiant conservé (0x%02X).", preferred);
     return false;
 }

@@ -63,6 +63,7 @@ void Satellite::loop() {
 
     if(firstLoop) {
         firstLoop = false;
+        recupererDate();
         recupererInfosChaudiere();
         if (this->getId() == ID_ZONE_1 && !cdcGereeParConnect) {
             if (recupererTemperatureCDC()) {
@@ -154,7 +155,7 @@ bool Satellite::recupererInfosChaudiere() {
         length = sizeof(donneesZones_t);
         err = this->radio().sendAsk(
             this->getId(), 
-            ID_CHAUDIERE, 
+            getConfig().boilerId(),
             this->getIdAssociation(),
             this->incrementIdMessage(),
             0x01,
@@ -197,7 +198,7 @@ bool Satellite::recupererTemperatureCDC() {
     do {
         err = this->radio().sendAsk(
             this->getId(),
-            ID_CHAUDIERE,
+            getConfig().boilerId(),
             this->getIdAssociation(),
             this->incrementIdMessage(),
             0x01,
@@ -273,7 +274,7 @@ bool Satellite::envoyerTemperatureAmbiante() {
         length = sizeof(donneesZones_t);
         err = this->radio().sendInit(
             this->getId(), 
-            ID_CHAUDIERE, 
+            getConfig().boilerId(),
             this->getIdAssociation(),
             this->incrementIdMessage(),
             0x01, 
@@ -388,7 +389,7 @@ bool Satellite::envoyerConsigne() {
         length = sizeof(donneesZones_t);
         err = this->radio().sendInit(
             this->getId(), 
-            ID_CHAUDIERE, 
+            getConfig().boilerId(),
             this->getIdAssociation(),
             this->incrementIdMessage(),
             0x01, 
@@ -453,7 +454,8 @@ bool Satellite::onReceive(byte* donnees, size_t length) {
             }
         }
 
-        if(length == 23 && header->type == FrisquetRadio::MessageType::INIT && header->idExpediteur == this->getId() && header->idMessage != getIdMessage()) { // Réception en écoute
+        if(length == 23 && header->type == FrisquetRadio::MessageType::INIT && header->idExpediteur == this->getId() && header->idMessage != getIdMessage()
+           && BoilerIdentity::valid(header->idDestinataire)) { // Réception en écoute
             FrisquetRadio::RadioTrameInit* requete = (FrisquetRadio::RadioTrameInit*) readBuffer.getBytes(sizeof(FrisquetRadio::RadioTrameInit));
             if(requete->adresseMemoireEcriture.toUInt16() == 0xA02F && requete->tailleMemoireEcriture.toUInt16() == 0x0004) { // Envoi consigne
 
@@ -478,7 +480,7 @@ bool Satellite::onReceive(byte* donnees, size_t length) {
                     delay(300);
 
                     err = radio().receiveExpected(
-                        ID_CHAUDIERE,
+                        header->idDestinataire,
                         this->getId(),
                         header->idAssociation, 
                         header->idMessage,
@@ -492,6 +494,10 @@ bool Satellite::onReceive(byte* donnees, size_t length) {
                     if(err != RADIOLIB_ERR_NONE) {
                         return false;
                     }
+
+                    if (lengthRx < sizeof(*header) + 1 || buffZones[2] != header->idAssociation
+                        || buffZones[sizeof(*header)] != lengthRx - sizeof(*header) - 1) return false;
+                    confirmerChaudiere(header->idDestinataire);
 
                     readBuffer = ReadBuffer(buffZones, lengthRx);
 

@@ -34,3 +34,4 @@ tests/*
 !tests/portal-polling.test.mjs
 !tests/test_boiler_firmware.py
 !tests/test_firmware_version.py
+!tests/test_boiler_identity.py

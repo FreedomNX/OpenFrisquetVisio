@@ -105,6 +105,7 @@ int16_t FrisquetRadio::sendAsk(
     size_t& length,
     uint8_t retry
 ) {
+    if (busy()) return ERR_BUSY;
     
     struct {
         RadioTrameHeader header;
@@ -160,6 +161,7 @@ int16_t FrisquetRadio::sendInit(
     byte* donneesReception, 
     size_t& length
 ) {
+    if (busy()) return ERR_BUSY;
 
     struct {
         RadioTrameHeader header;
@@ -215,6 +217,7 @@ int16_t FrisquetRadio::sendAnswer(
     byte* donneesEnvoi, 
     uint8_t longueurDonnees
 ) {
+    if (busy()) return ERR_BUSY;
 
     FrisquetRadio::RadioTrameHeader header;
 
@@ -264,6 +267,7 @@ int16_t FrisquetRadio::receiveExpected(
     bool useReadData,
     bool keepReceiving
 ) {
+    if (busy()) return ERR_BUSY;
     if (retry == 0) return RADIOLIB_ERR_RX_TIMEOUT;
     interruptReceive = true;
     // Cette fonction prend en charge la réception en attente. Son événement
@@ -347,5 +351,122 @@ int16_t FrisquetRadio::receiveExpected(
 }
 
 void FrisquetRadio::setNetworkID(NetworkID networkID) {
+    cancelOperations();
     this->setSyncWord(networkID.bytes, sizeof(networkID.bytes));
+}
+
+bool FrisquetRadio::beginObservation(uint8_t owner, const RadioTrameHeader& expected) {
+    if (busy()) return false;
+    _observation.owner = owner;
+    _observation.expected = expected;
+    _observation.remaining = 15;
+    _observation.length = 0;
+    _observation.deadline = millis() + 300U;
+    _observation.phase = ObservationPhase::Guard;
+    // RX a déjà été réarmé par le manager. Conserver le premier paquet dans
+    // le FIFO pendant les 300 ms, comme avant ; la boucle applicative est libérée.
+    interruptReceive = true;
+    receivedFlag = false;
+    return true;
+}
+
+bool FrisquetRadio::ownsObservation(uint8_t owner) const {
+    return _observation.phase != ObservationPhase::Idle && _observation.owner == owner;
+}
+
+bool FrisquetRadio::observationReady(uint8_t owner) const {
+    return _observation.phase == ObservationPhase::Ready && _observation.owner == owner;
+}
+
+void FrisquetRadio::finishObservation(int16_t result) {
+    // La réservation reste active jusqu'à la consommation du résultat.
+    // Le réarmement de l'écoute suivante ne change pas le résultat déjà reçu.
+    startReceive();
+    _observation.result = result;
+    _observation.phase = ObservationPhase::Ready;
+    interruptReceive = false;
+    receivedFlag = false;
+}
+
+void FrisquetRadio::pollObservation() {
+    if (_observation.phase == ObservationPhase::Idle ||
+        _observation.phase == ObservationPhase::Ready) return;
+    const uint32_t now = millis();
+    const bool expired = static_cast<int32_t>(now - _observation.deadline) >= 0;
+    const bool first = _observation.phase == ObservationPhase::Guard;
+    if (first && !expired) return;
+    if (!first && !hasReceivedPacket() && !expired) return;
+
+    // Une tentative au maximum par appel. La première lit immédiatement le
+    // FIFO après la garde ; les 14 suivantes attendent un IRQ ou 408 ms.
+    --_observation.remaining;
+    int16_t result = RADIOLIB_ERR_RX_TIMEOUT;
+    if (first || hasReceivedPacket()) {
+        receivedFlag = false;
+        result = readData(_operationData, 0);
+        if (result == RADIOLIB_ERR_NONE) {
+            _observation.length = getPacketLength();
+            if (_observation.length < sizeof(RadioTrameHeader)) {
+                result = RADIOLIB_ERR_RX_TIMEOUT;
+            } else {
+                logRadio(true, _operationData, _observation.length, getLastPacketRSSI());
+                RadioTrameHeader header;
+                memcpy(&header, _operationData, sizeof(header));
+                const auto& expected = _observation.expected;
+                // Même sélection que receiveExpected(), association comprise
+                // dans la requête mais non comparée par le protocole existant.
+                if (header.idExpediteur == expected.idExpediteur &&
+                    header.idDestinataire == expected.idDestinataire &&
+                    header.idMessage == expected.idMessage &&
+                    header.idReception == expected.idReception &&
+                    header.type == expected.type) {
+                    finishObservation(result);
+                    return;
+                }
+                if (header.type != expected.type && header.type == 0x83) {
+                    finishObservation(RADIOLIB_ERR_ADDRESS_NOT_FOUND);
+                    return;
+                }
+                bufferUnexpectedPacket(_operationData, _observation.length);
+                result = RADIOLIB_ERR_RX_TIMEOUT;
+            }
+        }
+    }
+    if (!_observation.remaining) {
+        finishObservation(result);
+        return;
+    }
+    const int16_t restart = startReceive();
+    if (restart != RADIOLIB_ERR_NONE) {
+        finishObservation(restart);
+        return;
+    }
+    _observation.phase = ObservationPhase::Receive;
+    _observation.deadline = millis() + 408U;
+}
+
+int16_t FrisquetRadio::takeObservation(uint8_t owner, byte* data, size_t& length) {
+    if (!observationReady(owner)) return ERR_BUSY;
+    const int16_t result = _observation.result;
+    if (result == RADIOLIB_ERR_NONE) {
+        if (length == 0 || _observation.length < length) length = _observation.length;
+        memcpy(data, _operationData, length);
+    } else {
+        length = 0;
+    }
+    _observation.phase = ObservationPhase::Idle;
+    return result;
+}
+
+void FrisquetRadio::cancelObservation() {
+    if (_observation.phase == ObservationPhase::Idle) return;
+    // Observation uniquement : aucun TX à interrompre ni commande à réémettre.
+    _observation.phase = ObservationPhase::Idle;
+    receivedFlag = false;
+    interruptReceive = false;
+    startReceive();
+}
+
+void FrisquetRadio::cancelOperations() {
+    cancelObservation();
 }

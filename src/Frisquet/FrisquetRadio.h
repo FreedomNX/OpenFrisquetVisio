@@ -105,6 +105,30 @@ class FrisquetRadio : public Radio {
 
     void setNetworkID(NetworkID networkID);
 
+    // Une seule observation passive, sans allocation ni callback réentrant.
+    // Le propriétaire conserve la réservation jusqu'à takeObservation().
+    static constexpr int16_t ERR_BUSY = -32000;
+    bool beginObservation(uint8_t owner, const RadioTrameHeader& expected);
+    void pollObservation();
+    bool observationReady(uint8_t owner) const;
+    bool ownsObservation(uint8_t owner) const;
+    int16_t takeObservation(uint8_t owner, byte* data, size_t& length);
+    void cancelObservation();
+    void cancelOperations();
+    bool suspended() const { return _suspended != 0; }
+    bool busy() const {
+        return _suspended || _observation.phase != ObservationPhase::Idle;
+    }
+    enum class Pause : uint8_t { ArduinoOta = 1, HttpOta = 2, Reboot = 4 };
+    void suspend(Pause reason, bool suspended) {
+        const uint8_t previous = _suspended;
+        const uint8_t bit = static_cast<uint8_t>(reason);
+        if (suspended) _suspended |= bit;
+        else _suspended &= ~bit;
+        if (!previous && _suspended) cancelOperations();
+        if (previous && !_suspended) { receivedFlag = false; startReceive(); }
+    }
+
     bool popBufferedPacket(byte* donnees, size_t& length, float* rssi = nullptr);
     bool hasBufferedPacket();
 
@@ -112,6 +136,19 @@ class FrisquetRadio : public Radio {
     static volatile bool interruptReceive;
 
     private:
+    enum class ObservationPhase : uint8_t { Idle, Guard, Receive, Ready };
+    struct {
+        ObservationPhase phase = ObservationPhase::Idle;
+        uint8_t owner = 0;
+        RadioTrameHeader expected;
+        uint8_t remaining = 0;
+        uint32_t deadline = 0;
+        int16_t result = RADIOLIB_ERR_NONE;
+        size_t length = 0;
+    } _observation;
+    byte _operationData[RADIOLIB_SX126X_MAX_PACKET_LENGTH] = {};
+    uint8_t _suspended = 0;
+    void finishObservation(int16_t result);
     struct BufferedPacket {
         bool used = false;
         uint32_t timestamp = 0;

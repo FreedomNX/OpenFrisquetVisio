@@ -34,3 +34,12 @@ tests/*
 !tests/portal-polling.test.mjs
 !tests/test_boiler_firmware.py
 !tests/test_firmware_version.py
+
+!tests/cooperative_radio_fixture.py
+!tests/test_cooperative_receive.py
+!tests/test_pairing_recovery.py
+!tests/fixtures/
+tests/fixtures/*
+!tests/fixtures/cooperative-radio/
+!tests/fixtures/pairing-recovery/
+!tests/fixtures/ota-auth/

@@ -81,6 +81,7 @@ struct FrisquetRadio : Radio {
     // Déclarations extraites de FrisquetRadio.h par le lanceur Python.
     #include "radio_types.inc"
 
+    void cancelOperations() {}
     void setNetworkID(NetworkID networkID);
 };
 

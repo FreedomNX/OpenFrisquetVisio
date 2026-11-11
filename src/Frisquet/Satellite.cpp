@@ -421,7 +421,7 @@ bool Satellite::envoyerConsigne() {
     return false;
 }
 
-bool Satellite::onReceive(byte* donnees, size_t length) { 
+bool Satellite::onReceive(byte* donnees, size_t length) {
     if(length < sizeof(FrisquetRadio::RadioTrameHeader)) {
         return false;
     }
@@ -457,42 +457,60 @@ bool Satellite::onReceive(byte* donnees, size_t length) {
             FrisquetRadio::RadioTrameInit* requete = (FrisquetRadio::RadioTrameInit*) readBuffer.getBytes(sizeof(FrisquetRadio::RadioTrameInit));
             if(requete->adresseMemoireEcriture.toUInt16() == 0xA02F && requete->tailleMemoireEcriture.toUInt16() == 0x0004) { // Envoi consigne
 
-                struct donneesSatellite_t {
-                    temperature16 temperatureAmbiante; 
-                    temperature16 temperatureConsigne;
-                    uint8_t i1 = 0x00; 
+                if (!getEcrasement()) {
+                    auto expected = *header;
+                    expected.idExpediteur = ID_CHAUDIERE;
+                    expected.idDestinataire = getId();
+                    expected.idReception |= 0x80;
+                    if (!radio().beginObservation(getId(), expected)) return false;
+                    memcpy(_observationPacket, donnees, sizeof(_observationPacket));
+                    _observationLastChange = _zone.getLastChange();
+                    _observationPending = true;
+                    return true;
+                }
+                return applyObservation(donnees, nullptr, 0);
+            }
+        }
+    } else {
+        if(header->idAssociation != getIdAssociation() || header->isAck()) {
+            return false;
+        }
+
+        //radio().sendAnswer(getId(), header->idExpediteur, header->idAssociation, header->idMessage, header->idReception, header->type, {}, 0);
+        return true;
+    }
+
+    return false;
+}
+
+void Satellite::pollObservation() {
+    if (!_observationPending) return;
+    if (!radio().ownsObservation(getId())) {
+        _observationPending = false; // Annulée par OTA/configuration/écrasement.
+        return;
+    }
+    if (!radio().observationReady(getId())) return;
+    byte reply[RADIOLIB_SX126X_MAX_PACKET_LENGTH];
+    size_t length = sizeof(reply);
+    const int16_t result = radio().takeObservation(getId(), reply, length);
+    _observationPending = false;
+    if (result == RADIOLIB_ERR_NONE) applyObservation(_observationPacket, reply, length);
+}
+
+bool Satellite::applyObservation(byte* request, byte* buffZones, size_t lengthRx) {
+    ReadBuffer readBuffer(request, sizeof(_observationPacket));
+    auto* header = (FrisquetRadio::RadioTrameHeader*)readBuffer.getBytes(sizeof(FrisquetRadio::RadioTrameHeader));
+    readBuffer.getBytes(sizeof(FrisquetRadio::RadioTrameInit));
+    struct donneesSatellite_t {
+        temperature16 temperatureAmbiante;
+        temperature16 temperatureConsigne;
+        uint8_t i1 = 0x00;
                     uint8_t mode = 0x00; // 0x01 Confort, 0x02 Reduit, etc.
                     uint8_t i2[2] = {0};
                 }* donneesSatellite = (donneesSatellite_t*) readBuffer.getBytes(sizeof(*donneesSatellite));
-                
-                //info("[SATELLITE Z%d] Interception envoi consigne.", getNumeroZone());
 
-                uint8_t retry = 0;
-                int16_t err;
-                
-                size_t lengthRx = 0;
-                byte buffZones[RADIOLIB_SX126X_MAX_PACKET_LENGTH];
-                byte modeObserve = MODE::INCONNU;
-
-                if(! getEcrasement()) {
-                    delay(300);
-
-                    err = radio().receiveExpected(
-                        ID_CHAUDIERE,
-                        this->getId(),
-                        header->idAssociation, 
-                        header->idMessage,
-                        header->idReception|0x80,
-                        header->type,
-                        (byte*) buffZones,
-                        lengthRx,
-                        15, true
-                    );
-                    
-                    if(err != RADIOLIB_ERR_NONE) {
-                        return false;
-                    }
-
+    byte modeObserve = MODE::INCONNU;
+    if(! getEcrasement()) {
                     readBuffer = ReadBuffer(buffZones, lengthRx);
 
                     struct donneesZones_t {
@@ -540,10 +558,11 @@ bool Satellite::onReceive(byte* donnees, size_t length) {
                 setIdAssociation(header->idAssociation);
                 setIdMessage(header->idMessage);
                 _zone.setTemperatureAmbiante(donneesSatellite->temperatureAmbiante.toFloat());
-                
+
                 if(! getEcrasement()) {
                     const auto modeDemande = _zone.getMode();
                     const byte optionsDemandees = _zone.getModeOptions();
+        const float consigneDemandee = _zone.getTemperatureConsigne();
                     const bool commandeConnectEnAttente = _zone.getSource() == Zone::SOURCE::CONNECT
                         && _zone.getLastChange() > _zone.getLastEnvoi();
                     // La réponse chaudière confirme aussi une zone Connect,
@@ -557,7 +576,11 @@ bool Satellite::onReceive(byte* donnees, size_t length) {
                         _zone.setMode(modeDemande);
                         _zone.setModeOptions(optionsDemandees);
                     }
-                    _zone.setTemperatureConsigne(donneesSatellite->temperatureConsigne.toFloat());
+        // Seule une commande arrivée pendant cet échange protège la consigne.
+        const bool nouvelleConsigne = commandeConnectEnAttente
+            && _zone.getLastChange() != _observationLastChange;
+        _zone.setTemperatureConsigne(nouvelleConsigne ? consigneDemandee
+            : donneesSatellite->temperatureConsigne.toFloat());
                     saveConfig();
                     _zone.saveConfig();
                     publishMqtt();
@@ -587,18 +610,6 @@ bool Satellite::onReceive(byte* donnees, size_t length) {
                 publishMqtt();
                 _zone.publishMqtt();
                 return true;
-            }
-        }
-    } else {
-        if(header->idAssociation != getIdAssociation() || header->isAck()) {
-            return false;
-        }
-
-        //radio().sendAnswer(getId(), header->idExpediteur, header->idAssociation, header->idMessage, header->idReception, header->type, {}, 0);
-        return true;
-    }
-
-    return false;
 }
 
 String Satellite::getNomMode() {

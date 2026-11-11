@@ -44,3 +44,6 @@ tests/fixtures/*
 !tests/fixtures/pairing-recovery/
 !tests/fixtures/ota-auth/
 !tests/test_cooperative_portal.py
+!tests/test_cooperative_commands.py
+!tests/test_satellite_observation.py
+!tests/fixtures/satellite-observation/

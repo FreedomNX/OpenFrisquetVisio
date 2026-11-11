@@ -57,6 +57,7 @@ class Connect : public FrisquetDevice {
         bool setModeECS(const String& modeECS);
         String getNomModeECS();
         void handleModeEcsCommand(const String& payload);
+        bool sendPendingModeEcs();
 
         bool onReceive(byte* donnees, size_t length);
 
@@ -99,4 +100,6 @@ class Connect : public FrisquetDevice {
         RadioSchedule _ecsSchedule;
         bool _initialReadPending = true;
         uint8_t _modeECSFrameBits = 0x01;
+        bool _modeEcsCommandPending = false;
+        MODE_ECS _requestedModeEcs = MODE_ECS::INCONNU;
 };

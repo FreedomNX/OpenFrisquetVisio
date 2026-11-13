@@ -27,6 +27,10 @@ code = r'''
 #include "Buffer.h"
 #include "Frisquet/BoilerIdentity.h"
 using byte = uint8_t;
+// Les méthodes Arduino extraites appellent les fonctions mathématiques sans
+// namespace ; <cmath> ne les expose pas forcément globalement (GCC/Linux).
+using std::isnan;
+using std::round;
 constexpr int RADIOLIB_ERR_NONE = 0;
 constexpr unsigned RADIOLIB_SX126X_MAX_PACKET_LENGTH = 255;
 void info(const char*, ...) {}

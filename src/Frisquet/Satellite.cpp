@@ -457,7 +457,11 @@ bool Satellite::onReceive(byte* donnees, size_t length) {
         if(length == 23 && header->type == FrisquetRadio::MessageType::INIT && header->idExpediteur == this->getId() && header->idMessage != getIdMessage()
            && BoilerIdentity::valid(header->idDestinataire)) { // Réception en écoute
             FrisquetRadio::RadioTrameInit* requete = (FrisquetRadio::RadioTrameInit*) readBuffer.getBytes(sizeof(FrisquetRadio::RadioTrameInit));
-            if(requete->adresseMemoireEcriture.toUInt16() == 0xA02F && requete->tailleMemoireEcriture.toUInt16() == 0x0004) { // Envoi consigne
+            const uint16_t adresseConsigne = 0xA02F + (0x0005 * (getNumeroZone() - 1));
+            if(!header->isAck() && getNumeroZone() >= 1 && getNumeroZone() <= 3 &&
+               requete->adresseMemoireEcriture.toUInt16() == adresseConsigne &&
+               requete->tailleMemoireEcriture.toUInt16() == 0x0004 &&
+               requete->longueurDonneesEcriture == 8) { // Envoi consigne de cette zone
 
                 struct donneesSatellite_t {
                     temperature16 temperatureAmbiante; 

@@ -111,6 +111,7 @@ code = prefix + '\n#include "Frisquet/ZoneProgram.h"\n' + class_code + '\n' + he
 code += '\n'.join(extract(method) for method in methods)
 code += r'''
 struct Config {
+    uint8_t boilerId(){return 0x80;}
     bool connect=false,passive=false;
     bool virtualZ1=false;
     bool useConnect(){return connect;}

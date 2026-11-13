@@ -58,7 +58,7 @@ bool SondeExterieure::envoyerTemperatureExterieure() {
         length = sizeof(donnees);
         err = this->radio().sendInit(
             this->getId(), 
-            ID_CHAUDIERE, 
+            getConfig().boilerId(),
             this->getIdAssociation(),
             this->incrementIdMessage(),
             0x01, 

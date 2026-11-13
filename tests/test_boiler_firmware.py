@@ -55,7 +55,7 @@ struct FrisquetRadio {
         return result;
     }
 };
-struct Config { bool passive=false;bool useConnectPassive(){return passive;} };
+struct Config { bool passive=false;bool useConnectPassive(){return passive;} uint8_t boilerId(){return 0x80;} };
 struct Connect {
     BoilerFirmware _boilerFirmware;
     FrisquetRadio radioMock;

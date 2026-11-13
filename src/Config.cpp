@@ -56,6 +56,9 @@ void Config::load() {
   _mqttOpts.cleanSession  = _preferences.getBool("mqttClean", true);
 
   // Frisquet
+  const uint8_t storedBoilerId = _preferences.getUChar("boilerId", 0xFF);
+  _boilerIdKnown = BoilerIdentity::valid(storedBoilerId);
+  _boilerId = _boilerIdKnown ? storedBoilerId : BoilerIdentity::DEFAULT_ID;
   if(_preferences.isKey("networkID")) {
     _preferences.getBytes("networkID", &_networkId, sizeof(NetworkID));
   } else {
@@ -127,6 +130,7 @@ void Config::save() {
 
   // Frisquet
   _preferences.putBytes("networkID", &_networkId, sizeof(NetworkID));
+  _preferences.putUChar("boilerId", _boilerIdKnown ? _boilerId : 0xFF);
   _preferences.putBool("useConnect", _useConnect);
   _preferences.putBool("useConnectPass", _useConnectPassive);
   _preferences.putBool("useSondeExt", _useSondeExterieure);

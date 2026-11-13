@@ -8,7 +8,6 @@
 
 #include <TimeLib.h>
 
-#define ID_CHAUDIERE 0x80
 #define ID_ZONE_1 0x08
 #define ID_ZONE_2 0x09
 #define ID_ZONE_3 0x0A
@@ -43,6 +42,7 @@ class FrisquetDevice {
 
         Preferences& getPreferences() { return _preferences; }
         Config& getConfig() { return _cfg; }
+        void confirmerChaudiere(uint8_t id);
 
         void loadConfig() {}
         void saveConfig() {}

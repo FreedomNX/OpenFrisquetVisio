@@ -5,12 +5,15 @@
 #include "MQTT/MqttManager.h"
 #include "Frisquet/NetworkID.h"
 #include "RadioSettings.h"
+#include "Frisquet/BoilerIdentity.h"
 
 class Config {
     private:
         OFVNetworkManager::Options _wifiOpts;
         MqttManager::Options _mqttOpts;
         NetworkID _networkId;
+        uint8_t _boilerId = BoilerIdentity::DEFAULT_ID;
+        bool _boilerIdKnown = false;
 
         Preferences _preferences;
 
@@ -49,6 +52,17 @@ class Config {
         MqttManager::Options& getMQTTOptions() { return _mqttOpts; }
         NetworkID& getNetworkID() { return _networkId; }
         void setNetworkID(NetworkID networkId) { _networkId = networkId; }
+        uint8_t boilerId() const { return _boilerId; }
+        bool boilerIdKnown() const { return _boilerIdKnown; }
+        uint16_t boilerMemoryOffset() const { return BoilerIdentity::memoryOffset(_boilerId); }
+        // Renvoie true uniquement si une nouvelle identité doit être sauvegardée.
+        bool boilerId(uint8_t id) {
+            if (!BoilerIdentity::valid(id)) return false;
+            const bool changed = !_boilerIdKnown || _boilerId != id;
+            _boilerId = id;
+            _boilerIdKnown = true;
+            return changed;
+        }
 
         bool useConnect() { return _useConnect; }
         bool useConnect(bool useConnect) { _useConnect = useConnect; return _useConnect; }

@@ -1232,7 +1232,7 @@ void Portal::handleMemoryRead() {
 
     int16_t err = _frisquetManager.radio().sendAsk(
         idExpediteur,
-        ID_CHAUDIERE,
+        _frisquetManager.config().boilerId(),
         idAssociation,
         ++s_memoryMessageId,
         0x01,
@@ -1365,7 +1365,7 @@ void Portal::handleMemoryScan() {
 
     int16_t err = _frisquetManager.radio().sendAsk(
         idExpediteur,
-        ID_CHAUDIERE,
+        _frisquetManager.config().boilerId(),
         idAssociation,
         ++s_memoryMessageId,
         0x01,

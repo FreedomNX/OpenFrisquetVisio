@@ -96,7 +96,7 @@ bool Connect::envoyerZone(Zone& zone) {
     do {
         err = this->radio().sendInit(
             this->getId(), 
-            ID_CHAUDIERE, 
+            getConfig().boilerId(),
             this->getIdAssociation(),
             this->incrementIdMessage(),
             zone.getIdZone(), 
@@ -131,7 +131,7 @@ bool Connect::recupererVersionFirmware() {
     byte response[sizeof(FrisquetRadio::RadioTrameHeader) + 1 + 4] = {};
     size_t length = sizeof(response);
     const int16_t result = this->radio().sendAsk(
-        this->getId(), ID_CHAUDIERE, this->getIdAssociation(),
+        this->getId(), getConfig().boilerId(), this->getIdAssociation(),
         this->incrementIdMessage(), 0x01, 0x7541, 0x0002,
         response, length, 1);
     if (result != RADIOLIB_ERR_NONE || !setVersionFirmware(response, length)) {
@@ -198,11 +198,11 @@ bool Connect::recupererInformations() {
         length = sizeof(buff);
         err = this->radio().sendAsk(
             this->getId(), 
-            ID_CHAUDIERE, 
+            getConfig().boilerId(),
             this->getIdAssociation(),
             this->incrementIdMessage(),
             0x01,
-            0x79F2 + (ID_CHAUDIERE == 0x84 ? 0xC8 : 0x00),
+            0x79F2 + getConfig().boilerMemoryOffset(),
             0x001C,
             (byte*)&buff,
             length
@@ -277,11 +277,11 @@ bool Connect::recupererConsommation() {
         length = sizeof(buff);
         err = this->radio().sendAsk(
             this->getId(), 
-            ID_CHAUDIERE, 
+            getConfig().boilerId(),
             this->getIdAssociation(),
             this->incrementIdMessage(),
             0x01,
-            0x7A18 + (ID_CHAUDIERE == 0x84 ? 0xC8 : 0x00),
+            0x7A18 + getConfig().boilerMemoryOffset(),
             0x001C,
             (byte*)&buff,
             length
@@ -326,7 +326,7 @@ bool Connect::recupererConsommationAnnuelle() {
         length = sizeof(buff);
         err = this->radio().sendAsk(
             this->getId(), 
-            ID_CHAUDIERE, 
+            getConfig().boilerId(),
             this->getIdAssociation(),
             this->incrementIdMessage(),
             0x01,
@@ -426,7 +426,7 @@ bool Connect::recupererModeECS() {
         //length = sizeof(buff);
         err = this->radio().sendAsk(
             this->getId(), 
-            ID_CHAUDIERE, 
+            getConfig().boilerId(),
             this->getIdAssociation(),
             this->incrementIdMessage(),
             0x01,
@@ -511,7 +511,7 @@ bool Connect::envoyerModeECS() {
     do {
         err = this->radio().sendInit(
             this->getId(), 
-            ID_CHAUDIERE, 
+            getConfig().boilerId(),
             this->getIdAssociation(),
             this->incrementIdMessage(),
             0x01, 
@@ -754,7 +754,7 @@ bool Connect::onReceive(byte* donnees, size_t length) {
     }
 
     if (header.type == FrisquetRadio::MessageType::READ) {
-        if (passive && header.idExpediteur == getId() && header.idDestinataire == ID_CHAUDIERE) {
+        if (passive && header.idExpediteur == getId() && BoilerIdentity::valid(header.idDestinataire)) {
             if(readBuffer.remainingLength() < sizeof(FrisquetRadio::RadioTrameAsk)) { return false; }
             FrisquetRadio::RadioTrameAsk requete;
             readBuffer.getBytes((byte*)&requete, sizeof(requete));
@@ -762,7 +762,7 @@ bool Connect::onReceive(byte* donnees, size_t length) {
             size_t lengthRx = 0;
             byte buffRx[RADIOLIB_SX126X_MAX_PACKET_LENGTH];
             int16_t err = radio().receiveExpected(
-                ID_CHAUDIERE,
+                header.idDestinataire,
                 getId(),
                 header.idAssociation,
                 header.idMessage,
@@ -777,6 +777,10 @@ bool Connect::onReceive(byte* donnees, size_t length) {
             if (err != RADIOLIB_ERR_NONE) {
                 return false;
             }
+
+            if (lengthRx < sizeof(header) + 1 || buffRx[2] != header.idAssociation
+                || buffRx[sizeof(header)] != lengthRx - sizeof(header) - 1) return false;
+            confirmerChaudiere(header.idDestinataire);
 
             setIdAssociation(header.idAssociation);
             setIdMessage(header.idMessage);

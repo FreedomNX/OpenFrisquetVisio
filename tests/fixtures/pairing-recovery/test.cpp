@@ -5,6 +5,7 @@
 #include <vector>
 
 #include "Frisquet/NetworkID.h"
+#include "Frisquet/BoilerIdentity.h"
 #include "Buffer.h"
 
 constexpr byte ID_CHAUDIERE = 0x80;
@@ -86,7 +87,9 @@ struct FrisquetRadio : Radio {
 
 struct Config {
     NetworkID network{1, 2, 3, 4};
+    byte boiler = BoilerIdentity::DEFAULT_ID;
     unsigned saves = 0;
+    void boilerId(byte id) { assert(BoilerIdentity::valid(id)); boiler = id; }
     NetworkID& getNetworkID() { return network; }
     void setNetworkID(NetworkID n) { network = n; }
     void save() { ++saves; }
@@ -111,15 +114,15 @@ struct FrisquetManager {
 
 #include "production_methods.inc"
 
-Radio::Packet announcement() {
+Radio::Packet announcement(byte boiler) {
     // En-tête (6), longueur (1), nouveau NetworkID (4).
-    return {{0x7e, 0x80, 55, 42, 1, 0x41, 4, 5, 6, 7, 8}, 0};
+    return {{0x7e, boiler, 55, 42, 1, 0x41, 4, 5, 6, 7, 8}, 0};
 }
 
 int main(int argc, char** argv) {
     assert(argc == 2);
     const bool manager = std::string(argv[1]) == "manager";
-    for (unsigned scenario = 0; scenario < 6; ++scenario) {
+    for (byte boiler : {0x80, 0x84}) for (unsigned scenario = 0; scenario < 6; ++scenario) {
         clockMs = 0;
         FrisquetRadio radio;
         Config cfg;
@@ -127,7 +130,7 @@ int main(int argc, char** argv) {
         const NetworkID initial = cfg.network;
         NetworkID output{9, 10, 11, 12};
         byte association = 99;
-        auto packet = announcement();
+        auto packet = announcement(boiler);
         if (scenario == 1) packet.result = -7; // erreur CRC
         if (scenario == 2) packet.bytes.resize(10);
         if (scenario == 3) packet.bytes[1] = 0x20; // mauvais expéditeur
@@ -143,15 +146,17 @@ int main(int argc, char** argv) {
             : FrisquetDevice{radio, cfg}.associer(output, association);
         assert(!ok && clockMs >= 30000 && clockMs < 31000);
         assert(same(cfg.network, configured) && cfg.saves == 0);
+        assert(cfg.boiler == BoilerIdentity::DEFAULT_ID);
         assert(same(output, NetworkID(9, 10, 11, 12)) && association == 99 && radio.sent.empty());
         assert(radio.accepts(configured) && radio.rearms == 1);
 
         // Une nouvelle tentative après cet échec peut encore réussir.
-        radio.packets.push_back(announcement());
+        radio.packets.push_back(announcement(boiler));
         const bool recovered = manager
             ? FrisquetManager{radio, cfg}.recupererNetworkID()
             : FrisquetDevice{radio, cfg}.associer(output, association);
         assert(recovered && radio.accepts(NetworkID(5, 6, 7, 8)) && radio.rearms == 2);
+        assert(cfg.boiler == boiler);
         assert(!radio.accepts(initial));
         if (manager) {
             assert(same(cfg.network, NetworkID(5, 6, 7, 8)) && cfg.saves == 1 && radio.sent.empty());
@@ -159,7 +164,7 @@ int main(int argc, char** argv) {
             assert(same(cfg.network, configured) && cfg.saves == 0);
             assert(same(output, NetworkID(5, 6, 7, 8)) && association == 55 && radio.sent.size() == 10);
             for (const auto& confirmation : radio.sent) {
-                assert(confirmation.size() == 10 && confirmation[0] == 0x80 && confirmation[1] == 0x7e);
+                assert(confirmation.size() == 10 && confirmation[0] == boiler && confirmation[1] == 0x7e);
                 assert(confirmation[2] == 55 && confirmation[3] == 42 && confirmation[4] == 0x81 && confirmation[5] == 0x41);
                 assert(!memcmp(confirmation.data() + 6, output.bytes, 4));
             }

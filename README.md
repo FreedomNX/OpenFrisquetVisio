@@ -228,6 +228,20 @@ Le bouton **Se déconnecter** se trouve dans la même section.
 
 ### 4️⃣ Association avec la chaudière
 
+L'identifiant radio chaudière (`0x80` ou `0x84`) est détecté automatiquement et
+mémorisé avec la configuration : aucune constante à modifier ni recompilation
+spécifique n'est nécessaire. L'annonce d'association fournit directement cet
+identifiant. Sur une installation déjà associée, le Connect actif et les
+satellites virtuels lisent l'heure (`0xA02B`) au démarrage : ils essaient d'abord
+l'identifiant mémorisé (`0x80` par défaut), puis l'autre si nécessaire. Seule une
+réponse correspondant à la requête et contenant une date valide est retenue.
+Sans réponse valide, la valeur précédente est conservée.
+
+En écoute passive, l'identifiant est appris à partir d'une réponse correspondant
+à une requête observée du Connect physique ou d'un satellite physique, sans
+émettre de requête de détection. La valeur détectée est partagée entre les
+modules et ajuste également le décalage mémoire `0xC8` du Connect pour `0x84`.
+
 #### 🔹 Module Connect
 1. Sur la chaudière : **lancer l’association Connect**  
   a. Accédez au menu de configuration

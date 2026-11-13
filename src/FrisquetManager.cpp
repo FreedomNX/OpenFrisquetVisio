@@ -214,7 +214,7 @@ void FrisquetManager::onRadioReceive()
     FrisquetRadio::RadioTrameHeader *header = (FrisquetRadio::RadioTrameHeader *)buff;
     if (_cfg.useConnect() &&
         (header->idDestinataire == _connect.getId() ||
-         (_cfg.useConnectPassive() && header->idExpediteur == _connect.getId() && header->idDestinataire == ID_CHAUDIERE))) {
+         (_cfg.useConnectPassive() && header->idExpediteur == _connect.getId() && BoilerIdentity::valid(header->idDestinataire)))) {
         info("[RADIO] Traitement données Connect");
         _connect.onReceive(buff, length);
     } else if (header->idDestinataire == _satelliteZ1.getId() && _cfg.useSatelliteZ1() && _cfg.useSatelliteVirtualZ1()) {
@@ -272,11 +272,14 @@ bool FrisquetManager::recupererNetworkID() {
         ReadBuffer readBuffer = ReadBuffer(buff, buffLength);
         readBuffer.getBytes((byte*)&donnees, sizeof(donnees));
 
-        if(donnees.header.idExpediteur == ID_CHAUDIERE && donnees.header.type == FrisquetRadio::MessageType::ASSOCIATION) {
+        if(BoilerIdentity::valid(donnees.header.idExpediteur) &&
+           donnees.header.type == FrisquetRadio::MessageType::ASSOCIATION &&
+           donnees.length == 4 && !donnees.header.isAck() && !donnees.networkID.isBroadcast()) {
             info("[DEVICE] Réception trame d'association");
             info("[DEVICE] Récupération du NetworkID : %s.", byteArrayToHexString((byte*)&donnees.networkID, sizeof(NetworkID)).c_str());
             
             config().setNetworkID(donnees.networkID);
+            config().boilerId(donnees.header.idExpediteur);
             radio().setNetworkID(donnees.networkID);
             config().save();
             radio().startReceive();

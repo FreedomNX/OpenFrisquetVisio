@@ -8,6 +8,10 @@ void OFVNetworkManager::begin(const Options& opts) {
   WiFi.mode(WIFI_STA);
   WiFi.setSleep(_opts.wifiSleep);
   WiFi.setAutoReconnect(true);
+  // Réseau maillé (plusieurs bornes, même SSID) : balayer tous les canaux et
+  // choisir la borne au meilleur signal, au lieu de la première entendue.
+  WiFi.setScanMethod(WIFI_ALL_CHANNEL_SCAN);
+  WiFi.setSortMethod(WIFI_CONNECT_AP_BY_SIGNAL);
 
 #ifdef ESP_ARDUINO_VERSION_MAJOR
   // Hostname (ESP32)

@@ -12,7 +12,7 @@ public:
 
     static bool quietWindow(uint32_t seconds) {
         const uint32_t phase = seconds % 600;
-        // Satellites Z1 à :00, Z2 à :01 et Z3 à :02, avec ±30 secondes.
+        // Protéger les satellites (:00:30, :00:54, :01:18) avec une marge.
         return phase < 150 || phase >= 570;
     }
 
@@ -21,18 +21,42 @@ public:
     }
 
     bool dueAt(uint32_t seconds, uint32_t uptime, uint32_t period, uint32_t offset) {
-        if (quietWindow(seconds) || period == 0 || offset >= period) return false;
-        const uint32_t phase = seconds % period;
-        if (phase < offset || phase - offset >= 10) return false;
-        // Empêcher une deuxième tentative dans le créneau et les doublons lors
-        // d'une correction de l'heure. La soustraction résiste au wrap de millis().
-        if (_attempted && uptime - _lastAttempt < (period - 10) * 1000UL) return false;
-        _attempted = true;
-        _lastAttempt = uptime;
-        return true;
+        if (quietWindow(seconds)) return false;
+        return dueWindowAt(seconds, uptime, period, offset, 10);
+    }
+
+    static bool satelliteWindow(uint32_t seconds, uint8_t zone) {
+        if (zone < 1 || zone > 3) return false;
+        const uint32_t offset = 30 + (zone - 1) * 24;
+        const uint32_t phase = seconds % 600;
+        return phase >= offset && phase < offset + 24;
+    }
+
+    bool dueSatellite(uint8_t zone) {
+        return dueSatelliteAt(clockSeconds(), millis(), zone);
+    }
+
+    bool dueSatelliteAt(uint32_t seconds, uint32_t uptime, uint8_t zone) {
+        if (!satelliteWindow(seconds, zone)) return false;
+        return dueWindowAt(seconds, uptime, 600, 30 + (zone - 1) * 24, 24);
     }
 
 private:
+    bool dueWindowAt(uint32_t seconds, uint32_t uptime, uint32_t period, uint32_t offset, uint32_t width) {
+        if (period == 0 || offset >= period) return false;
+        const uint32_t phase = seconds % period;
+        if (phase < offset || phase - offset >= width) return false;
+        // Empêcher une deuxième tentative dans le créneau et les doublons lors
+        // d'une correction de l'heure. La soustraction résiste au wrap de millis().
+        if (_attempted && (seconds / period == _lastCycle ||
+            uptime - _lastAttempt < (period - width) * 1000UL)) return false;
+        _attempted = true;
+        _lastAttempt = uptime;
+        _lastCycle = seconds / period;
+        return true;
+    }
+
     bool _attempted = false;
     uint32_t _lastAttempt = 0;
+    uint32_t _lastCycle = 0;
 };

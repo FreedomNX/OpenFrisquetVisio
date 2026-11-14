@@ -61,22 +61,25 @@ void Satellite::loop() {
         return;
     }
 
-    if(firstLoop) {
-        firstLoop = false;
-        recupererDate();
-        recupererInfosChaudiere();
-        if (this->getId() == ID_ZONE_1 && !cdcGereeParConnect) {
-            if (recupererTemperatureCDC()) {
-                _lastRecuperationTemperatureCDC = millis();
-            } else {
-                error("[SATELLITE Z%d] Échec de la récupération initiale de la température CDC.", getNumeroZone());
-            }
-            _cdcSchedules[0].due(600, 180);
-            _cdcSchedules[1].due(600, 480);
+    // Une commande locale est prioritaire et ne décale pas le cycle fixe.
+    // Mémoriser la tentative même en cas d'échec pour éviter de réémettre à
+    // chaque loop() hors créneau ; les prochains essais seront périodiques.
+    const uint32_t changement = _zone.getLastChange();
+    if (changement > _zone.getLastEnvoi() && changement != _lastDirectChange) {
+        _lastDirectChange = changement;
+        info("[SATELLITE Z%d] Envoi direct après modification de consigne.", getNumeroZone());
+        if (envoyerConsigne()) {
+            firstLoop = false; // La réponse fournit aussi la date et l'état.
+            _zone.refreshLastEnvoi();
+            incrementIdMessage(3);
+            _consigneSchedule.dueSatellite(getNumeroZone());
+            _consigneWindowActive = false;
+            _zone.publishMqtt();
+            publishMqtt();
+        } else {
+            error("[SATELLITE Z%d] Échec de l'envoi direct : attente du créneau périodique.", getNumeroZone());
         }
-        publishMqtt();
-        if (this->getId() == ID_ZONE_1 && !cdcGereeParConnect) _chaudiere.publishMqtt();
-        _zone.publishMqtt();
+        return;
     }
 
     // Sans Connect : :03 et :08 de chaque tranche, hors créneaux des satellites.
@@ -93,17 +96,49 @@ void Satellite::loop() {
         delay(100);
     }
 
-    if ((_zone.getLastChange() > _zone.getLastEnvoi() && (_zone.getLastChange() + 15000) < now ) || now - _lastEnvoiConsigne >= 600000  ) { // dernier changement ou 10 minutes
+    // Une fenêtre par cycle. Un échec peut être réessayé dans cette fenêtre,
+    // sans réinitialiser sa durée à chaque passage dans loop().
+    if (_consigneSchedule.dueSatellite(getNumeroZone())) {
+        _consigneWindowStarted = millis();
+        const uint32_t end = 30 + 24 * getNumeroZone();
+        // TimeLib expose les secondes entières : réserver la seconde courante
+        // pour ne jamais prolonger le créneau après une remise à l'heure.
+        _consigneWindowDuration = (end - RadioSchedule::clockSeconds() % 600 - 1) * 1000UL;
+        _consigneWindowActive = true;
+    }
+    if (!_consigneWindowActive) return;
+    const uint32_t elapsed = millis() - _consigneWindowStarted;
+    if (elapsed + 100 >= _consigneWindowDuration ||
+        !RadioSchedule::satelliteWindow(RadioSchedule::clockSeconds(), getNumeroZone())) {
+        _consigneWindowActive = false;
+        return;
+    }
+    FrisquetRadio::TransmitWindow window(radio(), _consigneWindowDuration - elapsed);
+
+    if (firstLoop) {
+        // La mise à l'heure peut déplacer notre créneau : le revérifier au
+        // passage suivant avant d'envoyer les consignes.
+        if (recupererDate()) firstLoop = false;
+        return;
+    }
+
+    if (isnan(_zone.getTemperatureAmbiante()) || isnan(_zone.getTemperatureConsigne())
+        || _zone.getMode() == Zone::MODE_ZONE::INCONNU) {
+        if (recupererInfosChaudiere()) {
+            _consigneWindowActive = false;
+            publishMqtt();
+            _zone.publishMqtt();
+        }
+    } else {
         info("[SATELLITE Z%d] Envoi de la consigne.", getNumeroZone());
-        _zone.refreshLastEnvoi();
         if(envoyerConsigne()) {
+            _consigneWindowActive = false;
+            _zone.refreshLastEnvoi();
             incrementIdMessage(3);
-            _lastEnvoiConsigne = now;
             _zone.publishMqtt();
             publishMqtt();
         } else {
-            error("[SATELLITE Z%d] Echec de l'envoi.", getNumeroZone());
-            _lastEnvoiConsigne = now <= 60000 ? 1 : now - 60000;
+            error("[SATELLITE Z%d] Échec de l'envoi : réessai dans le créneau disponible.", getNumeroZone());
         }
     }
 }

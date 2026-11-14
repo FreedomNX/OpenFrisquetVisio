@@ -138,7 +138,7 @@ int16_t FrisquetRadio::sendAsk(
         if(err == RADIOLIB_ERR_NONE || err == RADIOLIB_ERR_ADDRESS_NOT_FOUND) {
             break;
         }
-    } while (--attempts > 0);
+    } while (--attempts > 0 && transmitWindowOpen(100));
 
     interruptReceive = false;
     startReceive();
@@ -198,7 +198,7 @@ int16_t FrisquetRadio::sendInit(
             break;
         }
         delay(30);
-    } while (retry++ < 5);
+    } while (retry++ < 5 && transmitWindowOpen(100));
 
     interruptReceive = false;
     startReceive();
@@ -274,12 +274,25 @@ int16_t FrisquetRadio::receiveExpected(
     int16_t err;
     RadioTrameHeader radioTrameHeader;
 
+    if (_txWindowActive && !keepReceiving && !useReadData) {
+        err = startReceive();
+        if (err != RADIOLIB_ERR_NONE) {
+            interruptReceive = false;
+            return err;
+        }
+        keepReceiving = true;
+    }
+
     do {
+        if (!transmitWindowOpen()) {
+            err = RADIOLIB_ERR_RX_TIMEOUT;
+            break;
+        }
         if (keepReceiving) {
             // Ne pas interrompre une réponse déjà en cours de réception.
             // Même fenêtre que receive() à 25 kbit/s : 5 * 255 * 8 / 25000.
             const uint32_t waitStarted = millis();
-            while (!hasReceivedPacket() && millis() - waitStarted < 408U) {
+            while (!hasReceivedPacket() && millis() - waitStarted < 408U && transmitWindowOpen()) {
                 delay(1);
             }
             if (!hasReceivedPacket()) {

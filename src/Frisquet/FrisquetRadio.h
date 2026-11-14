@@ -8,6 +8,34 @@ class FrisquetRadio : public Radio {
     static constexpr uint8_t RX_BUFFER_SIZE = 6;
     static constexpr uint32_t RX_PACKET_TTL_MS = 1000;
 
+    // Limiter toutes les tentatives d'un échange au créneau satellite.
+    class TransmitWindow {
+    public:
+        TransmitWindow(FrisquetRadio& radio, uint32_t duration) : _radio(radio) {
+            _radio._txWindowStarted = millis();
+            _radio._txWindowDuration = duration;
+            _radio._txWindowActive = true;
+        }
+        ~TransmitWindow() { _radio._txWindowActive = false; }
+        TransmitWindow(const TransmitWindow&) = delete;
+        TransmitWindow& operator=(const TransmitWindow&) = delete;
+    private:
+        FrisquetRadio& _radio;
+    };
+
+    bool transmitWindowOpen(uint32_t margin = 0) const {
+        const uint32_t elapsed = millis() - _txWindowStarted;
+        return !_txWindowActive || (elapsed < _txWindowDuration &&
+            _txWindowDuration - elapsed > margin);
+    }
+
+    int16_t transmit(byte data[], size_t len) {
+        // Une trame de 63 octets à 25 kbit/s dure moins de 30 ms sur l'air.
+        // Réserver 100 ms pour sa préparation et sa transmission.
+        if (!transmitWindowOpen(100)) return RADIOLIB_ERR_TX_TIMEOUT;
+        return Radio::transmit(data, len);
+    }
+
     enum MessageType : byte {
         READ = 0x03,
         INIT = 0x17,
@@ -112,6 +140,9 @@ class FrisquetRadio : public Radio {
     static volatile bool interruptReceive;
 
     private:
+    bool _txWindowActive = false;
+    uint32_t _txWindowStarted = 0;
+    uint32_t _txWindowDuration = 0;
     struct BufferedPacket {
         bool used = false;
         uint32_t timestamp = 0;

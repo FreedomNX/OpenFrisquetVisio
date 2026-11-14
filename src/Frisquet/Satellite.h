@@ -78,7 +78,11 @@ class Satellite : public FrisquetDevice {
         Zone& _zone;
         Chaudiere& _chaudiere;
 
-        uint32_t _lastEnvoiConsigne = 0;
+        RadioSchedule _consigneSchedule;
+        uint32_t _lastDirectChange = 0;
+        bool _consigneWindowActive = false;
+        uint32_t _consigneWindowStarted = 0;
+        uint32_t _consigneWindowDuration = 0;
         uint32_t _lastRecuperationTemperatureCDC = 0;
         RadioSchedule _cdcSchedules[2];
         bool _initialReadPending = true;

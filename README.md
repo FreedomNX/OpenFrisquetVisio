@@ -49,6 +49,18 @@ Deux modes possibles :
   - **Configuration d'un boost consigne** (écrasement de la consigne envoyé par le satellite)
   - **Affichage du mode actif** (Auto, Confort, Réduit, Hors Gel)
 
+Les satellites virtuels utilisent un cycle fixe de 10 minutes, sur l'heure
+chaudière : Z1 de `HH:x0:30` à `HH:x0:54`, Z2 de `HH:x0:54` à `HH:x1:18`,
+Z3 de `HH:x1:18` à `HH:x1:42` (borne de fin exclue). Une modification locale
+de consigne ou de mode déclenche aussi un envoi direct sans attendre le créneau,
+sans décaler le calendrier périodique. Après l'échec de cet échange direct,
+les prochains essais attendent le créneau de la zone.
+Les réessais périodiques sont autorisés dans ce créneau,
+puis reportés au cycle suivant ; après un échange réussi, la zone attend aussi
+le prochain cycle. Une marge de sécurité en fin de fenêtre évite de déborder
+sur la zone suivante. La mise à l'heure initiale se fait également dans le
+créneau ; avant synchronisation, le cycle utilise le temps depuis le démarrage.
+
 ### 🧩 Intégration Home Assistant (MQTT Discovery)
 - Découverte automatique de tous les capteurs et entités :
   - Capteurs de température, de consommation, d’état de zones
@@ -232,7 +244,8 @@ L'identifiant radio chaudière (`0x80` ou `0x84`) est détecté automatiquement 
 mémorisé avec la configuration : aucune constante à modifier ni recompilation
 spécifique n'est nécessaire. L'annonce d'association fournit directement cet
 identifiant. Sur une installation déjà associée, le Connect actif et les
-satellites virtuels lisent l'heure (`0xA02B`) au démarrage : ils essaient d'abord
+satellites virtuels lisent l'heure (`0xA02B`) à l'initialisation (dans leur premier
+créneau pour les satellites) : ils essaient d'abord
 l'identifiant mémorisé (`0x80` par défaut), puis l'autre si nécessaire. Seule une
 réponse correspondant à la requête et contenant une date valide est retenue.
 Sans réponse valide, la valeur précédente est conservée.

@@ -37,3 +37,4 @@ tests/*
 !tests/test_boiler_firmware.py
 !tests/test_firmware_version.py
 !tests/test_boiler_identity.py
+!tests/test_mqtt_reconnect_throttle.py

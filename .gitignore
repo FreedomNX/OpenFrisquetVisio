@@ -25,6 +25,7 @@ tests/*
 !tests/test_satellite_schedule.py
 !tests/test_boiler_state.py
 !tests/test_monthly_consumption.py
+!tests/monthly-consumption.test.mjs
 !tests/boiler-state.test.mjs
 
 !tests/test_sx1276_radio.py

@@ -47,6 +47,12 @@
     .zone-values{display:grid;grid-template-columns:1fr 1fr;gap:12px}.zone-value{padding:12px;border-radius:14px;background:var(--surface-soft);border:1px solid #edf0f4}
     .zone-value span{display:block;color:var(--muted);font-size:12px}.zone-value strong{display:block;margin-top:3px;color:var(--navy);font-size:19px}.zone-source{margin-top:13px;color:var(--muted);font-size:12px}
     .empty{grid-column:1/-1;padding:28px;text-align:center;color:var(--muted);background:#fff;border:1px dashed #bfc9d6;border-radius:18px}
+    .consumption{margin-top:18px;padding:20px}.consumption summary{cursor:pointer;font-weight:800;color:var(--navy)}.consumption .updated{margin:12px 0}
+    .consumption-years{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:28px}.consumption-years>section{min-width:0}.consumption h3{font-size:16px;margin:16px 0 0}
+    @media(max-width:760px){.consumption-years{grid-template-columns:1fr;gap:16px}}
+    .consumption table{width:100%;border-collapse:collapse;font-variant-numeric:tabular-nums}.consumption caption{text-align:left;color:var(--muted);font-size:12px;margin-bottom:10px}
+    .consumption th,.consumption td{padding:8px;border-bottom:1px solid var(--border);text-align:right}.consumption th:first-child{text-align:left}
+    .consumption .partial{background:var(--surface-soft);color:var(--muted)}.consumption .partial-note{display:block;font-size:12px;font-weight:400}
     .diagnostics{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-top:14px}.diagnostic{padding:16px 18px;border:1px solid var(--border);border-radius:16px;background:#fff;color:var(--navy);font-weight:750}.diagnostic span{margin-right:8px}
     .notice{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:14px 20px;margin-bottom:18px;padding:20px 24px;border-radius:16px;background:#b42318;color:#fff;box-shadow:0 12px 32px rgba(180,35,24,.3)}.notice p{margin:0;max-width:760px}.notice strong{display:block;margin-bottom:4px;font-size:20px}.notice .btn{border-color:#fff;color:#b42318}
     footer{padding:18px 0 34px;color:var(--muted);font-size:12px;text-align:center}.skeleton{color:#a2acba}
@@ -86,6 +92,31 @@
     </section>
 
     <div class="section-head"><h2>🛋️ Zones de chauffage</h2><a class="btn" href="/programming">Programmation</a></div><section class="zones" id="zones"><div class="empty">Chargement des zones…</div></section>
+
+    <details class="panel consumption">
+      <summary>📊 Consommation mensuelle</summary>
+      <div class="consumption-years">
+        <section>
+          <h3>Année en cours</h3>
+          <p class="updated" id="monthlyConsumptionStatus">En attente des consommations mensuelles</p>
+          <table id="monthlyConsumptionTable" hidden>
+            <caption>kWh estimés par la chaudière · mois en cours partiel</caption>
+            <thead><tr><th scope="col">Mois</th><th scope="col">Chauffage</th><th scope="col">Eau chaude</th></tr></thead>
+            <tbody id="monthlyConsumptionRows"></tbody>
+          </table>
+        </section>
+        <section>
+          <h3>Année précédente</h3>
+          <p class="updated" id="previousYearConsumptionStatus">En attente des consommations de l’année précédente</p>
+          <table id="previousYearConsumptionTable" hidden>
+            <caption>kWh estimés par la chaudière · année complète</caption>
+            <thead><tr><th scope="col">Mois</th><th scope="col">Chauffage</th><th scope="col">Eau chaude</th></tr></thead>
+            <tbody id="previousYearConsumptionRows"></tbody>
+          </table>
+        </section>
+      </div>
+    </details>
+
     <div class="section-head"><h2>🛠️ Outils et diagnostic</h2></div>
     <nav class="diagnostics"><a class="diagnostic" href="/logs"><span>📋</span>Journaux système</a><a class="diagnostic" href="/logs-radio" data-developer-only hidden><span>📡</span>Trames radio</a><a class="diagnostic" href="/memory" data-developer-only hidden><span>🧠</span>Mémoire chaudière</a></nav>
   </main>
@@ -103,10 +134,30 @@
       if(!enabled.length){container.innerHTML='<div class="empty">Aucune zone de chauffage n’est activée.</div>';return}
       container.innerHTML=enabled.map(zone=>`<article class="zone"><div class="zone-head"><div class="zone-title"><span>🛋️</span><h3>Zone ${zone.id}</h3></div><span class="mode">${zone.mode||"Inconnu"}${zone.boost&&zone.mode!=="Boost"?" · Boost":""}</span></div><div class="zone-values"><div class="zone-value"><span>Ambiance</span><strong>${value(zone.ambientTemperature,"°C")}</strong></div><div class="zone-value"><span>Consigne</span><strong>${value(zone.setpointTemperature,"°C")}</strong></div><div class="zone-value"><span>Départ</span><strong>${value(zone.flowTemperature,"°C")}</strong></div><div class="zone-value"><span>Consigne départ</span><strong>${value(zone.flowSetpointTemperature,"°C")}</strong></div></div><div class="zone-source">Source : ${zone.source||"inconnue"}</div></article>`).join("")
     }
+    function renderMonthlyConsumption(data,prefix="monthlyConsumption"){
+      const available=data&&Array.isArray(data.heating)&&Array.isArray(data.hotWater)&&data.heating.length===12&&data.hotWater.length===12;
+      $("#"+prefix+"Table").hidden=!available;
+      if(!available){
+        $("#"+prefix+"Rows").innerHTML="";
+        setText("#"+prefix+"Status",prefix==="previousYearConsumption"?"En attente des consommations de l’année précédente":"En attente des consommations mensuelles");
+        return;
+      }
+      const months=["Janvier","Février","Mars","Avril","Mai","Juin","Juillet","Août","Septembre","Octobre","Novembre","Décembre"];
+      const monthKnown=Number.isInteger(data.month)&&data.month>=1&&data.month<=12;
+      const lastMonth=monthKnown?data.month:12;
+      $("#"+prefix+"Rows").innerHTML=months.slice(0,lastMonth).map((month,index)=>{
+        const partial=!monthKnown||(!data.complete&&index===lastMonth-1);
+        const note=monthKnown&&partial?'<span class="partial-note">Partiel</span>':"";
+        return `<tr${partial?' class="partial"':""}><th scope="row">${month}${note}</th><td>${integer(data.heating[index],"")}</td><td>${integer(data.hotWater[index],"")}</td></tr>`;
+      }).join("");
+      setText("#"+prefix+"Status",data.receivedAt?`Année ${data.year} · Relevé du ${data.receivedAt} (heure chaudière)`:"Date de réception indisponible · période non confirmée");
+    }
     function render(data){
       document.querySelectorAll("[data-developer-only]").forEach(element=>element.hidden=data.developerMode!==true);
       $("#defaultPasswordNotice").hidden=data.defaultPortalPassword!==true;
       const network=data.connectivity||{},boiler=data.boiler||{},probe=data.outdoorProbe||{};
+      renderMonthlyConsumption(boiler.monthlyConsumption);
+      renderMonthlyConsumption(boiler.previousYearConsumption,"previousYearConsumption");
       setStatus("#wifiStatus",network.wifiConnected?`Wi‑Fi · ${network.ssid||network.ip||"connecté"}`:"Wi‑Fi déconnecté",network.wifiConnected?"ok":"bad");
       setStatus("#mqttStatus",network.mqttConnected?"MQTT connecté":"MQTT déconnecté",network.mqttConnected?"ok":"warn");setStatus("#uptimeStatus","Actif depuis "+formatUptime(data.uptimeSec),"ok");
       setText("#boilerState",boiler.enabled?(boiler.state||"Inconnu"):"Non configurée");setStatus("#boilerAnomaly",boiler.anomaly==null?"Anomalie · inconnue":boiler.anomaly?"Anomalie détectée":"Aucune anomalie",boiler.anomaly==null?"warn":boiler.anomaly?"bad":"ok");setStatus("#hotWaterMode","ECS · "+(boiler.hotWaterMode||"Inconnu"),boiler.hotWaterMode==="Stop"?"warn":"ok");

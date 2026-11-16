@@ -121,9 +121,10 @@
       if(dashboardInFlight)return;
       dashboardInFlight=true;clearTimeout(dashboardTimer);dashboardTimer=null;
       const button=$("#refreshBtn");if(button)button.disabled=true;
-      try{const response=await fetch("/api/dashboard",{cache:"no-store"});if(!response.ok)throw new Error("HTTP "+response.status);render(await response.json())}
+      const controller=new AbortController(),deadline=setTimeout(()=>controller.abort(),10000);
+      try{const response=await fetch("/api/dashboard",{cache:"no-store",signal:controller.signal});if(!response.ok)throw new Error("HTTP "+response.status);render(await response.json())}
       catch(error){setStatus("#wifiStatus","Données indisponibles","bad");$("#lastUpdate").textContent="Impossible d’actualiser le tableau de bord"}
-      finally{dashboardInFlight=false;if(button)button.disabled=false;scheduleDashboard()}
+      finally{clearTimeout(deadline);dashboardInFlight=false;if(button)button.disabled=false;scheduleDashboard()}
     }
     $("#refreshBtn").addEventListener("click",loadDashboard);
     document.addEventListener("visibilitychange",()=>{clearTimeout(dashboardTimer);dashboardTimer=null;if(!document.hidden)loadDashboard()});

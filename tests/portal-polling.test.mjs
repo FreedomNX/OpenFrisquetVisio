@@ -22,15 +22,21 @@ function page(name, hidden=false) {
   const document={hidden,querySelector:element,querySelectorAll:()=>[],
     addEventListener(type,callback){events.set(type,callback);}};
   function setTimer(callback,delay,interval=false){const id=++nextTimer;timers.set(id,{callback,at:now+delay,delay,interval});return id;}
-  const context=vm.createContext({document,console,Date,
+  const context=vm.createContext({document,console,Date,AbortController,
     setTimeout:(callback,delay)=>setTimer(callback,delay),clearTimeout:id=>timers.delete(id),
     setInterval:(callback,delay)=>setTimer(callback,delay,true),clearInterval:id=>timers.delete(id),
-    fetch(url){
-      let resolveHeaders,reject,resolveBody;
+    fetch(url,{signal}={}){
+      let resolveHeaders,reject,resolveBody,rejectBody,readingBody=false;
       const response=new Promise((resolve,fail)=>{resolveHeaders=resolve;reject=fail;});
-      const body=new Promise(resolve=>{resolveBody=resolve;});
-      requests.push({url,headers:()=>resolveHeaders({ok:true,json:()=>body}),
-        finish(){resolveHeaders({ok:true,json:()=>body});resolveBody(name==='index'?{}:['sample']);},
+      const body=new Promise((resolve,fail)=>{resolveBody=resolve;rejectBody=fail;});
+      const result={ok:true,json(){readingBody=true;return body;}};
+      signal?.addEventListener('abort',()=>{
+        const error=new DOMException('Requête annulée','AbortError');
+        reject(error);
+        if(readingBody)rejectBody(error);
+      });
+      requests.push({url,signal,headers:()=>resolveHeaders(result),
+        finish(){resolveHeaders(result);resolveBody(name==='index'?{}:['sample']);},
         fail:()=>reject(new Error('network unavailable'))});
       return response;
     },
@@ -61,13 +67,14 @@ for(const name of ['index','logs','radio-logs']) {
   const interval=name==='index'?5000:2000;
   test(name+': one request through slow headers/body and manual refresh',async()=>{
     const p=page(name);assert.equal(p.requests.length,1);
-    await p.advance(15000);await p.click();assert.equal(p.requests.length,1);
-    p.requests[0].headers();await flush();await p.advance(15000);
+    await p.advance(5000);await p.click();assert.equal(p.requests.length,1);
+    p.requests[0].headers();await flush();await p.advance(3000);
     assert.equal(p.requests.length,1,'reading the response body is still in flight');
     p.requests[0].finish();await flush();assert.equal(p.timers.size,1);
     await p.advance(interval-1);assert.equal(p.requests.length,1);
     await p.advance(1);assert.equal(p.requests.length,2);
-    assert.equal(p.timers.size,0);
+    assert.equal(p.timers.size,1,'seule la nouvelle échéance reste active');
+    assert.equal(p.requests[0].signal.aborted,false,'échéance supprimée après succès');
   });
   test(name+': hidden tabs stop polling, including an in-flight completion',async()=>{
     const p=page(name);await p.visibility(true);
@@ -92,6 +99,45 @@ for(const name of ['index','logs','radio-logs']) {
     const p=page(name);await p.off();p.requests[0].finish();await flush();
     await p.advance(30000);assert.equal(p.requests.length,1);
     await p.visibility(true);await p.visibility(false);assert.equal(p.requests.length,1);
+    await p.click();assert.equal(p.requests.length,2);
+    p.requests[1].finish();await flush();assert.equal(p.timers.size,0);
+  });
+}
+
+for(const name of ['index','logs','radio-logs']) {
+  const interval=name==='index'?5000:2000;
+  for(const phase of ['en-têtes','corps'])test(name+': reprise après un blocage des '+phase,async()=>{
+    const p=page(name);
+    assert.ok(p.requests[0].signal,'la lecture doit fournir un signal d’annulation');
+    if(phase==='corps'){
+      await p.advance(2000);p.requests[0].headers();await flush();
+      await p.advance(7999);
+    }else await p.advance(9999);
+    await p.click();assert.equal(p.requests.length,1);
+    assert.equal(p.requests[0].signal.aborted,false);
+    await p.advance(1);
+    assert.equal(p.requests[0].signal.aborted,true);
+    assert.equal(p.timers.size,1,'une seule reprise programmée');
+    if(name==='index')assert.equal(p.element('#refreshBtn').disabled,false);
+    else assert.equal(p.element('#log').textContent,'Délai de chargement des journaux dépassé.');
+    await p.advance(interval-1);assert.equal(p.requests.length,1);
+    await p.advance(1);assert.equal(p.requests.length,2);
+    p.requests[1].finish();await flush();
+    await p.advance(interval);assert.equal(p.requests.length,3,'la reprise réussie relance le cycle');
+    assert.equal(p.requests[1].signal.aborted,false);
+    p.requests[2].finish();await flush();
+  });
+  test(name+': une expiration dans un onglet masqué ne relance pas les lectures',async()=>{
+    const p=page(name);await p.visibility(true);await p.advance(10000);
+    assert.equal(p.requests[0].signal.aborted,true);assert.equal(p.timers.size,0);
+    await p.advance(30000);assert.equal(p.requests.length,1);
+    await p.visibility(false);assert.equal(p.requests.length,2);
+    p.requests[1].finish();await flush();
+  });
+  if(name!=='index')test(name+': Off reste respecté après expiration',async()=>{
+    const p=page(name);await p.off();await p.advance(10000);
+    assert.equal(p.requests[0].signal.aborted,true);assert.equal(p.timers.size,0);
+    await p.advance(30000);assert.equal(p.requests.length,1);
     await p.click();assert.equal(p.requests.length,2);
     p.requests[1].finish();await flush();assert.equal(p.timers.size,0);
   });

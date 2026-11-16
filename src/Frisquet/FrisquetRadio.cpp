@@ -480,6 +480,152 @@ void FrisquetRadio::cancelObservation() {
     startReceive();
 }
 
+bool FrisquetRadio::beginRead(uint8_t owner, const RadioTrameHeader& request,
+                             fword address, fword words, uint8_t retry) {
+    if (busy() || retry == 0) return false;
+    _read.owner = owner;
+    _read.request.header = request;
+    _read.request.header.type = MessageType::READ;
+    _read.request.body.adresseMemoire = address;
+    _read.request.body.tailleMemoire = words;
+    _read.request.header.answer(_read.expected);
+    _read.retry = retry;
+    _read.sendsRemaining = retry;
+    _read.receivesRemaining = 0;
+    _read.length = 0;
+    _read.deadline = millis() + 30U;
+    _read.phase = ReadPhase::Guard;
+    interruptReceive = true;
+    receivedFlag = false;
+    return true;
+}
+
+bool FrisquetRadio::ownsRead(uint8_t owner) const {
+    return _read.phase != ReadPhase::Idle && _read.owner == owner;
+}
+
+bool FrisquetRadio::readReady(uint8_t owner) const {
+    return _read.phase == ReadPhase::Ready && _read.owner == owner;
+}
+
+void FrisquetRadio::finishRead(int16_t result) {
+    // Le réarmement de l'écoute suivante ne change pas le résultat déjà reçu.
+    startReceive();
+    _read.result = result;
+    _read.phase = ReadPhase::Ready;
+    interruptReceive = false;
+    receivedFlag = false;
+}
+
+void FrisquetRadio::retryRead(int16_t result) {
+    if (!_read.sendsRemaining) {
+        finishRead(result);
+        return;
+    }
+    const int16_t restart = startReceive();
+    if (restart != RADIOLIB_ERR_NONE) {
+        finishRead(restart);
+        return;
+    }
+    _read.phase = ReadPhase::Guard;
+    _read.deadline = millis() + 30U;
+}
+
+void FrisquetRadio::pollRead() {
+    if (_read.phase == ReadPhase::Idle || _read.phase == ReadPhase::Ready) return;
+    const bool expired = static_cast<int32_t>(millis() - _read.deadline) >= 0;
+    if (_read.phase == ReadPhase::Guard) {
+        if (!expired) return;
+        --_read.sendsRemaining;
+        logRadio(false, (byte*)&_read.request, sizeof(_read.request));
+        const int16_t result = transmit((byte*)&_read.request, sizeof(_read.request));
+        if (result != RADIOLIB_ERR_NONE) {
+            retryRead(result);
+            return;
+        }
+        // Ne pas intercaler une boucle applicative entre fin TX et début RX :
+        // la chaudière peut répondre avant le prochain passage du manager.
+        receivedFlag = false;
+        const int16_t restart = startReceive();
+        if (restart != RADIOLIB_ERR_NONE) {
+            finishRead(restart);
+            return;
+        }
+        _read.receivesRemaining = _read.retry;
+        _read.phase = ReadPhase::Receive;
+        _read.deadline = millis() + 408U;
+        return;
+    }
+
+    if (!hasReceivedPacket() && !expired) return;
+    --_read.receivesRemaining;
+    int16_t result = RADIOLIB_ERR_RX_TIMEOUT;
+    if (hasReceivedPacket()) {
+        receivedFlag = false;
+        result = readData(_operationData, 0);
+        if (result == RADIOLIB_ERR_NONE) {
+            _read.length = getPacketLength();
+            if (_read.length < sizeof(RadioTrameHeader)) {
+                result = RADIOLIB_ERR_RX_TIMEOUT;
+            } else {
+                logRadio(true, _operationData, _read.length, getLastPacketRSSI());
+                RadioTrameHeader header;
+                memcpy(&header, _operationData, sizeof(header));
+                const auto& expected = _read.expected;
+                // Conserver la sélection de receiveExpected() : l'association
+                // figure dans la trame, mais n'est pas un critère de sélection.
+                if (header.idExpediteur == expected.idExpediteur &&
+                    header.idDestinataire == expected.idDestinataire &&
+                    header.idMessage == expected.idMessage &&
+                    header.idReception == expected.idReception && header.type == expected.type) {
+                    finishRead(result);
+                    return;
+                }
+                if (header.type != expected.type && header.type == 0x83) {
+                    finishRead(RADIOLIB_ERR_ADDRESS_NOT_FOUND);
+                    return;
+                }
+                bufferUnexpectedPacket(_operationData, _read.length);
+                result = RADIOLIB_ERR_RX_TIMEOUT;
+            }
+        }
+    }
+    if (!_read.receivesRemaining) {
+        retryRead(result);
+        return;
+    }
+    const int16_t restart = startReceive();
+    if (restart != RADIOLIB_ERR_NONE) {
+        finishRead(restart);
+        return;
+    }
+    _read.deadline = millis() + 408U;
+}
+
+int16_t FrisquetRadio::takeRead(uint8_t owner, byte* data, size_t& length) {
+    if (!readReady(owner)) return ERR_BUSY;
+    const int16_t result = _read.result;
+    if (result == RADIOLIB_ERR_NONE) {
+        if (_read.length < length) length = _read.length;
+        memcpy(data, _operationData, length);
+    } else {
+        length = 0;
+    }
+    _read.phase = ReadPhase::Idle;
+    return result;
+}
+
+void FrisquetRadio::cancelRead() {
+    // Invalider aussi une collecte entre deux lectures, sans transaction active.
+    ++_operationGeneration;
+    if (_read.phase == ReadPhase::Idle) return;
+    _read.phase = ReadPhase::Idle;
+    receivedFlag = false;
+    interruptReceive = false;
+    startReceive();
+}
+
 void FrisquetRadio::cancelOperations() {
     cancelObservation();
+    cancelRead();
 }

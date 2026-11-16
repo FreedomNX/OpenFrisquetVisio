@@ -142,10 +142,21 @@ class FrisquetRadio : public Radio {
     bool ownsObservation(uint8_t owner) const;
     int16_t takeObservation(uint8_t owner, byte* data, size_t& length);
     void cancelObservation();
+    // Lecture active : seule la courte émission reste synchrone, suivie
+    // immédiatement du réarmement RX. Gardes et réceptions rendent la main.
+    bool beginRead(uint8_t owner, const RadioTrameHeader& request,
+                   fword address, fword words, uint8_t retry = 5);
+    void pollRead();
+    bool ownsRead(uint8_t owner) const;
+    bool readReady(uint8_t owner) const;
+    int16_t takeRead(uint8_t owner, byte* data, size_t& length);
+    // Toute annulation invalide le contexte, même entre deux transactions.
+    void cancelRead();
     void cancelOperations();
+    uint32_t operationGeneration() const { return _operationGeneration; }
     bool suspended() const { return _suspended != 0; }
     bool busy() const {
-        return _suspended || _observation.phase != ObservationPhase::Idle;
+        return _suspended || _observation.phase != ObservationPhase::Idle || _read.phase != ReadPhase::Idle;
     }
     enum class Pause : uint8_t { ArduinoOta = 1, HttpOta = 2, Reboot = 4 };
     void suspend(Pause reason, bool suspended) {
@@ -177,7 +188,25 @@ class FrisquetRadio : public Radio {
         int16_t result = RADIOLIB_ERR_NONE;
         size_t length = 0;
     } _observation;
+    enum class ReadPhase : uint8_t { Idle, Guard, Receive, Ready };
+    struct {
+        ReadPhase phase = ReadPhase::Idle;
+        uint8_t owner = 0;
+        struct {
+            RadioTrameHeader header;
+            RadioTrameAsk body;
+        } request;
+        RadioTrameHeader expected;
+        uint8_t retry = 0, sendsRemaining = 0, receivesRemaining = 0;
+        uint32_t deadline = 0;
+        int16_t result = RADIOLIB_ERR_NONE;
+        size_t length = 0;
+    } _read;
+    // Ces deux opérations s'excluent ; aucun deuxième tampon de 255 octets.
     byte _operationData[RADIOLIB_SX126X_MAX_PACKET_LENGTH] = {};
+    uint32_t _operationGeneration = 0;
+    void finishRead(int16_t result);
+    void retryRead(int16_t result);
     uint8_t _suspended = 0;
     void finishObservation(int16_t result);
     struct BufferedPacket {

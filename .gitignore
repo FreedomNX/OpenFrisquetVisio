@@ -58,3 +58,4 @@ tests/fixtures/*
 
 !tests/connect_fixture.py
 !tests/test_connect_decoding.py
+!tests/test_cooperative_read.py

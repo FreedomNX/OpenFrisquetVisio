@@ -567,13 +567,42 @@ void Portal::handlePing() {
   _srv.send(200, "application/json", "{\"ok\":true}");
 }
 
+static String jsonConsommationsMensuelles(const Connect::ConsommationsMensuelles& donnees, bool anneePrecedente = false) {
+  if (!donnees.disponibles) return "null";
+  String json;
+  json.reserve(256);
+  json = "{\"year\":";
+  if (donnees.dateReception) {
+    const time_t date = donnees.dateReception;
+    char texte[20];
+    // L'horloge chaudière est locale : ne pas la présenter comme une date UTC.
+    snprintf(texte, sizeof(texte), "%02d/%02d/%04d %02d:%02d:%02d",
+             day(date), month(date), year(date), hour(date), minute(date), second(date));
+    json += String(year(date) - (anneePrecedente ? 1 : 0)) + ",\"month\":" + String(anneePrecedente ? 12 : month(date)) + ",\"receivedAt\":\"" + String(texte) + "\"";
+  } else {
+    json += "null,\"month\":null,\"receivedAt\":null";
+  }
+  json += ",\"complete\":" + String(anneePrecedente ? "true" : "false");
+  json += ",\"heating\":[";
+  for (uint8_t mois = 0; mois < 12; ++mois) {
+    if (mois) json += ",";
+    json += String(donnees.chauffage[mois]);
+  }
+  json += "],\"hotWater\":[";
+  for (uint8_t mois = 0; mois < 12; ++mois) {
+    if (mois) json += ",";
+    json += String(donnees.ecs[mois]);
+  }
+  return json + "]}";
+}
+
 void Portal::handleDashboard() {
   auto& cfg = _frisquetManager.config();
   auto& chaudiere = _frisquetManager.chaudiere();
   auto etat = chaudiere.getEtatChaudiere();
 
   String json;
-  json.reserve(2400);
+  json.reserve(3100);
   json = "{\"ok\":true,";
   json += "\"developerMode\":" + String(cfg.developerMode() ? "true" : "false") + ",";
   json += "\"defaultPortalPassword\":" + String(cfg.portalPassword() == "admin" ? "true" : "false") + ",";
@@ -602,7 +631,9 @@ void Portal::handleDashboard() {
   json += "\"hotWaterPower\":" + jsonFloat(chaudiere.getPuissanceInstantaneeECS()) + ",";
   json += "\"heatingPower\":" + jsonFloat(chaudiere.getPuissanceInstantaneeChauffage()) + ",";
   json += "\"hotWaterConsumption\":" + jsonIntOrNull(chaudiere.getConsommationECS()) + ",";
-  json += "\"heatingConsumption\":" + jsonIntOrNull(chaudiere.getConsommationChauffage());
+  json += "\"heatingConsumption\":" + jsonIntOrNull(chaudiere.getConsommationChauffage()) + ",";
+  json += "\"monthlyConsumption\":" + jsonConsommationsMensuelles(_frisquetManager.connect().getConsommationsMensuelles());
+  json += ",\"previousYearConsumption\":" + jsonConsommationsMensuelles(_frisquetManager.connect().getConsommationsAnneePrecedente(), true);
   json += "},";
 
   json += "\"outdoorProbe\":{";

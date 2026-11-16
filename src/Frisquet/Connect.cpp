@@ -226,42 +226,42 @@ bool Connect::applyInformation(const byte* data, size_t length) {
     const size_t prefix = sizeof(buff.header) + 1;
     if (buff.longueurDonnees < sizeof(buff) - prefix || buff.longueurDonnees > length - prefix) return false;
 
-        if(getZone1().getSource() == Zone::SOURCE::CONNECT) {
-            getZone1().setTemperatureAmbiante(buff.temperatureAmbianteZ1.toFloat());
-            getZone1().setTemperatureConsigne(buff.temperatureConsigneZ1.toFloat());
-        }
-        getZone1().setTemperatureDepart(buff.temperatureDepartZ1.toFloat());
-        getZone1().setTemperatureConsigneDepart(buff.temperatureConsigneDepartZ1.toFloat());
+    if(getZone1().getSource() == Zone::SOURCE::CONNECT) {
+        getZone1().setTemperatureAmbiante(buff.temperatureAmbianteZ1.toFloat());
+        getZone1().setTemperatureConsigne(buff.temperatureConsigneZ1.toFloat());
+    }
+    getZone1().setTemperatureDepart(buff.temperatureDepartZ1.toFloat());
+    getZone1().setTemperatureConsigneDepart(buff.temperatureConsigneDepartZ1.toFloat());
 
-        if(getZone2().getSource() == Zone::SOURCE::CONNECT) {
-            getZone2().setTemperatureAmbiante(buff.temperatureAmbianteZ2.toFloat());
-            getZone2().setTemperatureConsigne(buff.temperatureConsigneZ2.toFloat());
-        }
-        getZone2().setTemperatureDepart(buff.temperatureDepartZ2.toFloat());
-        getZone2().setTemperatureConsigneDepart(buff.temperatureConsigneDepartZ2.toFloat());
+    if(getZone2().getSource() == Zone::SOURCE::CONNECT) {
+        getZone2().setTemperatureAmbiante(buff.temperatureAmbianteZ2.toFloat());
+        getZone2().setTemperatureConsigne(buff.temperatureConsigneZ2.toFloat());
+    }
+    getZone2().setTemperatureDepart(buff.temperatureDepartZ2.toFloat());
+    getZone2().setTemperatureConsigneDepart(buff.temperatureConsigneDepartZ2.toFloat());
 
-        if(getZone3().getSource() == Zone::SOURCE::CONNECT) {
-            getZone3().setTemperatureAmbiante(buff.temperatureAmbianteZ3.toFloat());
-            getZone3().setTemperatureConsigne(buff.temperatureConsigneZ3.toFloat());
-        }
-        getZone3().setTemperatureDepart(buff.temperatureDepartZ3.toFloat());
-        getZone3().setTemperatureConsigneDepart(buff.temperatureConsigneDepartZ3.toFloat());
+    if(getZone3().getSource() == Zone::SOURCE::CONNECT) {
+        getZone3().setTemperatureAmbiante(buff.temperatureAmbianteZ3.toFloat());
+        getZone3().setTemperatureConsigne(buff.temperatureConsigneZ3.toFloat());
+    }
+    getZone3().setTemperatureDepart(buff.temperatureDepartZ3.toFloat());
+    getZone3().setTemperatureConsigneDepart(buff.temperatureConsigneDepartZ3.toFloat());
 
 
-        if(buff.temperatureExterieure.toFloat() != 129) {
-            setTemperatureExterieure(buff.temperatureExterieure.toFloat());
-        }
-        setTemperatureECS(buff.temperatureECS.toFloat());
-        setTemperatureCDC(buff.temperatureCDC.toFloat());
-        _chaudiere.setTemperatureFumees(buff.temperatureFumees.toFloat()/2);
-        _chaudiere.setPuissanceInstantaneeECS(_boilerFirmware.power(
-            uint16_t(buff.puissanceInstantaneeECS.bytes[0]) << 8 | buff.puissanceInstantaneeECS.bytes[1]));
-        _chaudiere.setPuissanceInstantaneeChauffage(_boilerFirmware.power(
-            uint16_t(buff.puissanceInstantaneeChauffage.bytes[0]) << 8 | buff.puissanceInstantaneeChauffage.bytes[1]));
-        _chaudiere.setModeFonctionnement(buff.modeFonctionnement.toUInt16());
+    if(buff.temperatureExterieure.toFloat() != 129) {
+        setTemperatureExterieure(buff.temperatureExterieure.toFloat());
+    }
+    setTemperatureECS(buff.temperatureECS.toFloat());
+    setTemperatureCDC(buff.temperatureCDC.toFloat());
+    _chaudiere.setTemperatureFumees(buff.temperatureFumees.toFloat()/2);
+    _chaudiere.setPuissanceInstantaneeECS(_boilerFirmware.power(
+        uint16_t(buff.puissanceInstantaneeECS.bytes[0]) << 8 | buff.puissanceInstantaneeECS.bytes[1]));
+    _chaudiere.setPuissanceInstantaneeChauffage(_boilerFirmware.power(
+        uint16_t(buff.puissanceInstantaneeChauffage.bytes[0]) << 8 | buff.puissanceInstantaneeChauffage.bytes[1]));
+    _chaudiere.setModeFonctionnement(buff.modeFonctionnement.toUInt16());
 
-        setPression(buff.pression.toFloat());
-        return true;
+    setPression(buff.pression.toFloat());
+    return true;
 }
 
 bool Connect::recupererConsommation() {

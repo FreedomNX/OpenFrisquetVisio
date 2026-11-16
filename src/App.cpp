@@ -90,5 +90,6 @@ void App::initPortal() {
 }
 
 void App::initOta() {
-  _ota.begin(_networkManager.hostname().c_str(), _cfg.portalPassword().c_str());
+  _ota.begin(_networkManager.hostname().c_str(), _cfg.portalPassword().c_str(),
+             [this](bool updating) { _radio.suspend(FrisquetRadio::Pause::ArduinoOta, updating); });
 }

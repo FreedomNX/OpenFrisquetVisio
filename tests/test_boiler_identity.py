@@ -56,6 +56,7 @@ struct Config {
 ''' + config_methods + r'''
 };
 struct FrisquetRadio {
+    bool busy(){return false;}
 ''' + radio_types + r'''
     uint8_t responding=0x80;
     int result=0,mutate=-1;

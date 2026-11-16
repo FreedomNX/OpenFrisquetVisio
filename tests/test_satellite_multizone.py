@@ -43,6 +43,18 @@ struct FrisquetRadio {
     'enum MessageType', 'struct RadioTrameHeader', 'struct RadioTrameInit')) + r'''
     std::vector<byte> reply;
     unsigned waits=0;
+    bool observing=false;
+    bool beginObservation(byte to,const RadioTrameHeader& expected) {
+        assert(reply[0]==to && reply[1]==expected.idExpediteur);
+        assert(reply[3]==expected.idMessage);
+        assert(reply[4]==expected.idReception && reply[5]==expected.type);
+        ++waits;observing=true;return true;
+    }
+    bool ownsObservation(byte){return observing;}
+    bool observationReady(byte){return observing;}
+    int takeObservation(byte,byte* out,size_t& length){
+        observing=false;length=reply.size();memcpy(out,reply.data(),length);return 0;
+    }
     int receiveExpected(byte from, byte to, byte association, byte message,
                         byte reception, byte type, byte* out, size_t& length, unsigned, bool) {
         ++waits;
@@ -76,7 +88,10 @@ struct Satellite {
     enum MODE : byte {INCONNU=255};
     bool _modeVirtuel=false,overwrite=false;
     Zone _zone;FrisquetRadio transport;
-    byte number,association=255,message=0;
+    byte number,association=255,message=0,learnedBoiler=0;
+    byte _observationPacket[23]={};
+    unsigned _observationLastChange=0;
+    bool _observationPending=false;
     Satellite(byte n):number(n){}
     byte getNumeroZone(){return number;}
     byte getId(){return 7+number;}
@@ -87,7 +102,7 @@ struct Satellite {
     void incrementIdMessage(byte v){message+=v;}
     FrisquetRadio& radio(){return transport;}
     bool getEcrasement(){return overwrite;}
-    void confirmerChaudiere(byte){}
+    void confirmerChaudiere(byte boiler){learnedBoiler=boiler;}
     void setEtatChaudiere(byte){}
     void setDate(Date&){}
     bool setModeFromRaw(byte){return true;}
@@ -96,8 +111,12 @@ struct Satellite {
     void saveConfig(){}
     void publishMqtt(){}
     bool onReceive(byte*,size_t);
+    void pollObservation();
+    bool applyObservation(byte*,byte*,size_t);
 };
-''' + extract('src/Frisquet/Satellite.cpp', 'bool Satellite::onReceive(') + r'''
+''' + '\n'.join(extract('src/Frisquet/Satellite.cpp', method) for method in (
+    'bool Satellite::onReceive(', 'void Satellite::pollObservation(',
+    'bool Satellite::applyObservation(')) + r'''
 int main(){
     // Real zone-1 request and boiler reply from the 12 November capture.
     const std::vector<byte> request={
@@ -115,9 +134,12 @@ int main(){
         frame[0]=boiler;frame[1]=s.getId();frame[11]=0x2F+5*(zone-1);
         s.transport.reply[0]=s.getId();s.transport.reply[1]=boiler;
         assert(s.onReceive(frame.data(),frame.size()));
+        assert(s._zone.publishes==0); // Cooperative observation completes later.
+        s.pollObservation();
         assert(s.transport.waits==1 && s._zone.publishes==1);
         assert(s._zone.ambient==20.2f && s._zone.setpoint==17.0f);
         assert(s.association==0x3F && s.message==0xE8);
+        assert(s.learnedBoiler==boiler);
         // Duplicate setpoints must not wait for the same response again.
         assert(!s.onReceive(frame.data(),frame.size()));assert(s.transport.waits==1);
         // Another zone's address, malformed payload and ACK are ignored.
@@ -134,6 +156,14 @@ int main(){
             Satellite truncated(zone);
             assert(!truncated.onReceive(frame.data(),size));
             assert(truncated.transport.waits==0);
+        }
+        // A deferred reply must retain the original association and length.
+        for(unsigned field: {2U,6U}) {
+            Satellite rejected(zone);rejected.transport.reply=s.transport.reply;
+            rejected.transport.reply[field]^=1;
+            assert(rejected.onReceive(frame.data(),frame.size()));
+            rejected.pollObservation();
+            assert(rejected._zone.publishes==0 && rejected.learnedBoiler==0);
         }
     }
     puts("OK: physical Z1/Z2/Z3 setpoints, 0x80/0x84, duplicates and invalid requests");

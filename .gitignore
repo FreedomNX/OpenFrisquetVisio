@@ -24,6 +24,7 @@ tests/*
 !tests/test_satellite_multizone.py
 !tests/test_satellite_schedule.py
 !tests/test_boiler_state.py
+!tests/test_monthly_consumption.py
 !tests/boiler-state.test.mjs
 
 !tests/test_sx1276_radio.py
@@ -48,6 +49,7 @@ tests/fixtures/*
 !tests/fixtures/cooperative-radio/
 !tests/fixtures/pairing-recovery/
 !tests/fixtures/ota-auth/
+!tests/fixtures/monthly-consumption/
 !tests/test_cooperative_portal.py
 !tests/test_cooperative_commands.py
 !tests/test_satellite_observation.py

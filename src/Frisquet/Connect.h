@@ -38,11 +38,21 @@ class Connect : public FrisquetDevice {
         }
         Chaudiere& chaudiere() { return _chaudiere; }
 
+        struct ConsommationsMensuelles {
+            uint16_t chauffage[12] = {};
+            uint16_t ecs[12] = {};
+            // Heure locale synchronisée avec la chaudière ; 0 si inconnue.
+            uint32_t dateReception = 0;
+            bool disponibles = false;
+        };
+        const ConsommationsMensuelles& getConsommationsMensuelles() const { return _consommationsMensuelles; }
+        const ConsommationsMensuelles& getConsommationsAnneePrecedente() const { return _consommationsAnneePrecedente; }
+
         bool envoyerZone(Zone& zone);
         bool envoyerModeECS();
         bool recupererInformations();
         bool recupererConsommation();
-        bool recupererConsommationAnnuelle();
+        bool recupererConsommationAnnuelle(bool anneePrecedente = false);
         bool recupererModeECS();
 
         float getTemperatureExterieure();
@@ -67,6 +77,8 @@ class Connect : public FrisquetDevice {
         Zone& _zone2;
         Zone& _zone3;
         Chaudiere& _chaudiere;
+        ConsommationsMensuelles _consommationsMensuelles;
+        ConsommationsMensuelles _consommationsAnneePrecedente;
 
         void setTemperatureExterieure(float temperature);
         void setTemperatureECS(float temperature);
@@ -74,7 +86,7 @@ class Connect : public FrisquetDevice {
 
         void setConsommationECS(int16_t consommation);
         void setConsommationChauffage(int16_t consommation);
-        bool setConsommationAnnuelle(const byte* donnees, size_t length);
+        bool setConsommationAnnuelle(const byte* donnees, size_t length, bool anneePrecedente = false);
         bool recupererVersionFirmware();
         bool setVersionFirmware(const byte* response, size_t length);
         BoilerFirmware _boilerFirmware;

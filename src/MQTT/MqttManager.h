@@ -1,5 +1,6 @@
 #pragma once
 #include <Arduino.h>
+#include <WiFi.h>
 #include <WiFiClient.h>
 #include <PubSubClient.h>
 #include <vector>
@@ -38,7 +39,19 @@ public:
     });
   }
 
-  bool loop() { if (!_mqtt.connected()) reconnect(); return _mqtt.loop(); }
+  bool loop() {
+    if (!_mqtt.connected()) {
+      // connect() bloque jusqu'à ~3 s si le broker est injoignable : espacer
+      // les essais pour ne pas figer le portail web et la radio.
+      if (_opts.host.isEmpty() || !WiFi.isConnected()) return false;
+      const uint32_t now = millis();
+      if (_triedOnce && now - _lastAttemptMs < kRetryMs) return false;
+      _triedOnce = true;
+      _lastAttemptMs = now;
+      reconnect();
+    }
+    return _mqtt.loop();
+  }
   bool connected() { return _mqtt.connected(); }
 
   // --- Device & Entity registration ---
@@ -156,6 +169,9 @@ private:
   PubSubClient _mqtt;
   Options _opts;
   const size_t _bufferSize = 4096;
+  static constexpr uint32_t kRetryMs = 15000;
+  uint32_t _lastAttemptMs = 0;
+  bool _triedOnce = false;
 
   std::map<String, MqttDevice*> _devices;
   std::vector<String> _removedDiscoveryTopics;

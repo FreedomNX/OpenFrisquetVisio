@@ -161,6 +161,37 @@ bool Connect::recupererInformations() {
         return false;
     }
 
+    byte buff[sizeof(FrisquetRadio::RadioTrameHeader) + 1 + 56];
+
+    size_t length;
+    int16_t err;
+
+    uint8_t retry = 0;
+    do {
+        length = sizeof(buff);
+        err = this->radio().sendAsk(
+            this->getId(),
+            getConfig().boilerId(),
+            this->getIdAssociation(),
+            this->incrementIdMessage(),
+            0x01,
+            0x79F2 + getConfig().boilerMemoryOffset(),
+            0x001C,
+            (byte*)&buff,
+            length
+        );
+
+        if(err != RADIOLIB_ERR_NONE || !applyInformation(buff, length)) {
+            delay(100);
+            continue;
+        }
+        return true;
+    } while(retry++ < 1);
+
+    return false;
+}
+
+bool Connect::applyInformation(const byte* data, size_t length) {
     struct {
         FrisquetRadio::RadioTrameHeader header;
         uint8_t longueurDonnees;
@@ -190,28 +221,10 @@ bool Connect::recupererInformations() {
         temperature16 inconnu2;
     } buff;
 
-    size_t length;
-    int16_t err;
-
-    uint8_t retry = 0;
-    do {
-        length = sizeof(buff);
-        err = this->radio().sendAsk(
-            this->getId(), 
-            getConfig().boilerId(),
-            this->getIdAssociation(),
-            this->incrementIdMessage(),
-            0x01,
-            0x79F2 + getConfig().boilerMemoryOffset(),
-            0x001C,
-            (byte*)&buff,
-            length
-        );
-
-        if(err != RADIOLIB_ERR_NONE) {
-            delay(100);
-            continue;
-        }
+    if (!data || length < sizeof(buff)) return false;
+    memcpy(&buff, data, sizeof(buff));
+    const size_t prefix = sizeof(buff.header) + 1;
+    if (buff.longueurDonnees < sizeof(buff) - prefix || buff.longueurDonnees > length - prefix) return false;
 
         if(getZone1().getSource() == Zone::SOURCE::CONNECT) {
             getZone1().setTemperatureAmbiante(buff.temperatureAmbianteZ1.toFloat());
@@ -249,9 +262,6 @@ bool Connect::recupererInformations() {
 
         setPression(buff.pression.toFloat());
         return true;
-    } while(retry++ < 1);
-
-    return false;
 }
 
 bool Connect::recupererConsommation() {
@@ -259,14 +269,7 @@ bool Connect::recupererConsommation() {
         return false;
     }
 
-    struct {
-        FrisquetRadio::RadioTrameHeader header;
-        uint8_t longueurDonnees;
-        byte i1[18] = {0};
-        fword consommationECS;
-        fword consommationChauffage;
-        byte i2[34] = {0};
-    } buff;
+    byte buff[sizeof(FrisquetRadio::RadioTrameHeader) + 1 + 56];
     
 
     size_t length;
@@ -287,18 +290,33 @@ bool Connect::recupererConsommation() {
             length
         );
 
-        if(err != RADIOLIB_ERR_NONE) {
+        if(err != RADIOLIB_ERR_NONE || !applyConsumption(buff, length)) {
             delay(100);
             continue;
         }
-        
-        setConsommationChauffage(buff.consommationChauffage.toInt16());
-        setConsommationECS(buff.consommationECS.toInt16());
-        
         return true;
     } while(retry++ < 1);
 
     return false;
+}
+
+bool Connect::applyConsumption(const byte* data, size_t length) {
+    struct {
+        FrisquetRadio::RadioTrameHeader header;
+        uint8_t longueurDonnees;
+        byte i1[18] = {0};
+        fword consommationECS;
+        fword consommationChauffage;
+        byte i2[34] = {0};
+    } buff;
+
+
+    if (!data || length < sizeof(buff)) return false;
+    memcpy(&buff, data, sizeof(buff));
+    if (buff.longueurDonnees != 56 || length < 7U + buff.longueurDonnees) return false;
+    setConsommationChauffage(buff.consommationChauffage.toInt16());
+    setConsommationECS(buff.consommationECS.toInt16());
+    return true;
 }
 
 // Deux blocs contigus de 24 mots : année courante en 0xA063, précédente
@@ -406,20 +424,7 @@ bool Connect::recupererModeECS() {
     }
 
 
-    /*
-    7E 80 AA 16 05 10 A0 F0 00 0D 1A 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 11 // Eco horloge
-    7E 80 AA 1A 05 10 A0 F0 00 0D 1A 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 09 // Eco
-    80 7E AA 03 05 10 A0 F0 00 0D 1A 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 09 // Eco
-    7E 80 AA 1D 05 10 A0 F0 00 0D 1A 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 01 // max
-    7E 80 AA 22 05 10 A0 F0 00 0D 1A 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 19 // eco+
-    */
-    // Demande récupération courte : 80 7E AA 03 01 03 A0 FC 00 01
-    struct {
-        FrisquetRadio::RadioTrameHeader header;
-        uint8_t longueurDonnees;
-        byte i1;
-        byte modeECS;
-    } buff;
+    byte buff[sizeof(FrisquetRadio::RadioTrameHeader) + 1 + 2];
     
 
     size_t length = 0;
@@ -427,7 +432,7 @@ bool Connect::recupererModeECS() {
 
     uint8_t retry = 0;
     do {
-        //length = sizeof(buff);
+        length = sizeof(buff);
         err = this->radio().sendAsk(
             this->getId(), 
             getConfig().boilerId(),
@@ -440,17 +445,29 @@ bool Connect::recupererModeECS() {
             length
         );
 
-        if(err != RADIOLIB_ERR_NONE) {
+        if(err != RADIOLIB_ERR_NONE || !applyEcs(buff, length)) {
             delay(10);
             continue;
         }
-        
-        setModeECSFromRaw(buff.modeECS);
-
         return true;
     } while(retry++ < 1);
 
     return false;
+}
+
+bool Connect::applyEcs(const byte* data, size_t length) {
+    /*
+    7E 80 AA 16 05 10 A0 F0 00 0D 1A 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 11 // Eco horloge
+    7E 80 AA 1A 05 10 A0 F0 00 0D 1A 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 09 // Eco
+    80 7E AA 03 05 10 A0 F0 00 0D 1A 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 09 // Eco
+    7E 80 AA 1D 05 10 A0 F0 00 0D 1A 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 01 // max
+    7E 80 AA 22 05 10 A0 F0 00 0D 1A 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 19 // eco+
+    */
+    // Demande récupération courte : 80 7E AA 03 01 03 A0 FC 00 01
+    // Réponse A0FC : en-tête, longueur 2, octet réservé, mode.
+    if (!data || length < 9 || data[6] != 2) return false;
+    setModeECSFromRaw(data[8]);
+    return true;
 }
 
 Connect::MODE_ECS Connect::getModeECS() {

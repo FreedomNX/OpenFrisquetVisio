@@ -19,7 +19,7 @@ loop = extract('void Connect::loop()')
 assert loop.count('recupererVersionFirmware();') == 1
 assert loop.index('useConnectPassive()') < loop.index('if (_initialReadPending)')
 assert loop.index('_initialReadPending = false;') < loop.index('recupererVersionFirmware();') < loop.index('recupererInformations()')
-active = extract('bool Connect::recupererInformations()')
+active = extract('bool Connect::applyInformation(')
 assert active.count('_boilerFirmware.power(') == 2
 passive = extract('bool Connect::handlePassiveReadResponse(')
 assert passive.count('_boilerFirmware.power(') == 2

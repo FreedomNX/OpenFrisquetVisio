@@ -88,6 +88,9 @@ class Connect : public FrisquetDevice {
         void setConsommationChauffage(int16_t consommation);
         bool setConsommationAnnuelle(const byte* donnees, size_t length, bool anneePrecedente = false);
         bool recupererVersionFirmware();
+        bool applyInformation(const byte* data, size_t length);
+        bool applyConsumption(const byte* data, size_t length);
+        bool applyEcs(const byte* data, size_t length);
         bool setVersionFirmware(const byte* response, size_t length);
         BoilerFirmware _boilerFirmware;
 

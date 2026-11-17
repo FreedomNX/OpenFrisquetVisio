@@ -20,8 +20,9 @@ neutres ; le navigateur ne devine ni l'année ni le mois.
 
 Les deux années sont lues séparément : 24 mots à partir de `0xA063`, puis
 24 mots à partir de `0xA07B`. Chaque réponse fait 55 octets, sous la limite RX
-de 63 octets. Le scénario contrôle cette limite réelle, les deux identités
-chaudière, les archives passives et l'indépendance des caches/cumuls MQTT.
+de 63 octets. Le scénario contrôle cette limite réelle et l'indépendance des
+caches/cumuls MQTT. Les requêtes des deux années, pour les deux identités
+chaudière, sont vérifiées par `tests/fixtures/cooperative-radio/connect.cpp`.
 Le JSON date chaque cache à réception ; l’archive porte l’année précédente et
 reste complète jusqu’à décembre. Les tests de rendu distinguent les deux
 années, leurs données absentes et leurs mois complets/partiels.

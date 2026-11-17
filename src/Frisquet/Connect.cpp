@@ -124,23 +124,6 @@ bool Connect::envoyerZone(Zone& zone) {
     return false;
 }
 
-bool Connect::recupererVersionFirmware() {
-    if (getConfig().useConnectPassive() || !estAssocie()) return false;
-
-    _boilerFirmware = BoilerFirmware();
-    byte response[sizeof(FrisquetRadio::RadioTrameHeader) + 1 + 4] = {};
-    size_t length = sizeof(response);
-    const int16_t result = this->radio().sendAsk(
-        this->getId(), getConfig().boilerId(), this->getIdAssociation(),
-        this->incrementIdMessage(), 0x01, 0x7541, 0x0002,
-        response, length, 1);
-    if (result != RADIOLIB_ERR_NONE || !setVersionFirmware(response, length)) {
-        error("[CONNECT] Version chaudière indisponible ou invalide (code=%d) : puissances divisées par 10.", result);
-        return false;
-    }
-    return true;
-}
-
 bool Connect::setVersionFirmware(const byte* response, size_t length) {
     const size_t prefixLength = sizeof(FrisquetRadio::RadioTrameHeader) + 1;
     BoilerFirmware version;
@@ -156,42 +139,7 @@ bool Connect::setVersionFirmware(const byte* response, size_t length) {
     return true;
 }
 
-bool Connect::recupererInformations() {
-    if(! estAssocie()) {
-        return false;
-    }
-
-    byte buff[sizeof(FrisquetRadio::RadioTrameHeader) + 1 + 56];
-
-    size_t length;
-    int16_t err;
-
-    uint8_t retry = 0;
-    do {
-        length = sizeof(buff);
-        err = this->radio().sendAsk(
-            this->getId(),
-            getConfig().boilerId(),
-            this->getIdAssociation(),
-            this->incrementIdMessage(),
-            0x01,
-            0x79F2 + getConfig().boilerMemoryOffset(),
-            0x001C,
-            (byte*)&buff,
-            length
-        );
-
-        if(err != RADIOLIB_ERR_NONE || !applyInformation(buff, length)) {
-            delay(100);
-            continue;
-        }
-        return true;
-    } while(retry++ < 1);
-
-    return false;
-}
-
-bool Connect::applyInformation(const byte* data, size_t length) {
+bool Connect::applyInformation(const byte* data, size_t length, const uint32_t* zoneChanges) {
     struct {
         FrisquetRadio::RadioTrameHeader header;
         uint8_t longueurDonnees;
@@ -228,21 +176,24 @@ bool Connect::applyInformation(const byte* data, size_t length) {
 
     if(getZone1().getSource() == Zone::SOURCE::CONNECT) {
         getZone1().setTemperatureAmbiante(buff.temperatureAmbianteZ1.toFloat());
-        getZone1().setTemperatureConsigne(buff.temperatureConsigneZ1.toFloat());
+        if (!zoneChanges || getZone1().getLastChange() == zoneChanges[0])
+            getZone1().setTemperatureConsigne(buff.temperatureConsigneZ1.toFloat());
     }
     getZone1().setTemperatureDepart(buff.temperatureDepartZ1.toFloat());
     getZone1().setTemperatureConsigneDepart(buff.temperatureConsigneDepartZ1.toFloat());
 
     if(getZone2().getSource() == Zone::SOURCE::CONNECT) {
         getZone2().setTemperatureAmbiante(buff.temperatureAmbianteZ2.toFloat());
-        getZone2().setTemperatureConsigne(buff.temperatureConsigneZ2.toFloat());
+        if (!zoneChanges || getZone2().getLastChange() == zoneChanges[1])
+            getZone2().setTemperatureConsigne(buff.temperatureConsigneZ2.toFloat());
     }
     getZone2().setTemperatureDepart(buff.temperatureDepartZ2.toFloat());
     getZone2().setTemperatureConsigneDepart(buff.temperatureConsigneDepartZ2.toFloat());
 
     if(getZone3().getSource() == Zone::SOURCE::CONNECT) {
         getZone3().setTemperatureAmbiante(buff.temperatureAmbianteZ3.toFloat());
-        getZone3().setTemperatureConsigne(buff.temperatureConsigneZ3.toFloat());
+        if (!zoneChanges || getZone3().getLastChange() == zoneChanges[2])
+            getZone3().setTemperatureConsigne(buff.temperatureConsigneZ3.toFloat());
     }
     getZone3().setTemperatureDepart(buff.temperatureDepartZ3.toFloat());
     getZone3().setTemperatureConsigneDepart(buff.temperatureConsigneDepartZ3.toFloat());
@@ -262,42 +213,6 @@ bool Connect::applyInformation(const byte* data, size_t length) {
 
     setPression(buff.pression.toFloat());
     return true;
-}
-
-bool Connect::recupererConsommation() {
-    if(! estAssocie()) {
-        return false;
-    }
-
-    byte buff[sizeof(FrisquetRadio::RadioTrameHeader) + 1 + 56];
-    
-
-    size_t length;
-    int16_t err;
-
-    uint8_t retry = 0;
-    do {
-        length = sizeof(buff);
-        err = this->radio().sendAsk(
-            this->getId(), 
-            getConfig().boilerId(),
-            this->getIdAssociation(),
-            this->incrementIdMessage(),
-            0x01,
-            0x7A18 + getConfig().boilerMemoryOffset(),
-            0x001C,
-            (byte*)&buff,
-            length
-        );
-
-        if(err != RADIOLIB_ERR_NONE || !applyConsumption(buff, length)) {
-            delay(100);
-            continue;
-        }
-        return true;
-    } while(retry++ < 1);
-
-    return false;
 }
 
 bool Connect::applyConsumption(const byte* data, size_t length) {
@@ -328,42 +243,6 @@ struct ConsommationMensuelle {
 };
 static_assert(sizeof(ConsommationMensuelle) == 55, "Une année occupe 55 octets");
 static_assert(sizeof(ConsommationMensuelle) <= Radio::MAX_RX_PACKET_LENGTH, "Respecter la capacité RX");
-
-bool Connect::recupererConsommationAnnuelle(bool anneePrecedente) {
-    if(! estAssocie()) {
-        return false;
-    }
-
-    ConsommationMensuelle buff;
-
-    size_t length;
-    int16_t err;
-
-    uint8_t retry = 0;
-    do {
-        length = sizeof(buff);
-        err = this->radio().sendAsk(
-            this->getId(), 
-            getConfig().boilerId(),
-            this->getIdAssociation(),
-            this->incrementIdMessage(),
-            0x01,
-            anneePrecedente ? 0xA07B : 0xA063,
-            0x0018,
-            (byte*)&buff,
-            length
-        );
-
-        if(err != RADIOLIB_ERR_NONE) {
-            delay(100);
-            continue;
-        }
-
-        return setConsommationAnnuelle((byte*)&buff, length, anneePrecedente);
-    } while(retry++ < 1);
-
-    return false;
-}
 
 bool Connect::setConsommationAnnuelle(const byte* donnees, size_t length, bool anneePrecedente) {
     ConsommationMensuelle resp;
@@ -416,43 +295,6 @@ int16_t Connect::getConsommationChauffage() {
 }
 int16_t Connect::getConsommationECS() {
     return _chaudiere.getConsommationECS();
-}
-
-bool Connect::recupererModeECS() {
-    if(! estAssocie()) {
-        return false;
-    }
-
-
-    byte buff[sizeof(FrisquetRadio::RadioTrameHeader) + 1 + 2];
-    
-
-    size_t length = 0;
-    int16_t err;
-
-    uint8_t retry = 0;
-    do {
-        length = sizeof(buff);
-        err = this->radio().sendAsk(
-            this->getId(), 
-            getConfig().boilerId(),
-            this->getIdAssociation(),
-            this->incrementIdMessage(),
-            0x01,
-            0xA0FC,
-            0x0001,
-            (byte*)&buff,
-            length
-        );
-
-        if(err != RADIOLIB_ERR_NONE || !applyEcs(buff, length)) {
-            delay(10);
-            continue;
-        }
-        return true;
-    } while(retry++ < 1);
-
-    return false;
 }
 
 bool Connect::applyEcs(const byte* data, size_t length) {
@@ -928,106 +770,199 @@ void Connect::begin() {
 
 void Connect::loop() {
     if (sendPendingModeEcs()) return;
-    if (getConfig().useConnectPassive() || !estAssocie()) return;
+    if (getConfig().useConnectPassive() || !estAssocie() || radio().busy()
+        || _readKind != ReadKind::None) return;
 
-    // Exception au planning : une collecte complète au démarrage, même dans
-    // une fenêtre réservée. Seules les mesures seront reprises aux créneaux
-    // ordinaires ; la version n'est demandée qu'une fois par démarrage.
+    // Une collecte initiale, y compris dans les fenêtres réservées ; pas de
+    // rattrapage en rafale après un échec ou une annulation de configuration.
     if (_initialReadPending) {
-        _initialReadPending = false;
-        recupererVersionFirmware();
-        delay(100);
-        info("[CONNECT] Récupération initiale des informations...");
-        if (recupererInformations()) {
-            _lastRecuperationTemperatures = millis();
-        } else {
-            error("[CONNECT] Échec de la récupération initiale des températures.");
-        }
-        delay(100);
-        if (recupererConsommation()) {
-            _lastRecuperationConsommation = millis();
-        } else {
-            error("[CONNECT] Échec de la récupération initiale des consommations.");
-        }
-        delay(100);
-        if (!recupererConsommationAnnuelle()) {
-            error("[CONNECT] Échec de la récupération initiale des consommations mensuelles.");
-        }
-        delay(100);
-        if (!recupererConsommationAnnuelle(true)) {
-            error("[CONNECT] Échec de la récupération de l'année précédente.");
-        }
-        delay(100);
-        if (recupererModeECS()) {
-            _lastRecuperationModeECS = millis();
-        } else {
-            error("[CONNECT] Échec de la récupération initiale du mode ECS.");
-        }
-        publishMqtt();
-        _zone1.publishMqtt();
-        _zone2.publishMqtt();
-        _zone3.publishMqtt();
-        // Consommer les créneaux actuellement ouverts pour éviter une lecture
-        // identique immédiatement après la collecte initiale.
-        _temperatureSchedules[0].due(600, 180);
-        _temperatureSchedules[1].due(600, 360);
-        _temperatureSchedules[2].due(600, 480);
-        _consommationSchedule.due(3600, 300);
-        _ecsSchedule.due(3600, 420);
+        // Rester en attente jusqu'à la fin : une annulation doit permettre
+        // de recommencer avec le réseau et l'association courants.
+        startReads(ReadKind::Firmware, ReadKind::Ecs);
         return;
     }
     if (RadioSchedule::quietWindow(RadioSchedule::clockSeconds())) return;
-
     // Trois lectures par tranche de 10 minutes : :03, :06 et :08.
     if (_temperatureSchedules[0].due(600, 180)
         || _temperatureSchedules[1].due(600, 360)
         || _temperatureSchedules[2].due(600, 480)) {
-        info("[CONNECT] Récupération des températures...");
-        if (recupererInformations()) {
-            _lastRecuperationTemperatures = millis();
-            publishMqtt();
-            _zone1.publishMqtt();
-            _zone2.publishMqtt();
-            _zone3.publishMqtt();
-        } else {
-            error("[CONNECT] Échec de la récupération des températures.");
-        }
+        startReads(ReadKind::Information, ReadKind::Information);
         return;
     }
-
     // Créneaux horaires distincts pour les lectures moins fréquentes.
     if (_consommationSchedule.due(3600, 300)) {
-        info("[CONNECT] Récupération des consommations...");
-        if (recupererConsommation()) {
-            _lastRecuperationConsommation = millis();
-        } else {
-            error("[CONNECT] Échec de la récupération des consommations.");
-        }
-        delay(100);
-        if (!recupererConsommationAnnuelle()) {
-            error("[CONNECT] Échec de la récupération des consommations mensuelles.");
-        }
-        delay(100);
-        if (!recupererConsommationAnnuelle(true)) {
-            error("[CONNECT] Échec de la récupération de l'année précédente.");
-        }
-        publishMqtt();
+        startReads(ReadKind::Consumption, ReadKind::PreviousAnnual);
         return;
     }
     if (_ecsSchedule.due(3600, 420)) {
-        info("[CONNECT] Récupération du mode ECS...");
-        if (recupererModeECS()) {
-            _lastRecuperationModeECS = millis();
-            publishMqtt();
-        } else {
-            error("[CONNECT] Récupération impossible");
+        startReads(ReadKind::Ecs, ReadKind::Ecs);
+        return;
+    }
+    const uint32_t now = millis();
+    if (now - _lastEnvoiZone >= 30000 || _lastEnvoiZone == 0) {
+        envoiZones();
+    }
+}
+
+void Connect::startReads(ReadKind first, ReadKind last) {
+    if (first == ReadKind::Firmware) _boilerFirmware = BoilerFirmware();
+    _lastRead = last;
+    _readKind = first;
+    _readAttempts = 0;
+    _readAssociation = getIdAssociation();
+    _readBoiler = getConfig().boilerId();
+    _readGeneration = radio().operationGeneration();
+    _readDeadline = millis();
+    switch (first) {
+        case ReadKind::Firmware: info("[CONNECT] Récupération initiale des informations..."); break;
+        case ReadKind::Information: info("[CONNECT] Récupération des températures..."); break;
+        case ReadKind::Consumption: info("[CONNECT] Récupération des consommations..."); break;
+        case ReadKind::Ecs: info("[CONNECT] Récupération du mode ECS..."); break;
+        case ReadKind::Annual:
+        case ReadKind::PreviousAnnual:
+        case ReadKind::None: break;
+    }
+    pollReads();
+}
+
+void Connect::pollReads() {
+    if (_readKind == ReadKind::None) return;
+    if (!getConfig().useConnect() || getConfig().useConnectPassive() || !estAssocie()
+        || getConfig().boilerId() != _readBoiler
+        || getIdAssociation() != _readAssociation || radio().operationGeneration() != _readGeneration) {
+        if (radio().ownsRead(getId())) radio().cancelRead();
+        _readKind = ReadKind::None;
+        return;
+    }
+    if (!radio().ownsRead(getId())) {
+        // Les commandes récentes passent entre les lectures. Une autre écoute
+        // peut occuper la radio pendant les 100 ms d'intervalle.
+        if (radio().busy() || _modeEcsCommandPending || static_cast<int32_t>(millis() - _readDeadline) < 0
+            || FrisquetRadio::receivedFlag || radio().hasReceivedPacket() || radio().hasBufferedPacket()) return;
+        uint16_t address = 0, words = 0;
+        switch (_readKind) {
+            case ReadKind::Firmware: address = 0x7541; words = 2; break;
+            case ReadKind::Information: address = 0x79F2 + getConfig().boilerMemoryOffset(); words = 0x1C; break;
+            case ReadKind::Consumption: address = 0x7A18 + getConfig().boilerMemoryOffset(); words = 0x1C; break;
+            case ReadKind::Annual: address = 0xA063; words = 0x18; break;
+            case ReadKind::PreviousAnnual: address = 0xA07B; words = 0x18; break;
+            case ReadKind::Ecs: address = 0xA0FC; words = 1; break;
+            case ReadKind::None: return;
+        }
+        FrisquetRadio::RadioTrameHeader request;
+        request.idExpediteur = getId();
+        request.idDestinataire = getConfig().boilerId();
+        request.idAssociation = getIdAssociation();
+        request.idMessage = incrementIdMessage();
+        request.idReception = 1;
+        if (radio().beginRead(getId(), request, address, words, _readKind == ReadKind::Firmware ? 1 : 5)) {
+            if (_readKind == ReadKind::Information && !_readAttempts) {
+                // Protéger seulement les commandes reçues pendant cette lecture,
+                // sans figer les observations ultérieures si leur envoi échoue.
+                _readZoneChanges[0] = _zone1.getLastChange();
+                _readZoneChanges[1] = _zone2.getLastChange();
+                _readZoneChanges[2] = _zone3.getLastChange();
+            }
+            ++_readAttempts;
         }
         return;
     }
 
-    const uint32_t now = millis();
-    if (now - _lastEnvoiZone >= 30000 || _lastEnvoiZone == 0) {
-        envoiZones();
+    radio().pollRead();
+    if (!radio().readReady(getId())) return;
+    byte data[RADIOLIB_SX126X_MAX_PACKET_LENGTH];
+    size_t length = sizeof(data);
+    const int16_t result = radio().takeRead(getId(), data, length);
+
+    bool success = false;
+    if (result == RADIOLIB_ERR_NONE) {
+        switch (_readKind) {
+            case ReadKind::Firmware: success = setVersionFirmware(data, length); break;
+            case ReadKind::Information: success = applyInformation(data, length, _readZoneChanges); break;
+            case ReadKind::Consumption: success = applyConsumption(data, length); break;
+            case ReadKind::Annual: success = setConsommationAnnuelle(data, length); break;
+            case ReadKind::PreviousAnnual: success = setConsommationAnnuelle(data, length, true); break;
+            case ReadKind::Ecs: success = applyEcs(data, length); break;
+            case ReadKind::None: return;
+        }
+    }
+    // Même deuxième tentative externe et nouvel idMessage qu'avant. Les
+    // erreurs de format ne modifient aucun état et suivent aussi ce chemin.
+    if (!success && _readKind != ReadKind::Firmware && _readAttempts < 2) {
+        _readDeadline = millis() + (_readKind == ReadKind::Ecs ? 10U : 100U);
+        return;
+    }
+    completeRead(success, result);
+}
+
+void Connect::completeRead(bool success, int16_t result) {
+    // Seule la collecte de démarrage peut commencer tant que ce drapeau est actif.
+    const bool initial = _initialReadPending;
+    if (success) {
+        switch (_readKind) {
+            case ReadKind::Information:
+                _lastRecuperationTemperatures = millis();
+                _zone1.publishMqtt();
+                _zone2.publishMqtt();
+                _zone3.publishMqtt();
+                break;
+            case ReadKind::Consumption: _lastRecuperationConsommation = millis(); break;
+            case ReadKind::Ecs: _lastRecuperationModeECS = millis(); break;
+            case ReadKind::Annual: break;
+            case ReadKind::PreviousAnnual: break;
+            case ReadKind::Firmware: break;
+            case ReadKind::None: return;
+        }
+        // Une commande ECS arrivée pendant la lecture publiera son résultat
+        // après envoi ; ne pas intercaler ici le mode antérieur à cette commande.
+        // L'année précédente ne modifie aucune valeur MQTT.
+        if (_readKind != ReadKind::Firmware && _readKind != ReadKind::PreviousAnnual
+            && !(_readKind == ReadKind::Ecs && _modeEcsCommandPending)) publishMqtt();
+    } else {
+        switch (_readKind) {
+            case ReadKind::Firmware:
+                error("[CONNECT] Version chaudière indisponible ou invalide (code=%d) : puissances divisées par 10.", result);
+                break;
+            case ReadKind::Information:
+                error(initial ? "[CONNECT] Échec de la récupération initiale des températures."
+                    : "[CONNECT] Échec de la récupération des températures.");
+                break;
+            case ReadKind::Consumption:
+                error(initial ? "[CONNECT] Échec de la récupération initiale des consommations."
+                    : "[CONNECT] Échec de la récupération des consommations.");
+                break;
+            case ReadKind::Annual:
+                error(initial ? "[CONNECT] Échec de la récupération initiale des consommations mensuelles."
+                    : "[CONNECT] Échec de la récupération des consommations mensuelles.");
+                break;
+            case ReadKind::PreviousAnnual:
+                error("[CONNECT] Échec de la récupération de l'année précédente.");
+                break;
+            case ReadKind::Ecs:
+                error(initial ? "[CONNECT] Échec de la récupération initiale du mode ECS."
+                    : "[CONNECT] Récupération impossible");
+                break;
+            case ReadKind::None: return;
+        }
+    }
+    if (_readKind != _lastRead) {
+        const uint32_t gap = success || _readKind == ReadKind::Firmware ? 100U : 200U;
+        _readKind = static_cast<ReadKind>(static_cast<uint8_t>(_readKind) + 1);
+        _readAttempts = 0;
+        // L'ancienne boucle attendait aussi 100 ms après le dernier échec,
+        // avant les 100 ms séparant deux lectures. Aucun sommeil ici.
+        _readDeadline = millis() + gap;
+    } else {
+        _readKind = ReadKind::None;
+        if (initial) {
+            _initialReadPending = false;
+            // Pas de rattrapage immédiat des créneaux traversés au démarrage.
+            _temperatureSchedules[0].due(600, 180);
+            _temperatureSchedules[1].due(600, 360);
+            _temperatureSchedules[2].due(600, 480);
+            _consommationSchedule.due(3600, 300);
+            _ecsSchedule.due(3600, 420);
+        }
     }
 }
 

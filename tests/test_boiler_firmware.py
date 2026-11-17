@@ -16,9 +16,9 @@ def extract(signature):
     return source[start:end]
 
 loop = extract('void Connect::loop()')
-assert loop.count('recupererVersionFirmware();') == 1
 assert loop.index('useConnectPassive()') < loop.index('if (_initialReadPending)')
-assert loop.index('_initialReadPending = false;') < loop.index('recupererVersionFirmware();') < loop.index('recupererInformations()')
+assert 'startReads(ReadKind::Firmware, ReadKind::Ecs);' in loop
+# La collecte, ses tentatives et les puissances sont exercées dans test_cooperative_connect.py.
 active = extract('bool Connect::applyInformation(')
 assert active.count('_boilerFirmware.power(') == 2
 passive = extract('bool Connect::handlePassiveReadResponse(')
@@ -30,8 +30,7 @@ assert 'return setVersionFirmware(buff, length);' in passive
 with tempfile.TemporaryDirectory(prefix='ofv-boiler-firmware-') as temp:
     cpp = ROOT / 'tests/fixtures/cooperative-radio/firmware.cpp'
     (Path(temp) / 'firmware-methods.inc').write_text(
-        extract('bool Connect::recupererVersionFirmware()') + '\n'
-        + extract('bool Connect::setVersionFirmware(')
+        extract('bool Connect::setVersionFirmware(')
     )
     binary = Path(temp) / 'test'
     subprocess.run(['c++', '-std=c++11', '-Wall', '-Wextra', '-Werror',

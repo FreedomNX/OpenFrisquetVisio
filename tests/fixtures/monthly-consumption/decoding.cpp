@@ -15,48 +15,12 @@ struct Chaudiere {
     int32_t chauffage = -1, ecs = -1;
     void setConsommationAnnuelle(int32_t h, int32_t e) { chauffage = h; ecs = e; }
 };
-constexpr int RADIOLIB_ERR_NONE = 0;
-void delay(unsigned) {}
-struct Radio {
-    unsigned calls = 0;
-    uint8_t boiler = 0;
-    uint16_t address = 0, words = 0;
-    size_t capacity = 0;
-    bool fail = false;
-    int16_t sendAsk(uint8_t, uint8_t destination, uint8_t, uint8_t, uint8_t,
-                    uint16_t addr, uint16_t count, byte* data, size_t& length) {
-        ++calls; boiler = destination; address = addr; words = count; capacity = length;
-        assert(7U + 2U * count <= RadioCrc::MAX_PAYLOAD);
-        assert(length == 55);
-        if (fail) return -1;
-        memset(data, 0, 55);
-        data[6] = 48;
-        data[8] = addr == 0xA063 ? 10 : 20;
-        length = 55;
-        return RADIOLIB_ERR_NONE;
-    }
-};
-struct Config {
-    uint8_t id = 0x80;
-    uint8_t boilerId() { return id; }
-};
 struct Connect {
 #include "monthly-state.inc"
     Chaudiere _chaudiere;
-    Radio _radio;
-    Config _config;
-    bool paired = true;
-    bool estAssocie() { return paired; }
-    Radio& radio() { return _radio; }
-    Config& getConfig() { return _config; }
-    uint8_t getId() { return 0x13; }
-    uint8_t getIdAssociation() { return 2; }
-    uint8_t incrementIdMessage() { return 3; }
     bool setConsommationAnnuelle(const byte*, size_t, bool = false);
-    bool recupererConsommationAnnuelle(bool = false);
 };
 #include "monthly-method.inc"
-#include "monthly-query.inc"
 
 int main() {
     Connect connect;
@@ -112,24 +76,6 @@ int main() {
     Connect restarted;
     assert(!restarted.getConsommationsMensuelles().disponibles);
     assert(!restarted.getConsommationsAnneePrecedente().disponibles);
-    for (auto boiler : {0x80, 0x84}) {
-        restarted._config.id = boiler;
-        assert(restarted.recupererConsommationAnnuelle());
-        assert(restarted._radio.boiler == boiler && restarted._radio.address == 0xA063);
-        assert(restarted._radio.words == 24 && restarted._radio.capacity == 55);
-        assert(restarted._chaudiere.chauffage == 10);
-        assert(restarted.recupererConsommationAnnuelle(true));
-        assert(restarted._radio.address == 0xA07B && restarted._radio.words == 24);
-        assert(restarted.getConsommationsAnneePrecedente().chauffage[0] == 20);
-        assert(restarted._chaudiere.chauffage == 10);
-    }
-    assert(restarted._radio.calls == 4);
-    restarted._radio.fail = true;
-    assert(!restarted.recupererConsommationAnnuelle(true));
-    assert(restarted.getConsommationsAnneePrecedente().chauffage[0] == 20);
-    assert(restarted._chaudiere.chauffage == 10);
-    const auto calls = restarted._radio.calls;
-    restarted.paired = false;
-    assert(!restarted.recupererConsommationAnnuelle() && restarted._radio.calls == calls);
-    puts("OK : deux lectures sous la limite RX, caches indépendants et MQTT courant préservé");
+    // Les requêtes des deux années sont vérifiées dans le séquencement Connect.
+    puts("OK : réponses sous la limite RX, caches indépendants et MQTT courant préservé");
 }

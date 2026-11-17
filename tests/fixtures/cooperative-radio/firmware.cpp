@@ -9,36 +9,10 @@ template<typename... T> void info(const char*, T...) {}
 template<typename... T> void error(const char*, T...) {}
 struct FrisquetRadio {
     struct RadioTrameHeader { byte bytes[6]; };
-    byte payload[4] = {0x19,0x02,0x00,0x00};
-    size_t responseLength = 11;
-    byte declaredLength = 4;
-    int result = 0, calls = 0;
-    int16_t sendAsk(uint8_t from,uint8_t to,uint8_t association,uint8_t message,
-                    uint8_t reception,uint16_t address,uint16_t words,
-                    byte* response,size_t& length,uint8_t attempts) {
-        ++calls;
-        assert(from==0x7E && to==ID_CHAUDIERE && association==0xAC && message==1);
-        assert(reception==1 && address==0x7541 && words==2 && attempts==1);
-        assert(length==11);
-        response[6]=declaredLength;
-        memcpy(response+7,payload,4);
-        length=responseLength;
-        return result;
-    }
+
 };
-struct Config { bool passive=false;bool useConnectPassive(){return passive;} uint8_t boilerId(){return 0x80;} };
 struct Connect {
     BoilerFirmware _boilerFirmware;
-    FrisquetRadio radioMock;
-    Config cfg;
-    bool associated = true;
-    Config& getConfig(){return cfg;}
-    bool estAssocie(){return associated;}
-    FrisquetRadio& radio(){return radioMock;}
-    uint8_t getId(){return 0x7E;}
-    uint8_t getIdAssociation(){return 0xAC;}
-    uint8_t incrementIdMessage(){return 1;}
-    bool recupererVersionFirmware();
     bool setVersionFirmware(const byte* response, size_t length);
 };
 
@@ -70,31 +44,12 @@ int main() {
     assert(!version.decode(nullptr,4));
     assert(!version.decode(newVersion,3));
     assert(!version.decode(newVersion,5));
-    Connect c;
-    assert(c.recupererVersionFirmware() && c.radioMock.calls==1 && c._boilerFirmware.directPower());
-    c.radioMock.result=-6;
-    assert(!c.recupererVersionFirmware() && !c._boilerFirmware.known && c._boilerFirmware.power(200)==20.0f);
-    c.radioMock.result=0;
-    for(size_t length=0;length<11;++length) {
-        c.radioMock.responseLength=length;
-        assert(!c.recupererVersionFirmware() && !c._boilerFirmware.known);
-    }
-    c.radioMock.responseLength=11;c.radioMock.declaredLength=3;
-    assert(!c.recupererVersionFirmware());
-    c.radioMock.declaredLength=4;c.radioMock.payload[3]=0xFF;
-    assert(!c.recupererVersionFirmware());
-    const int calls=c.radioMock.calls;
-    c.cfg.passive=true;
-    assert(!c.recupererVersionFirmware() && c.radioMock.calls==calls);
-    c.cfg.passive=false;c.associated=false;
-    assert(!c.recupererVersionFirmware() && c.radioMock.calls==calls);
     // Capture réelle : demande 80 7E 6E 1C 01 03 75 41 00 02.
     const byte captured[]={0x7E,0x80,0x6E,0x1C,0x81,0x03,0x04,0x19,0x02,0x00,0x11};
     Connect passive;
-    passive.cfg.passive=true;
     assert(passive.setVersionFirmware(captured,sizeof(captured)));
     assert(passive._boilerFirmware.major==19 && passive._boilerFirmware.minor==2 && passive._boilerFirmware.build==11);
-    assert(passive._boilerFirmware.power(20)==20.0f && passive.radioMock.calls==0);
+    assert(passive._boilerFirmware.power(20)==20.0f);
     assert(!passive.setVersionFirmware(nullptr,11));
     for(size_t length=0;length<sizeof(captured);++length) {
         assert(!passive.setVersionFirmware(captured,length));
@@ -108,6 +63,6 @@ int main() {
     byte oldResponse[sizeof(captured)];memcpy(oldResponse,captured,sizeof(captured));
     memcpy(oldResponse+7,oldVersion,4);
     assert(passive.setVersionFirmware(oldResponse,sizeof(oldResponse)));
-    assert(passive._boilerFirmware.power(200)==20.0f && passive.radioMock.calls==0);
-    puts("OK: firmware BCD, threshold 19.02.0000, power scales, one startup read, passive capture 19.02.0011 without transmission, preserved known version and invalid/failed responses");
+    assert(passive._boilerFirmware.power(200)==20.0f);
+    puts("OK: firmware BCD, threshold 19.02.0000, power scales, passive capture 19.02.0011, preserved known version and invalid/failed responses");
 }

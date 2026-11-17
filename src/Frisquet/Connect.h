@@ -22,6 +22,7 @@ class Connect : public FrisquetDevice {
 
         void begin();
         void loop();
+        void pollReads();
 
         using MODE_ECS = Chaudiere::MODE_ECS;
 
@@ -50,10 +51,6 @@ class Connect : public FrisquetDevice {
 
         bool envoyerZone(Zone& zone);
         bool envoyerModeECS();
-        bool recupererInformations();
-        bool recupererConsommation();
-        bool recupererConsommationAnnuelle(bool anneePrecedente = false);
-        bool recupererModeECS();
 
         float getTemperatureExterieure();
         float getTemperatureECS();
@@ -87,10 +84,10 @@ class Connect : public FrisquetDevice {
         void setConsommationECS(int16_t consommation);
         void setConsommationChauffage(int16_t consommation);
         bool setConsommationAnnuelle(const byte* donnees, size_t length, bool anneePrecedente = false);
-        bool recupererVersionFirmware();
-        bool applyInformation(const byte* data, size_t length);
+        bool applyInformation(const byte* data, size_t length, const uint32_t* zoneChanges = nullptr);
         bool applyConsumption(const byte* data, size_t length);
         bool applyEcs(const byte* data, size_t length);
+
         bool setVersionFirmware(const byte* response, size_t length);
         BoilerFirmware _boilerFirmware;
 
@@ -114,6 +111,14 @@ class Connect : public FrisquetDevice {
         RadioSchedule _consommationSchedule;
         RadioSchedule _ecsSchedule;
         bool _initialReadPending = true;
+        enum class ReadKind : uint8_t { Firmware, Information, Consumption, Annual, PreviousAnnual, Ecs, None };
+        void startReads(ReadKind first, ReadKind last);
+        void completeRead(bool success, int16_t result);
+        // Une collecte parcourt un intervalle contigu de lectures ; None signifie repos.
+        ReadKind _readKind = ReadKind::None, _lastRead = ReadKind::None;
+        uint8_t _readAttempts = 0, _readAssociation = 0, _readBoiler = 0;
+        uint32_t _readDeadline = 0, _readGeneration = 0;
+        uint32_t _readZoneChanges[3] = {};
         uint8_t _modeECSFrameBits = 0x01;
         bool _modeEcsCommandPending = false;
         MODE_ECS _requestedModeEcs = MODE_ECS::INCONNU;

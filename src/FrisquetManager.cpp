@@ -107,6 +107,9 @@ void FrisquetManager::loop()
     _satelliteZ1.pollObservation();
     _satelliteZ2.pollObservation();
     _satelliteZ3.pollObservation();
+    // Vérifier configuration/annulation avant une éventuelle émission. Les
+    // résultats doivent aussi être consommés avant le retour busy().
+    _connect.pollReads();
     if (_radio.busy()) return;
 
     if (FrisquetRadio::receivedFlag || _radio.hasReceivedPacket() || _radio.hasBufferedPacket()) {
@@ -121,6 +124,7 @@ void FrisquetManager::loop()
     if (_cfg.useConnect()) {
         _connect.loop();
     }
+    if (_radio.busy()) return;
     
     if (_cfg.useSondeExterieure()) {
         _sondeExterieure.loop();

@@ -23,9 +23,9 @@ test('boiler activity and anomaly stay independent on the dashboard', () => {
       context.render({ boiler: { enabled: true, state, anomaly, hotWaterMode: 'Eco' } });
       assert.equal(elements.get('#boilerState').textContent, state);
       assert.equal(elements.get('#boilerAnomaly').textContent,
-        anomaly == null ? 'Anomalie · inconnue' : anomaly ? 'Anomalie détectée' : 'Aucune anomalie');
+        anomaly == null ? 'Anomalie · en attente de données' : anomaly ? 'Anomalie détectée' : 'Aucune anomalie');
       assert.equal(elements.get('#boilerAnomaly').className,
-        'status ' + (anomaly == null ? 'warn' : anomaly ? 'bad' : 'ok'));
+        'status ' + (anomaly == null ? '' : anomaly ? 'bad' : 'ok'));
       assert.equal(elements.get('#hotWaterMode').textContent, 'ECS · Eco');
     }
   }

@@ -1,4 +1,6 @@
 :root{color-scheme:light}
+footer > a{display:inline-block;margin-top:12px}
+footer > a img{display:block;height:50px;width:auto;border:0}
 :root[data-theme="dark"]{
   color-scheme:dark;
   --bg:#101722;--surface:#1b2635;--card:#1b2635;--soft:#222f40;--surface-soft:#222f40;

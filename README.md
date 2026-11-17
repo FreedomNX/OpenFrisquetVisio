@@ -49,6 +49,11 @@ Deux modes possibles :
   - **Configuration d'un boost consigne** (écrasement de la consigne envoyé par le satellite)
   - **Affichage du mode actif** (Auto, Confort, Réduit, Hors Gel)
 
+En mode satellite physique, les réponses de neuf octets à une lecture d'un mot
+(par exemple `A033` sur un satellite ancien) sont prises en charge : ambiance,
+consigne et mode proviennent de la trame du satellite. La date et l'état chaudière
+ne sont actualisés par cet échange que lorsqu'il contient le grand bloc zones.
+
 Les satellites virtuels utilisent un cycle fixe de 10 minutes, sur l'heure
 chaudière : Z1 de `HH:x0:30` à `HH:x0:54`, Z2 de `HH:x0:54` à `HH:x1:18`,
 Z3 de `HH:x1:18` à `HH:x1:42` (borne de fin exclue). Une modification locale

@@ -541,7 +541,8 @@ void Satellite::pollObservation() {
 bool Satellite::applyObservation(byte* request, byte* buffZones, size_t lengthRx) {
     ReadBuffer readBuffer(request, sizeof(_observationPacket));
     auto* header = (FrisquetRadio::RadioTrameHeader*)readBuffer.getBytes(sizeof(FrisquetRadio::RadioTrameHeader));
-    readBuffer.getBytes(sizeof(FrisquetRadio::RadioTrameInit));
+    FrisquetRadio::RadioTrameInit requete;
+    readBuffer.getBytes((byte*)&requete, sizeof(requete));
     struct donneesSatellite_t {
         temperature16 temperatureAmbiante;
         temperature16 temperatureConsigne;
@@ -552,8 +553,9 @@ bool Satellite::applyObservation(byte* request, byte* buffZones, size_t lengthRx
 
     byte modeObserve = MODE::INCONNU;
     if(! getEcrasement()) {
-        if (lengthRx < sizeof(*header) + 1 || buffZones[2] != header->idAssociation
-            || buffZones[sizeof(*header)] != lengthRx - sizeof(*header) - 1) return false;
+        if (!buffZones || lengthRx < sizeof(*header) + 1 || buffZones[2] != header->idAssociation
+            || buffZones[sizeof(*header)] != lengthRx - sizeof(*header) - 1
+            || buffZones[sizeof(*header)] != 2U * requete.tailleMemoireLecture.toUInt16()) return false;
         readBuffer = ReadBuffer(buffZones, lengthRx);
 
         struct donneesZones_t {
@@ -581,23 +583,30 @@ bool Satellite::applyObservation(byte* request, byte* buffZones, size_t lengthRx
             byte i7[4] = {0x00, 0x00, 0x00, 0x00};
         }* donneesZones = (donneesZones_t*)readBuffer.getBytes(sizeof(donneesZones_t));
 
-        if(lengthRx < sizeof(donneesZones_t)) {
-            return false;
-        }
+        const bool blocZones = requete.adresseMemoireLecture.toUInt16() == 0xA029
+            && requete.tailleMemoireLecture.toUInt16() == 0x0015
+            && lengthRx >= sizeof(donneesZones_t);
+        const bool lectureUnMot = requete.tailleMemoireLecture.toUInt16() == 1
+            && lengthRx == sizeof(*header) + 1 + 2;
+        if (!blocZones && !lectureUnMot) return false;
 
         confirmerChaudiere(header->idDestinataire);
 
-        // Ces octets utilisent le format A02F (ex. 0x25 = Auto
-        // Confort), pas l'énumération Zone::MODE_ZONE d'A154.
-        switch(getNumeroZone()) {
-            case 1: modeObserve = donneesZones->modeZ1; break;
-            case 2: modeObserve = donneesZones->modeZ2; break;
-            case 3: modeObserve = donneesZones->modeZ3; break;
-        }
+        // Les anciens satellites lisent un seul mot (ex. A033) et reçoivent
+        // neuf octets. Ambiance, consigne et mode restent dans leur requête ;
+        // seule la réponse A029 complète fournit les informations chaudière.
+        if (blocZones) {
+            // Format A02F (ex. 0x25 = Auto Confort), distinct d'A154.
+            switch(getNumeroZone()) {
+                case 1: modeObserve = donneesZones->modeZ1; break;
+                case 2: modeObserve = donneesZones->modeZ2; break;
+                case 3: modeObserve = donneesZones->modeZ3; break;
+            }
 
-        setEtatChaudiere(donneesZones->etatChaudiere);
-        Date date = donneesZones->date;
-        setDate(date);
+            setEtatChaudiere(donneesZones->etatChaudiere);
+            Date date = donneesZones->date;
+            setDate(date);
+        }
     }
 
     setIdAssociation(header->idAssociation);

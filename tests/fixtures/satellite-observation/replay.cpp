@@ -45,7 +45,8 @@ struct temperature16 : fword {float toFloat() const { return toUInt16() / 10.0f;
 struct Date {Date(const byte*) {}};
 struct Chaudiere {
     struct ETAT_CHAUDIERE {};
-    void setEtatChaudiere(byte) {}
+    unsigned stateUpdates=0;
+    void setEtatChaudiere(byte) {++stateUpdates;}
     ETAT_CHAUDIERE getEtatChaudiere() {return {};}
 };
 class FrisquetRadio {
@@ -57,6 +58,7 @@ public:
 struct FrisquetDevice {
     FrisquetRadio& link;
     byte id, association = 0, message = 0;
+    unsigned dateUpdates=0;
     FrisquetDevice(FrisquetRadio& radio, Config&, MqttManager&, byte id): link(radio), id(id) {}
     FrisquetRadio& radio() {return link;}
     byte getId() {return id;}
@@ -65,7 +67,7 @@ struct FrisquetDevice {
     void setIdMessage(byte n) {message=n;}
     void setIdAssociation(byte n) {association=n;}
     void incrementIdMessage(byte n) {message+=n;}
-    void setDate(Date) {}
+    void setDate(Date) {++dateUpdates;}
     void confirmerChaudiere(byte boiler) {assert(BoilerIdentity::valid(boiler));}
 };
 #include "classes.inc"
@@ -217,5 +219,61 @@ int main() {
         assert(zone._modeObserve==Zone::INCONNU && mqtt.publications==0);
     }
 
-    puts("OK : modes synthétiques, commandes en attente, annulation, sélection de zone, modes invalides et réponses tronquées.");
+    // Capture Prestige 2012 : le satellite lit un seul mot A033, et non le
+    // grand bloc A029. La réponse complète ne fait donc que neuf octets.
+    const std::vector<byte> legacyRequest={
+        0x80,0x08,0xB0,0x10,0x01,0x17,0xA0,0x33,0x00,0x01,
+        0xA0,0x2F,0x00,0x04,0x08,0x00,0xE1,0x00,0xD7,0x00,0x01,0x00,0xD2};
+    const std::vector<byte> legacyReply={0x08,0x80,0xB0,0x10,0x81,0x17,0x02,0x00,0xC6};
+    for(byte boilerId: {0x80,0x84}) for(byte zoneId: {8,9,10}) {
+        // Seule Z1 est capturée ; les autres combinaisons vérifient le routage.
+        for(unsigned scenario=0;scenario<9;++scenario) {
+            MqttManager mqtt;Config config;FrisquetRadio radio;Chaudiere boiler;
+            Zone zone(zoneId,mqtt);zone.setSource(Zone::SATELLITE_PHYSIQUE);zone._mqttPret=true;
+            Satellite satellite(radio,config,mqtt,zone,boiler);
+            auto request=legacyRequest;request[0]=boilerId;request[1]=zoneId;
+            request[11]+=5*(zoneId-8);
+            radio.reply=legacyReply;radio.reply[0]=zoneId;radio.reply[1]=boilerId;
+            if(scenario==1)radio.reply[2]^=1; // wrong association
+            if(scenario==2)radio.reply[6]=3; // inconsistent length
+            if(scenario==3)radio.reply.resize(8); // truncated word
+            if(scenario==4)radio.reply.clear(); // no reply
+            if(scenario==5)request[9]=0x15; // short reply to a long read
+            if(scenario==6){radio.reply.push_back(0);radio.reply[6]=3;} // malformed word
+            if(scenario==7)radio.reply[3]^=1; // wrong message
+            if(scenario==8)radio.reply[1]=0x20; // wrong boiler
+            assert(satellite.onReceive(request.data(),request.size()));
+            assert(!mqtt.publications);
+            satellite.pollObservation();
+            if(scenario==0) {
+                assert(zone._temperatureAmbiante==22.5f && zone.getTemperatureConsigne()==21.5f);
+                assert(zone._modeObserve==Zone::CONFORT);
+                assert(zone._mqttEntities.preset.value=="Confort" && mqtt.publications);
+                assert(satellite.getIdAssociation()==0xB0 && satellite.getIdMessage()==0x10);
+                // 00 C6 is not an ambient temperature, a date or boiler status.
+                assert(!satellite.dateUpdates && !boiler.stateUpdates);
+                assert(!satellite.onReceive(request.data(),request.size()));
+            } else {
+                assert(!mqtt.publications && zone._modeObserve==Zone::INCONNU);
+                assert(!satellite.dateUpdates && !boiler.stateUpdates);
+            }
+        }
+    }
+    // Sans grand bloc, ne pas confirmer un mode chaudière Connect inconnu,
+    // ni écraser une nouvelle commande reçue pendant cette lecture courte.
+    for(bool pending: {false,true}) {
+        MqttManager mqtt;Config config;FrisquetRadio radio;Chaudiere boiler;
+        Zone zone(8,mqtt);zone.setSource(Zone::CONNECT);zone._mqttPret=true;
+        zone.setMode(Zone::CONFORT);zone._lastChange=0;zone._lastEnvoi=0;
+        Satellite satellite(radio,config,mqtt,zone,boiler);
+        auto request=legacyRequest;radio.reply=legacyReply;
+        assert(satellite.onReceive(request.data(),request.size()));
+        if(pending){zone._lastChange=2;zone.setTemperatureConsigne(23.5f);}
+        satellite.pollObservation();
+        assert(zone._temperatureAmbiante==22.5f);
+        assert(zone.getTemperatureConsigne()==(pending ? 23.5f : 21.5f));
+        assert(zone._modeObserve==Zone::INCONNU);
+        assert(!satellite.dateUpdates && !boiler.stateUpdates);
+    }
+    puts("OK : modes, commandes en attente, réponses longues et capture ancienne A033 de neuf octets, validation et absence de données chaudière inventées.");
 }

@@ -191,19 +191,24 @@ async function reload(){
   if(pollInFlight) return;
   pollInFlight = true;
   stopPolling();
+  const controller = new AbortController();
+  const deadline = setTimeout(()=>controller.abort(), 10000);
   try{
     const limitParam = selLimit.value === "0" ? "500" : selLimit.value;
     const qs =
       "?limit=" + encodeURIComponent(limitParam) +
       "&level=RADIO&_=" + Date.now();
 
-    const r = await fetch("/api/logs"+qs,{cache:"no-store"});
+    const r = await fetch("/api/logs"+qs,{cache:"no-store",signal:controller.signal});
     const arr = await r.json();   // ["ligne1", "ligne2", ...]
     raw = arr.join("\n");
     render();
   }catch(e){
-    elLog.textContent = "Erreur chargement logs: " + e;
+    elLog.textContent = e.name === "AbortError"
+      ? "Délai de chargement des journaux dépassé."
+      : "Erreur chargement logs: " + e;
   } finally {
+    clearTimeout(deadline);
     pollInFlight = false;
     scheduleNextPoll();
   }

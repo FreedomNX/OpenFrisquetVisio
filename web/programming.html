@@ -61,7 +61,9 @@
       return ranges.length ? ranges.join(', ') : 'Aucune période Confort';
     }
     let zones=[],selected=null,draft=null,original='',revision='',dirty=false,brush=true,painting=false,busy=false,loading=false,polling=false;
-    function message(text,error=false) { $('#message').textContent=text; $('#message').className='message'+(error?' error':''); }
+    const LOAD_TIMEOUT_MESSAGE='Délai de chargement de la programmation dépassé.';
+    let messageVersion=0;
+    function message(text,error=false) { messageVersion++; $('#message').textContent=text; $('#message').className='message'+(error?' error':''); }
     function selectBrush(value) {
       brush=value; for(const [id,active] of [['comfort',value],['reduced',!value]]) {
         $('#'+id).classList.toggle('selected',active); $('#'+id).setAttribute('aria-pressed',String(active));
@@ -130,12 +132,15 @@
       if(manual && dirty && !confirm('Abandonner les modifications non enregistrées et recharger ?')) return;
       // Le rafraîchissement automatique ne désactive pas l’éditeur, pour éviter un clignotement toutes les 5 s.
       if(manual) {loading=true;refreshControls();} else polling=true;
+      const controller=new AbortController(),deadline=setTimeout(()=>controller.abort(),10000);
+      const messageVersionAtStart=messageVersion;
       try {
-        const response=await fetch('/api/programming',{cache:'no-store'});const data=await response.json();
+        const response=await fetch('/api/programming',{cache:'no-store',signal:controller.signal});const data=await response.json();
         if(busy) return;
         if(!response.ok || !data.ok) throw new Error(data.err || 'Chargement impossible.');
         const incoming=(data.zones||[]).filter(zone=>zone.enabled);
         for(const zone of incoming) decodeProgram(zone.program);
+        if($('#message').textContent===LOAD_TIMEOUT_MESSAGE) message('');
         const ids=incoming.map(zone=>String(zone.id)).join();zones=incoming;
         if(ids!==[...$('#zone').options].map(option=>option.value).join()) {
           $('#zone').replaceChildren();
@@ -147,8 +152,13 @@
           const requested=Number(new URLSearchParams(location.search).get('zone'));showZone(zones.some(zone=>zone.id===requested)?requested:zones[0].id);
         } else if(manual || (!dirty && zones.find(zone=>zone.id===selected).revision!==revision)) showZone(selected);
         else {$('#zone').value=String(selected);refreshControls();if(zones.find(zone=>zone.id===selected).revision!==revision) message('La programmation a changé ailleurs. Vos modifications sont conservées ; rechargez avant d’enregistrer.',true);}
-      } catch(error) {message(error.message || 'Impossible de charger la programmation.',true);}
-      finally {if(manual) loading=false; else polling=false;refreshControls();}
+      } catch(error) {
+        if(error.name==='AbortError') {
+          // Une ancienne lecture ne doit pas masquer un message plus récent, notamment une sauvegarde.
+          if(messageVersion===messageVersionAtStart) message(LOAD_TIMEOUT_MESSAGE,true);
+        } else message(error.message || 'Impossible de charger la programmation.',true);
+      }
+      finally {clearTimeout(deadline);if(manual) loading=false; else polling=false;refreshControls();}
     }
     async function save() {
       if(busy || loading || (!dirty && zones.find(zone=>zone.id===selected)?.known) || $('#editor').disabled) return;

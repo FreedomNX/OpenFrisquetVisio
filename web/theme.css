@@ -1,4 +1,6 @@
 :root{color-scheme:light}
+.footer-support{display:inline-block;margin-top:12px;max-width:100%}
+.footer-support img{display:block;height:auto;max-height:50px;max-width:100%;border:0}
 :root[data-theme="dark"]{
   color-scheme:dark;
   --bg:#101722;--surface:#1b2635;--card:#1b2635;--soft:#222f40;--surface-soft:#222f40;

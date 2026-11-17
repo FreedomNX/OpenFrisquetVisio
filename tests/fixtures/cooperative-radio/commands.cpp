@@ -36,7 +36,7 @@ struct Connect {
     void recupererVersionFirmware() { assert(false); }
     bool recupererInformations() { assert(false); return false; }
     bool recupererConsommation() { assert(false); return false; }
-    bool recupererConsommationAnnuelle() { assert(false); return false; }
+    bool recupererConsommationAnnuelle(bool = false) { assert(false); return false; }
     bool recupererModeECS() { assert(false); return false; }
     void publishMqtt() { assert(false); }
     void envoiZones() { assert(false); }

@@ -301,17 +301,17 @@ bool Connect::recupererConsommation() {
     return false;
 }
 
-// Consommation mensuelle de l'année en cours en kWh, de janvier à décembre :
-// chauffage puis ECS pour chaque mois (24 mots à partir de 0xA063).
-// 0xA07B contient l'année précédente.
+// Deux blocs contigus de 24 mots : année courante en 0xA063, précédente
+// en 0xA07B. Pour chaque année : janvier à décembre, chauffage puis ECS en kWh.
 struct ConsommationMensuelle {
     FrisquetRadio::RadioTrameHeader header;
     uint8_t longueurDonnees;
     fword mois[24];
 };
-static_assert(sizeof(ConsommationMensuelle) == 55, "La réponse A063 doit contenir 55 octets");
+static_assert(sizeof(ConsommationMensuelle) == 55, "Une année occupe 55 octets");
+static_assert(sizeof(ConsommationMensuelle) <= Radio::MAX_RX_PACKET_LENGTH, "Respecter la capacité RX");
 
-bool Connect::recupererConsommationAnnuelle() {
+bool Connect::recupererConsommationAnnuelle(bool anneePrecedente) {
     if(! estAssocie()) {
         return false;
     }
@@ -330,7 +330,7 @@ bool Connect::recupererConsommationAnnuelle() {
             this->getIdAssociation(),
             this->incrementIdMessage(),
             0x01,
-            0xA063,
+            anneePrecedente ? 0xA07B : 0xA063,
             0x0018,
             (byte*)&buff,
             length
@@ -341,25 +341,29 @@ bool Connect::recupererConsommationAnnuelle() {
             continue;
         }
 
-        return setConsommationAnnuelle((byte*)&buff, length);
+        return setConsommationAnnuelle((byte*)&buff, length, anneePrecedente);
     } while(retry++ < 1);
 
     return false;
 }
 
-bool Connect::setConsommationAnnuelle(const byte* donnees, size_t length) {
+bool Connect::setConsommationAnnuelle(const byte* donnees, size_t length, bool anneePrecedente) {
     ConsommationMensuelle resp;
     if (!donnees || length < sizeof(resp)) return false;
     memcpy(&resp, donnees, sizeof(resp));
     if (resp.longueurDonnees != sizeof(resp.mois)) return false;
-
-    int32_t chauffage = 0;
-    int32_t ecs = 0;
-    for (uint8_t mois = 0; mois < 12; mois++) {
-        chauffage += resp.mois[mois * 2].toInt16();
-        ecs += resp.mois[mois * 2 + 1].toInt16();
+    auto& destination = anneePrecedente ? _consommationsAnneePrecedente : _consommationsMensuelles;
+    int32_t chauffage = 0, ecs = 0;
+    for (uint8_t mois = 0; mois < 12; ++mois) {
+        destination.chauffage[mois] = resp.mois[mois * 2].toUInt16();
+        destination.ecs[mois] = resp.mois[mois * 2 + 1].toUInt16();
+        chauffage += destination.chauffage[mois];
+        ecs += destination.ecs[mois];
     }
-    _chaudiere.setConsommationAnnuelle(chauffage, ecs);
+    destination.dateReception = timeStatus() == timeNotSet ? 0 : ::now();
+    destination.disponibles = true;
+    // L'archive ne remplace jamais les cumuls de l'année courante dans MQTT.
+    if (!anneePrecedente) _chaudiere.setConsommationAnnuelle(chauffage, ecs);
     return true;
 }
 
@@ -725,6 +729,10 @@ bool Connect::handlePassiveReadResponse(uint16_t adresseMemoire, const byte* buf
         return true;
     }
 
+    if (adresseMemoire == 0xA07B) {
+        return setConsommationAnnuelle(buff, length, true);
+    }
+
     if (adresseMemoire == addrConsommationAnnuelle) {
         debug("[CONNECT] Réception des consommations mensuelles passives du Connect.");
         if (!setConsommationAnnuelle(buff, length)) return false;
@@ -929,6 +937,10 @@ void Connect::loop() {
             error("[CONNECT] Échec de la récupération initiale des consommations mensuelles.");
         }
         delay(100);
+        if (!recupererConsommationAnnuelle(true)) {
+            error("[CONNECT] Échec de la récupération de l'année précédente.");
+        }
+        delay(100);
         if (recupererModeECS()) {
             _lastRecuperationModeECS = millis();
         } else {
@@ -977,6 +989,10 @@ void Connect::loop() {
         delay(100);
         if (!recupererConsommationAnnuelle()) {
             error("[CONNECT] Échec de la récupération des consommations mensuelles.");
+        }
+        delay(100);
+        if (!recupererConsommationAnnuelle(true)) {
+            error("[CONNECT] Échec de la récupération de l'année précédente.");
         }
         publishMqtt();
         return;

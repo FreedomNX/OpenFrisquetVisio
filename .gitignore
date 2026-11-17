@@ -55,3 +55,8 @@ tests/fixtures/*
 !tests/test_cooperative_commands.py
 !tests/test_satellite_observation.py
 !tests/fixtures/satellite-observation/
+
+!tests/connect_fixture.py
+!tests/test_connect_decoding.py
+!tests/test_cooperative_read.py
+!tests/test_cooperative_connect.py

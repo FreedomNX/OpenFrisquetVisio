@@ -12,6 +12,7 @@ struct Service {
     unsigned calls = 0, polls = 0;
     void loop() { ++calls; }
     void pollObservation() { ++polls; }
+    void pollReads() {}
 };
 struct Config {
     bool useZone1() { return true; }
@@ -28,6 +29,7 @@ struct FrisquetRadio {
     bool occupied = false, packet = true;
     unsigned polls = 0;
     void pollObservation() { ++polls; }
+    void pollReads() {}
     bool busy() { return occupied; }
     bool hasReceivedPacket() { return packet; }
     bool hasBufferedPacket() { return false; }

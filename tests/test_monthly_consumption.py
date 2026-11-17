@@ -25,7 +25,6 @@ with tempfile.TemporaryDirectory(prefix="ofv-monthly-") as directory:
         + ";\n}\n" + extract(source, "struct ConsommationMensuelle") + ";\n"
     )
     (temp / "monthly-method.inc").write_text(extract(source, "bool Connect::setConsommationAnnuelle("))
-    (temp / "monthly-query.inc").write_text(extract(source, "bool Connect::recupererConsommationAnnuelle("))
     binary = temp / "test"
     subprocess.run([
         "c++", "-std=c++17", "-Wall", "-Wextra", "-Werror",

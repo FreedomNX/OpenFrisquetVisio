@@ -21,9 +21,10 @@ def stripped(path):
     return re.sub(r"^#.*\n", "", path.read_text(), flags=re.M)
 
 
-def write_radio_fixture(directory):
+def write_radio_fixture(directory, full_types=False):
     types = stripped(ROOT / "src/Frisquet/Utils.h")
-    types = extract(types, "struct fword") + ";"
+    if not full_types:
+        types = extract(types, "struct fword") + ";"
     (directory / "radio-types.inc").write_text(types + "\n")
     declarations = stripped(ROOT / "src/Buffer.h")
     declarations += stripped(ROOT / "src/Frisquet/FrisquetRadio.h")
@@ -38,6 +39,14 @@ def write_radio_fixture(directory):
         "int16_t FrisquetRadio::takeObservation(",
         "void FrisquetRadio::cancelObservation(",
         "void FrisquetRadio::setNetworkID(",
+        "bool FrisquetRadio::beginRead(",
+        "bool FrisquetRadio::ownsRead(",
+        "bool FrisquetRadio::readReady(",
+        "void FrisquetRadio::pollRead(",
+        "void FrisquetRadio::finishRead(",
+        "void FrisquetRadio::retryRead(",
+        "int16_t FrisquetRadio::takeRead(",
+        "void FrisquetRadio::cancelRead(",
         "void FrisquetRadio::cancelOperations(",
         "void FrisquetRadio::purgeBufferedPackets(",
         "bool FrisquetRadio::bufferUnexpectedPacket(",

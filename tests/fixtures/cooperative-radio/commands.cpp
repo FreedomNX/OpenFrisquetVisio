@@ -33,12 +33,9 @@ struct Connect {
              _lastRecuperationModeECS = 0, _lastEnvoiZone = 0;
     RadioSchedule _temperatureSchedules[3], _consommationSchedule, _ecsSchedule;
     Zone _zone1, _zone2, _zone3;
-    void recupererVersionFirmware() { assert(false); }
-    bool recupererInformations() { assert(false); return false; }
-    bool recupererConsommation() { assert(false); return false; }
-    bool recupererConsommationAnnuelle(bool = false) { assert(false); return false; }
-    bool recupererModeECS() { assert(false); return false; }
-    void publishMqtt() { assert(false); }
+    enum class ReadKind { Firmware, Information, Consumption, Annual, PreviousAnnual, Ecs, None };
+    ReadKind _readKind = ReadKind::None;
+    void startReads(ReadKind, ReadKind) { assert(false); }
     void envoiZones() { assert(false); }
     void loop();
     Config config;

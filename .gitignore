@@ -41,6 +41,7 @@ tests/*
 !tests/test_boiler_identity.py
 !tests/test_mqtt_reconnect_throttle.py
 !tests/test_wifi_scan_method.py
+!tests/test_temperature_encoding.py
 
 !tests/cooperative_radio_fixture.py
 !tests/test_cooperative_receive.py

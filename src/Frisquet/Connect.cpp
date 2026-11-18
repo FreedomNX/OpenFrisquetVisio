@@ -855,7 +855,7 @@ void Connect::pollReads() {
         request.idAssociation = getIdAssociation();
         request.idMessage = incrementIdMessage();
         request.idReception = 1;
-        if (radio().beginRead(getId(), request, address, words, _readKind == ReadKind::Firmware ? 1 : 5)) {
+        if (radio().beginRead(getId(), request, address, words, 5)) {
             if (_readKind == ReadKind::Information && !_readAttempts) {
                 // Protéger seulement les commandes reçues pendant cette lecture,
                 // sans figer les observations ultérieures si leur envoi échoue.

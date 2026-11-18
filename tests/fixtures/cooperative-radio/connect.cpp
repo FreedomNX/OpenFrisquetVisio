@@ -181,26 +181,67 @@ int main() {
         assert(model._zone1.ambient == 21.5f && model.boiler.heat == 456);
     }
 
-    // La lecture de version au démarrage dispose d’une émission et d’une réception.
-    // Un échec conserve les puissances divisées par dix et poursuit les lectures initiales.
-    FrisquetManager versionTimeout;
-    seconds = 0;
-    tick(versionTimeout, 0);
-    tick(versionTimeout, 30);
-    assert(address(versionTimeout._radio) == 0x7541);
-    tick(versionTimeout, 438);
-    assert(versionTimeout._radio.sent.size() == 1 &&
-           !versionTimeout._connect._boilerFirmware.known);
-    tick(versionTimeout, 537);
-    assert(!versionTimeout._radio.busy());
-    tick(versionTimeout, 538);
-    tick(versionTimeout, 568);
-    assert(address(versionTimeout._radio) == 0x79f2);
+    // Réponse au-delà de la première fenêtre de 408 ms, sur la première ou
+    // la dernière émission autorisée. Les services progressent et la lecture
+    // suivante utilise la bonne échelle de puissance pour les deux chaudières.
+    for (byte boiler : {0x80, 0x84}) {
+        for (unsigned transmission : {1U, 5U}) {
+            App delayedVersion;
+            auto &m = delayedVersion._frisquetManager;
+            m._cfg.boiler = boiler;
+            clockMs = seconds = 0;
+            for (unsigned i = 0; i < 1100 && m._radio.sent.size() < transmission; ++i)
+                delayedVersion.loop();
+            assert(m._radio.sent.size() == transmission && address(m._radio) == 0x7541);
+            for (unsigned i = 0; i < 60; ++i)
+                delayedVersion.loop(); // 600 ms après l'émission, sans réponse
+            assert(m._connect._readKind == Kind::Firmware && !m._connect._boilerFirmware.known);
+            assert(m._radio.sent.size() == transmission);
+            m._radio.packets.push_back(reply(m._radio));
+            delayedVersion.loop();
+            assert(m._connect._boilerFirmware.directPower() && m._radio.sent.size() == transmission);
+            for (unsigned i = 0; i < 20 && m._radio.sent.size() == transmission; ++i)
+                delayedVersion.loop();
+            assert(m._radio.sent.size() == transmission + 1);
+            assert(address(m._radio) == (boiler == 0x84 ? 0x7aba : 0x79f2));
+            auto power = reply(m._radio);
+            put(power.data, 41, 20);
+            put(power.data, 43, 30);
+            m._radio.packets.push_back(power);
+            delayedVersion.loop();
+            assert(m.boiler.powerEcs == 20.0f && m.boiler.powerHeat == 30.0f);
+            assert(delayedVersion._ota.calls == clockMs / 10 &&
+                   delayedVersion.portal.calls == delayedVersion._ota.calls &&
+                   delayedVersion._mqtt.calls == delayedVersion._ota.calls);
+        }
+    }
+
+    // Silence complet : cinq émissions et cinq fenêtres de réception chacune,
+    // puis libération de la radio. Le délai est borné, sans bloquer les services.
+    App silentVersion;
+    auto &versionTimeout = silentVersion._frisquetManager;
+    clockMs = seconds = 0;
+    silentVersion.loop();
+    for (unsigned i = 0; i < 1100 && versionTimeout._connect._readKind == Kind::Firmware; ++i)
+        silentVersion.loop();
+    assert(versionTimeout._connect._readKind == Kind::Information && !versionTimeout._radio.busy());
+    assert(versionTimeout._radio.sent.size() == 5 && !versionTimeout._connect._boilerFirmware.known);
+    assert(clockMs >= 5 * (30 + 5 * 408) && clockMs < 10600);
+    for (const auto &packet : versionTimeout._radio.sent)
+        assert(packet == versionTimeout._radio.sent.front());
+    assert(silentVersion._ota.calls == clockMs / 10 &&
+           silentVersion.portal.calls == silentVersion._ota.calls &&
+           silentVersion._mqtt.calls == silentVersion._ota.calls);
+
+    // L'échec garde le repli historique et laisse poursuivre les lectures initiales.
+    for (unsigned i = 0; i < 20 && versionTimeout._radio.sent.size() == 5; ++i)
+        silentVersion.loop();
+    assert(versionTimeout._radio.sent.size() == 6 && address(versionTimeout._radio) == 0x79f2);
     auto power = reply(versionTimeout._radio);
     put(power.data, 41, 200);
     put(power.data, 43, 300);
     versionTimeout._radio.packets.push_back(power);
-    tick(versionTimeout, 580);
+    silentVersion.loop();
     assert(versionTimeout.boiler.powerEcs == 20.0f && versionTimeout.boiler.powerHeat == 30.0f);
     assert(boot._connect.applyInformation(power.data.data(), power.data.size()));
     assert(boot.boiler.powerEcs == 200.0f && boot.boiler.powerHeat == 300.0f);

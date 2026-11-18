@@ -706,6 +706,11 @@ bool Connect::onReceive(byte* donnees, size_t length) {
                 return false;
             }
 
+            if(donneesZone.mode < Zone::MODE_ZONE::AUTO || donneesZone.mode > Zone::MODE_ZONE::HORS_GEL) {
+                error("[CONNECT] Zone %d : mode 0x%02X hors plage, trame ignorée.", zoneId, donneesZone.mode);
+                return false;
+            }
+
             getZone(zoneId).setProgrammation(donneesZone.programmation, true);
             getZone(zoneId).confirmerMode((Zone::MODE_ZONE)donneesZone.mode, donneesZone.modeOptions);
             // Conserver une commande locale en attente pendant l'acquisition.

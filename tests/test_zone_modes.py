@@ -309,7 +309,16 @@ int main(){
     cfg.passive=false;assert(!(programmationReadOnlyReason(cfg,bridge,remote,true)==""));
     bridge.associated=true;remote.setMode(Zone::CONFORT);
     assert(programmationReadOnlyReason(cfg,bridge,remote,true)=="");
-    puts("OK: native modes, Boost once, local schedule/expiry/restart, remote confirmation, passive controls");
+    // A received out-of-range mode keeps the current mode and options; INCONNU stays accepted.
+    Zone range(8,mqtt);initialize(range,Zone::SATELLITE_VIRTUEL);range.setMode(Zone::CONFORT);range.activerBoost();
+    const byte optionsBefore=range.getModeOptions();
+    range.setMode(static_cast<Zone::MODE_ZONE>(0x09));
+    assert(range.getMode()==Zone::CONFORT&&range.getModeOptions()==optionsBefore&&range.boostActif());
+    range.setMode(static_cast<Zone::MODE_ZONE>(0x00));
+    assert(range.getMode()==Zone::CONFORT&&range.getModeOptions()==optionsBefore);
+    range.setMode(Zone::REDUIT);assert(range.getMode()==Zone::REDUIT&&range.boostActif());
+    range.setMode(Zone::INCONNU);assert(range.getMode()==Zone::INCONNU);
+    puts("OK: native modes, Boost once, local schedule/expiry/restart, remote confirmation, passive controls, out-of-range mode");
 }
 '''
 with tempfile.TemporaryDirectory(prefix='frisquet-zone-modes-') as temp:

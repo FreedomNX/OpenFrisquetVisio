@@ -415,7 +415,6 @@ Zone::MODE_ZONE Zone::getMode() {
 }
 
 void Zone::setMode(MODE_ZONE mode, bool confort, bool derogation) {
-    _mode = mode;
     byte optionsMode;
     switch(mode) {
         case MODE_ZONE::AUTO:
@@ -430,9 +429,14 @@ void Zone::setMode(MODE_ZONE mode, bool confort, bool derogation) {
         case MODE_ZONE::HORS_GEL:
             optionsMode = 0x10;
             break;
+        case MODE_ZONE::INCONNU:
+            _mode = mode;
+            return;
         default:
+            // Valeur hors plage (trame inattendue) : conserver le mode courant.
             return;
     }
+    _mode = mode;
 
     // Même codage que Satellite::MODE pour les bits Confort, Dérogation,
     // Auto et Hors Gel. Préserver le Boost et les bits non interprétés.

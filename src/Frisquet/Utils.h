@@ -36,10 +36,11 @@ struct temperature8 {
         this->value = b0;
     }
     temperature8(float value) {
-        if(isnan(value)) {
-            value = 5;
-        }
-        this->value = uint8_t((round(value * 2.0f) / 2)*10) - 50;   // Début 5°C -> 0 - MAX 30°C -> 250, incrément 0,5
+        if (isnan(value)) value = 5;
+        value = value < 5 ? 5 : value > 30 ? 30 : value;
+        // Entier avant la conversion en octet : un float hors de [0, 255] converti en uint8_t est indéfini.
+        const int encoded = static_cast<int>(round(value * 2.0f)) * 5 - 50;
+        this->value = static_cast<uint8_t>(encoded);   // Début 5°C -> 0 - MAX 30°C -> 250, incrément 0,5
     }
 
     float toFloat() const {
@@ -96,9 +97,8 @@ struct temperature16 {
         memcpy(this->bytes, bytes, 2);
     }
     temperature16(float value) {
-        if(isnan(value)) {
-            value = 0;
-        }
+        if (isnan(value)) value = 0;
+        value = value < -3276.8f ? -3276.8f : value > 3276.7f ? 3276.7f : value;
         int16_t intValue = static_cast<int16_t>(round(value * 10.0f));
         this->bytes[0] = (intValue >> 8) & 0xFF;
         this->bytes[1] = intValue & 0xFF;

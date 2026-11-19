@@ -43,6 +43,20 @@ static bool parseUint16Hex(const String& input, uint16_t& out) {
   return true;
 }
 
+// Entier décimal dans [minimum, maximum]. Recevoir la String par référence
+// garde `end` valide pendant le contrôle de fin, même pour un argument
+// temporaire comme `_srv.arg(...)`, détruit seulement après l'appel.
+static bool parseDecimalArg(const String& input, unsigned long minimum, unsigned long maximum,
+                            uint16_t& out) {
+  char* end = nullptr;
+  const unsigned long value = strtoul(input.c_str(), &end, 10);
+  if (input.isEmpty() || !end || *end != '\0' || value < minimum || value > maximum) {
+    return false;
+  }
+  out = static_cast<uint16_t>(value);
+  return true;
+}
+
 static bool parseNetworkIdFromString(const String& s, NetworkID& out) {
   String hex = s;
   hex.trim();
@@ -1224,14 +1238,11 @@ void Portal::handleMemoryRead() {
   }
 
   if (_srv.hasArg("len")) {
-    char* end = nullptr;
-    unsigned long v = strtoul(_srv.arg("len").c_str(), &end, 10);
-    if (!end || *end != '\0' || v == 0 || v > 256) {
+    if (!parseDecimalArg(_srv.arg("len"), 1, 256, len)) {
       _srv.send(400, "application/json; charset=utf-8",
                 "{\"ok\":false,\"err\":\"Paramètre len invalide (1..256)\"}");
       return;
     }
-    len = static_cast<uint16_t>(v);
   }
 
   if (start > 0xFFFF - (len - 1)) {
@@ -1379,25 +1390,19 @@ void Portal::handleMemoryScan() {
   }
 
   if (_srv.hasArg("max")) {
-    char* end = nullptr;
-    unsigned long v = strtoul(_srv.arg("max").c_str(), &end, 10);
-    if (!end || *end != '\0' || v == 0 || v > 512) {
+    if (!parseDecimalArg(_srv.arg("max"), 1, 512, maxScan)) {
       _srv.send(400, "application/json; charset=utf-8",
                 "{\"ok\":false,\"err\":\"Paramètre max invalide (1..512)\"}");
       return;
     }
-    maxScan = static_cast<uint16_t>(v);
   }
 
   if (_srv.hasArg("step")) {
-    char* end = nullptr;
-    unsigned long v = strtoul(_srv.arg("step").c_str(), &end, 10);
-    if (!end || *end != '\0' || v == 0 || v > 256) {
+    if (!parseDecimalArg(_srv.arg("step"), 1, 256, step)) {
       _srv.send(400, "application/json; charset=utf-8",
                 "{\"ok\":false,\"err\":\"Paramètre step invalide (1..256)\"}");
       return;
     }
-    step = static_cast<uint16_t>(v);
   }
 
   if (_srv.hasArg("stopOnValid")) {

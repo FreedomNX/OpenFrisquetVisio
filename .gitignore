@@ -34,6 +34,7 @@ tests/*
 !tests/test_config_migration.py
 !tests/test_mqtt_discovery_cleanup.py
 !tests/test_portal_logs.py
+!tests/test_portal_numeric_args.py
 !tests/portal_logs_test.cpp
 !tests/test_logs_levels.py
 !tests/portal-polling.test.mjs

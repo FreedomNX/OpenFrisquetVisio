@@ -241,6 +241,11 @@ nécessitent une connexion ; les sessions expirent après 12 heures ou au
 redémarrage, et un changement de mot de passe déconnecte toutes les sessions.
 Le bouton **Se déconnecter** se trouve dans la même section.
 
+Les mots de passe WiFi et MQTT ne sont jamais réaffichés : le portail indique
+seulement qu’un mot de passe est enregistré. Laisser le champ vide le conserve ;
+cocher **Effacer le mot de passe enregistré** le supprime (réseau ouvert, broker
+sans mot de passe).
+
 ---
 
 ### 4️⃣ Association avec la chaudière

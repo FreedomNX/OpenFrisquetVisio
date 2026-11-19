@@ -16,6 +16,9 @@ class Config {
         bool _boilerIdKnown = false;
 
         Preferences _preferences;
+        // Faux si la configuration n'a pas pu être lue : les valeurs par défaut
+        // en mémoire ne doivent alors pas écraser celles enregistrées.
+        bool _loaded = false;
 
         bool _useConnect = false;
         bool _developerMode = false;

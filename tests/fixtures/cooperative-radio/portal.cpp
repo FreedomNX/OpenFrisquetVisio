@@ -201,18 +201,30 @@ int main(int argc, char **argv) {
         }
     }
     if (std::string(argv[1]) == "config") {
-        for (const char *field :
-             {"wifiIp", "wifiGw", "wifiMask", "wifiDns1", "wifiDns2", "networkID"}) {
+        const std::pair<const char *, const char *> invalid[] = {
+            {"wifiIp", "invalide"}, {"wifiGw", "invalide"}, {"wifiMask", "invalide"},
+            {"wifiDns1", "invalide"}, {"wifiDns2", "invalide"}, {"networkID", "invalide"},
+            {"wifiHostname", "mon_heltec"}, {"wifiSsid", "0123456789abcdef0123456789abcdefX"},
+            {"wifiPass", "court"}, {"mqttBaseTopic", "frisquet/#"}};
+        for (const auto &[field, value] : invalid) {
             Portal p;
             reserve(p);
-            p._srv.args[field] = "invalide";
+            p._srv.args[field] = value;
             p.handlePostConfig();
             assert(p._srv.status == 400 && p.reboots == 0 && p._frisquetManager.cfg.saves == 0);
             assert(p._frisquetManager.r.ownsObservation(8));
+            const auto &cfg = p._frisquetManager.cfg;
+            assert(cfg.wifi.hostname.empty() && cfg.wifi.ssid.empty() && cfg.wifi.password.empty() &&
+                   cfg.mqtt.baseTopic.empty());
         }
         Portal accepted;
         reserve(accepted);
+        // Un mot de passe vide reste accepté (réseau ouvert).
+        accepted._srv.args = {{"wifiHostname", "open-frisquet-visio"}, {"wifiSsid", "MaBox"},
+                              {"wifiPass", ""}, {"mqttBaseTopic", "maison/frisquet"}};
         accepted.handlePostConfig();
+        assert(accepted._frisquetManager.cfg.wifi.hostname == "open-frisquet-visio" &&
+               accepted._frisquetManager.cfg.mqtt.baseTopic == "maison/frisquet");
         assert(accepted._srv.status == 200 && accepted.reboots == 1 &&
                accepted._frisquetManager.cfg.saves == 1);
         assert(!accepted._frisquetManager.r.ownsObservation(8) && accepted._frisquetManager.r.busy());

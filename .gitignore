@@ -58,6 +58,7 @@ tests/fixtures/*
 !tests/fixtures/ota-auth/
 !tests/fixtures/monthly-consumption/
 !tests/test_cooperative_portal.py
+!tests/test_portal_network_limits.py
 !tests/test_cooperative_commands.py
 !tests/test_satellite_observation.py
 !tests/fixtures/satellite-observation/

@@ -106,6 +106,40 @@ static bool isValidIPv4(const String& s) {
   return parts == 4;
 }
 
+// Limites du core Wi-Fi et de MQTT, vérifiées avant l'enregistrement.
+static bool fitsBytes(const String& s, size_t maximum) {
+  return s.length() <= maximum && strlen(s.c_str()) == s.length();
+}
+
+static bool isValidHostname(const String& s) {
+  // Le core copie le hostname dans 32 octets, NUL compris (RFC 1123 : lettres, chiffres, tirets).
+  if (s.isEmpty() || !fitsBytes(s, 31) || s[0] == '-' || s[s.length() - 1] == '-') return false;
+  for (size_t i = 0; i < s.length(); i++) {
+    const char c = s[i];
+    if (!((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') || c == '-')) return false;
+  }
+  return true;
+}
+
+static bool isValidWifiPassword(const String& s) {
+  // WPA : phrase de 8 à 63 caractères, ou clé de 64 chiffres hexadécimaux.
+  if (!fitsBytes(s, 64)) return false;
+  if (s.length() < 64) return s.length() >= 8;
+  for (size_t i = 0; i < s.length(); i++) {
+    const char c = s[i];
+    if (!((c >= '0' && c <= '9') || (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F'))) return false;
+  }
+  return true;
+}
+
+static bool isValidMqttBaseTopic(const String& s) {
+  // Les jokers + et # sont interdits dans un topic de publication. Vide : topics à la racine.
+  for (size_t i = 0; i < s.length(); i++) {
+    if (s[i] == '+' || s[i] == '#' || (uint8_t)s[i] < 0x20) return false;
+  }
+  return true;
+}
+
 static const char* resetReasonToString(esp_reset_reason_t reason) {
   switch (reason) {
     case ESP_RST_UNKNOWN: return "UNKNOWN";
@@ -812,6 +846,21 @@ void Portal::handlePostConfig() {
       }
       lnaBypass = value == "true" || value == "1";
     }
+  }
+  // Refuser ce que le core Wi-Fi ou le broker n'accepteraient pas, avant toute modification.
+  // Un mot de passe Wi-Fi vide n'est pas contrôlé : réseau ouvert.
+  const char* invalidNetwork = nullptr;
+  if (_srv.hasArg("wifiHostname") && !isValidHostname(_srv.arg("wifiHostname")))
+    invalidNetwork = "Hostname invalide (1 à 31 caractères : lettres, chiffres et tirets, sans tiret au début ni à la fin)";
+  else if (_srv.hasArg("wifiSsid") && !fitsBytes(_srv.arg("wifiSsid"), 32))
+    invalidNetwork = "SSID trop long (32 octets au plus)";
+  else if (!_srv.arg("wifiPass").isEmpty() && !isValidWifiPassword(_srv.arg("wifiPass")))
+    invalidNetwork = "Mot de passe Wi-Fi invalide (8 à 63 caractères, ou 64 chiffres hexadécimaux)";
+  else if (_srv.hasArg("mqttBaseTopic") && !isValidMqttBaseTopic(_srv.arg("mqttBaseTopic")))
+    invalidNetwork = "Préfixe MQTT invalide (sans + ni #)";
+  if (invalidNetwork) {
+    _srv.send(400, "application/json; charset=utf-8", String("{\"ok\":false,\"err\":\"") + invalidNetwork + "\"}");
+    return;
   }
 
   auto& w = _frisquetManager.config().getWiFiOptions();

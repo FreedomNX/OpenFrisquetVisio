@@ -42,6 +42,7 @@ tests/*
 !tests/test_firmware_version.py
 !tests/test_boiler_identity.py
 !tests/test_mqtt_reconnect_throttle.py
+!tests/test_mqtt_numeric_commands.py
 !tests/test_wifi_scan_method.py
 !tests/test_temperature_encoding.py
 

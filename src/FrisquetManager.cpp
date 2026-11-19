@@ -235,7 +235,7 @@ void FrisquetManager::onRadioReceive()
         info("[RADIO] Traitement données Satellite Z2");
         _satelliteZ2.onReceive(buff, length);
     } else if (header->idDestinataire == _satelliteZ3.getId() && _cfg.useSatelliteZ3() && _cfg.useSatelliteVirtualZ3()) {
-        info("[RADIO] Traitement données Satellite Z2");
+        info("[RADIO] Traitement données Satellite Z3");
         _satelliteZ3.onReceive(buff, length);
     } else if (header->idExpediteur == _satelliteZ1.getId() && _cfg.useSatelliteZ1() && !_cfg.useSatelliteVirtualZ1()) {
         info("[RADIO] Traitement données envoi Satellite Z1");

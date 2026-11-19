@@ -1,4 +1,5 @@
 #include "SondeExterieure.h"
+#include "NumberParsing.h"
 #include <math.h>
 
 void SondeExterieure::loadConfig() {
@@ -116,10 +117,10 @@ void SondeExterieure::begin() {
     _mqttEntities.tempExterieure.set("mode", "box");
     _mqttEntities.tempExterieure.set("step", "0.1");
     mqtt().onCommand(_mqttEntities.tempExterieure, [&](const String& payload) {
-            float temperature = payload.toFloat();
-            if(!isnan(temperature)) {
+            float temperature;
+            if(NumberParsing::finiteDecimal(payload.c_str(), temperature)) {
                 info("[SONDE EXTERIEURE] Modification manuelle de la température extérieure à %0.2f.", temperature);
-                setTemperatureExterieure(payload.toFloat());
+                setTemperatureExterieure(temperature);
                 mqtt().publishState(_mqttEntities.tempExterieure, getTemperatureExterieure());
             }
         });

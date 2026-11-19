@@ -1,5 +1,6 @@
 #include "Zone.h"
 #include "ZoneProgram.h"
+#include "NumberParsing.h"
 #include <TimeLib.h>
 #include <stdlib.h>
 
@@ -108,8 +109,9 @@ void Zone::begin() {
         _mqttEntities.temperatureAmbiante.set("step", "0.1");
         _mqttEntities.temperatureAmbiante.commandTopic = MqttTopic(MqttManager::compose({device->baseTopic, "z" + String(getNumeroZone()),"temperatureAmbiante", "set"}), 0, true);
         mqtt().onCommand(_mqttEntities.temperatureAmbiante, [&](const String& payload) {
-            float temperature = payload.toFloat();
-            if(!isnan(temperature)) {
+            float temperature;
+            // Mêmes bornes que l'entité découverte (0 à 50 °C) : pas de bornage plus loin.
+            if(NumberParsing::finiteDecimal(payload.c_str(), temperature) && temperature >= 0 && temperature <= 50) {
                 info("[ZONE Z%d] Modification de la température ambiante à %0.2f.", getNumeroZone(), temperature);
                 setTemperatureAmbiante(temperature);
                 mqtt().publishState(_mqttEntities.temperatureAmbiante, getTemperatureAmbiante());
@@ -153,8 +155,8 @@ void Zone::begin() {
     mqtt().registerEntity(*device, _mqttEntities.temperatureConfort, true);
     mqtt().onCommand(_mqttEntities.temperatureConfort, [&](const String& payload) {
         if(!pilotageDisponible()) return;
-        float temperature = payload.toFloat();
-        if(!isnan(temperature)) {
+        float temperature;
+        if(NumberParsing::finiteDecimal(payload.c_str(), temperature)) {
             info("[ZONE %d] Modification de la température confort à %0.2f.", getNumeroZone(), temperature);
             setTemperatureConfort(temperature);
             actualiserConsigne();
@@ -180,8 +182,8 @@ void Zone::begin() {
     mqtt().registerEntity(*device, _mqttEntities.temperatureReduit, true);
     mqtt().onCommand(_mqttEntities.temperatureReduit, [&](const String& payload) {
         if(!pilotageDisponible()) return;
-        float temperature = payload.toFloat();
-        if(!isnan(temperature)) {
+        float temperature;
+        if(NumberParsing::finiteDecimal(payload.c_str(), temperature)) {
             info("[ZONE %d] Modification de la température réduit à %0.2f.", getNumeroZone(), temperature);
             setTemperatureReduit(temperature);
             actualiserConsigne();
@@ -207,8 +209,8 @@ void Zone::begin() {
     mqtt().registerEntity(*device, _mqttEntities.temperatureHorsGel, true);
     mqtt().onCommand(_mqttEntities.temperatureHorsGel, [&](const String& payload) {
         if(!pilotageDisponible()) return;
-        float temperature = payload.toFloat();
-        if(!isnan(temperature)) {
+        float temperature;
+        if(NumberParsing::finiteDecimal(payload.c_str(), temperature)) {
             info("[ZONE %d] Modification de la température hors-gel à %0.2f.", getNumeroZone(), temperature);
             setTemperatureHorsGel(temperature);
             actualiserConsigne();
@@ -254,8 +256,8 @@ void Zone::begin() {
     mqtt().registerEntity(*device, _mqttEntities.temperatureBoost, true);
     mqtt().onCommand(_mqttEntities.temperatureBoost, [&](const String& payload) {
         if(!pilotageDisponible()) return;
-        float temperature = payload.toFloat();
-        if(!isnan(temperature)) {
+        float temperature;
+        if(NumberParsing::finiteDecimal(payload.c_str(), temperature)) {
             info("[ZONE %d] Modification de la température de boost à %0.2f.", getNumeroZone(), temperature);
             setTemperatureBoost(temperature);
             actualiserConsigne();

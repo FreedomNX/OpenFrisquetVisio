@@ -53,12 +53,20 @@ bool FrisquetDevice::associer(NetworkID& networkId, uint8_t& idAssociation) {
 
             logRadio(false, (byte*)&confirmPayload, sizeof(confirmPayload));
 
+            uint8_t confirmations = 0;
             for(uint8_t i = 0; i < 10; i++) {
                 err = radio().transmit((byte*)&confirmPayload, sizeof(confirmPayload));
                 if (err != RADIOLIB_ERR_NONE) {
                     continue;
                 }
+                ++confirmations;
                 delay(30);
+            }
+            // Sans aucune confirmation émise, la chaudière ignore l'appareil :
+            // ne pas déclarer l'association réussie, restaurer le réseau configuré.
+            if (confirmations == 0) {
+                error("[DEVICE] Association abandonnée : aucune confirmation émise (erreur %d).", err);
+                break;
             }
 
             idAssociation = donnees.header.idAssociation;

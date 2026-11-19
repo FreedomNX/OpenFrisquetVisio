@@ -5,6 +5,7 @@
 #include <Preferences.h>
 #include "../MQTT/MqttManager.h"
 #include "../Config.h"
+#include "BoilerIdentity.h"
 
 #include <TimeLib.h>
 
@@ -23,6 +24,20 @@ class FrisquetDevice {
 
         Date& getDate() { return _date; }
         void setDate(Date& date){ _date = date; setTime(_date.heure, _date.minute, _date.seconde, _date.jour, _date.mois, _date.annee); }
+        // Date BCD reçue d'une trame (YY MM DD hh mm ss) : l'horloge n'est réglée
+        // que si elle est valide, comme pour la lecture explicite de recupererDate().
+        bool setDateRecue(const byte* bcd) {
+            if (!BoilerIdentity::validDate(bcd)) {
+                debug("[RADIO] Date reçue invalide ignorée : %02X %02X %02X %02X %02X %02X.",
+                      bcd[0], bcd[1], bcd[2], bcd[3], bcd[4], bcd[5]);
+                return false;
+            }
+            byte copie[6];
+            memcpy(copie, bcd, sizeof(copie));
+            Date date(copie);
+            setDate(date);
+            return true;
+        }
         bool recupererDate();
         
         void setIdAssociation(uint8_t idAssociation) { _idAssociation = idAssociation; };

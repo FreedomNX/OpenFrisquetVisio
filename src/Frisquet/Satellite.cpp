@@ -206,8 +206,7 @@ bool Satellite::recupererInfosChaudiere() {
         }
 
         setEtatChaudiere(donneesZones.etatChaudiere);
-        Date date = donneesZones.date;
-        setDate(date);
+        setDateRecue(donneesZones.date);
         
         return true;
     } while(retry++ < 1);
@@ -329,8 +328,7 @@ bool Satellite::envoyerTemperatureAmbiante() {
         }
 
         setEtatChaudiere(donneesZones.etatChaudiere);
-        Date date = donneesZones.date;
-        setDate(date);
+        setDateRecue(donneesZones.date);
         
         return true;
     } while(retry++ < 1);
@@ -448,8 +446,7 @@ bool Satellite::envoyerConsigne() {
         else _zone.confirmerMode();
         debug("[SATELLITE Z%d] Retour état chaudière : 0x%02X", getNumeroZone(), donneesZones.etatChaudiere);
         debug("[SATELLITE Z%d] Retour état chaudière : %s", getNumeroZone(), getEtatChaudiere().getLibelle().c_str());
-        Date date = donneesZones.date;
-        setDate(date);
+        setDateRecue(donneesZones.date);
         
         return true;
     } while(retry++ < 1);
@@ -604,8 +601,7 @@ bool Satellite::applyObservation(byte* request, byte* buffZones, size_t lengthRx
             }
 
             setEtatChaudiere(donneesZones->etatChaudiere);
-            Date date = donneesZones->date;
-            setDate(date);
+            setDateRecue(donneesZones->date);
         }
     }
 

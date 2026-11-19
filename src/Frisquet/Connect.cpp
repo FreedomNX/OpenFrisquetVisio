@@ -583,8 +583,7 @@ bool Connect::handlePassiveReadResponse(uint16_t adresseMemoire, const byte* buf
         }
         memcpy(&resp, buff, sizeof(resp));
 
-        Date date = resp.date;
-        setDate(date);
+        setDateRecue(resp.date);
         return true;
     }
 

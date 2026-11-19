@@ -68,6 +68,7 @@ struct FrisquetDevice {
     void setIdAssociation(byte n) {association=n;}
     void incrementIdMessage(byte n) {message+=n;}
     void setDate(Date) {++dateUpdates;}
+    bool setDateRecue(const byte* bcd) {if(!BoilerIdentity::validDate(bcd)) return false; ++dateUpdates; return true;}
     void confirmerChaudiere(byte boiler) {assert(BoilerIdentity::valid(boiler));}
 };
 #include "classes.inc"

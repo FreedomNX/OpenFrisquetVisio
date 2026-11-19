@@ -78,8 +78,7 @@ bool SondeExterieure::envoyerTemperatureExterieure() {
             continue;
         }
 
-        Date date = Date(donnees.date);
-        setDate(date);
+        setDateRecue(donnees.date);
         
         return true;
     } while(retry++ < 1);

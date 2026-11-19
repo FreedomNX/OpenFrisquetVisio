@@ -17,6 +17,8 @@ uint32_t clockMs = 0;
 uint32_t millis() { return clockMs; }
 void delay(uint32_t ms) { clockMs += ms; }
 void info(const char*, ...) {}
+unsigned errors = 0;
+void error(const char*, ...) { ++errors; }
 void logRadio(bool, byte*, size_t, float = 0) {}
 std::string byteArrayToHexString(byte*, size_t) { return "synthetique"; }
 
@@ -32,6 +34,7 @@ struct Radio {
 
     std::deque<Packet> packets;
     std::vector<std::vector<byte>> sent;
+    std::deque<int16_t> transmitResults; // Vide : émission réussie.
     NetworkID network;
     size_t length = 0;
     unsigned rearms = 0;
@@ -62,8 +65,13 @@ struct Radio {
     float getLastPacketRSSI() { return -50; }
 
     int16_t transmit(byte* data, size_t n) {
-        sent.emplace_back(data, data + n);
         armed = false;
+        if (!transmitResults.empty()) {
+            const int16_t result = transmitResults.front();
+            transmitResults.pop_front();
+            if (result != RADIOLIB_ERR_NONE) return result;
+        }
+        sent.emplace_back(data, data + n);
         return RADIOLIB_ERR_NONE;
     }
 
@@ -185,5 +193,29 @@ int main(int argc, char** argv) {
             }
         }
     }
-    puts("OK : délai expiré, CRC, trames ignorées, réseau restauré, nouvelle tentative et écoute après succès");
+    if (!manager) for (unsigned failures : {10U, 9U}) {
+        // Dix émissions de confirmation en échec : association refusée et réseau
+        // restauré ; une seule émission réussie suffit.
+        clockMs = 0; errors = 0;
+        FrisquetRadio radio;
+        Config cfg;
+        radio.network = cfg.network;
+        const NetworkID configured = cfg.network;
+        NetworkID output{9, 10, 11, 12};
+        byte association = 99;
+        radio.packets.push_back(announcement(0x80));
+        radio.transmitResults.assign(failures, -2);
+        const bool ok = FrisquetDevice{radio, cfg}.associer(output, association);
+        if (failures == 10) {
+            assert(!ok && errors == 1 && radio.sent.empty());
+            assert(same(output, NetworkID(9, 10, 11, 12)) && association == 99);
+            assert(cfg.boiler == BoilerIdentity::DEFAULT_ID && cfg.saves == 0);
+            assert(radio.accepts(configured) && radio.rearms == 1);
+        } else {
+            assert(ok && errors == 0 && radio.sent.size() == 1);
+            assert(same(output, NetworkID(5, 6, 7, 8)) && association == 55);
+            assert(radio.accepts(NetworkID(5, 6, 7, 8)));
+        }
+    }
+    puts("OK : délai expiré, CRC, trames ignorées, réseau restauré, nouvelle tentative, confirmations non émises et écoute après succès");
 }

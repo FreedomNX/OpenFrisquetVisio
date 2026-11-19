@@ -32,15 +32,21 @@ tests/*
 
 !tests/portal-theme.test.mjs
 !tests/test_config_migration.py
+!tests/test_config_load_failure.py
 !tests/test_mqtt_discovery_cleanup.py
 !tests/test_portal_logs.py
+!tests/test_portal_numeric_args.py
 !tests/portal_logs_test.cpp
+!tests/test_logs_levels.py
 !tests/portal-polling.test.mjs
 !tests/test_boiler_firmware.py
 !tests/test_firmware_version.py
 !tests/test_boiler_identity.py
+!tests/test_date_recue.py
 !tests/test_mqtt_reconnect_throttle.py
+!tests/test_mqtt_numeric_commands.py
 !tests/test_wifi_scan_method.py
+!tests/test_temperature_encoding.py
 
 !tests/cooperative_radio_fixture.py
 !tests/test_cooperative_receive.py

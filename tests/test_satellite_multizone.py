@@ -105,6 +105,7 @@ struct Satellite {
     void confirmerChaudiere(byte boiler){learnedBoiler=boiler;}
     void setEtatChaudiere(byte){}
     void setDate(Date&){}
+    bool setDateRecue(const byte*){return true;}
     bool setModeFromRaw(byte){return true;}
     MODE getMode(){return INCONNU;}
     bool envoyerConsigne(){return true;}

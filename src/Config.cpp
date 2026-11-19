@@ -16,8 +16,9 @@ void Config::load() {
 
   bool checkMigration = false;
 
-  if(!_preferences.begin("sysconfig", false)) {
-    error("[CONFIG] Impossible de charger la configuration.");
+  _loaded = _preferences.begin("sysconfig", false);
+  if(!_loaded) {
+    error("[CONFIG] Impossible de charger la configuration : sauvegarde désactivée jusqu'au redémarrage.");
   }
 
   // WIFI
@@ -93,8 +94,13 @@ void Config::load() {
 }
 
 void Config::save() {
+  if(!_loaded) {
+    error("[CONFIG] Sauvegarde refusée : la configuration n'a pas pu être lue au démarrage.");
+    return;
+  }
   if(!_preferences.begin("sysconfig", false)) {
     error("[CONFIG] Impossible de sauvegarder la configuration.");
+    return;
   }
 
   // WIFI

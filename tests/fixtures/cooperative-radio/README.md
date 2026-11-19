@@ -5,7 +5,7 @@ Python extraient les méthodes du firmware, puis compilent et exécutent les
 tests avec ASan et UBSan. Aucune copie des méthodes de production n'est
 maintenue dans les fixtures.
 
-- `connect.cpp` : plages de lectures, progression des services, annulation et commandes pendant les nouvelles tentatives.
+- `connect.cpp` : plages de lectures, version chaudière retardée ou absente, limites des tentatives, progression des services, annulation et commandes pendant les nouvelles tentatives.
 - `firmware.cpp` : version BCD et conversion des puissances.
 - `decoding.cpp` : validation des réponses Connect et conservation des valeurs en cas de troncature.
 - `read.cpp` : émission, réception coopérative, réservation du résultat et limites des tentatives.

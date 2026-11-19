@@ -73,7 +73,8 @@ int main() {
     assert(decode(realMulti, sizeof(realMulti), out + 1).status == Status::Invalid);
     for (uint8_t byte : out) assert(byte == 0xA5);
 
-    // Deux et trois changements dans une même suite sont rejetés dans les deux sens.
+    // Deux changements dans une même longue suite (au moins 64 zéros) sont
+    // réparés dans les deux sens ; trois restent rejetés.
     uint8_t intermediate[RAW_LENGTH];
     for (uint8_t count = 2; count <= 3; ++count) {
         for (bool extra : directions) {
@@ -83,9 +84,16 @@ int main() {
                 memcpy(damaged, intermediate, sizeof(damaged));
             }
             memset(out, 0xA5, sizeof(out));
-            const Result rejected = decode(damaged, sizeof(damaged), out);
-            assert(rejected.status == Status::Invalid && rejected.correctedBits == 0);
-            for (uint8_t byte : out) assert(byte == 0xA5);
+            const Result result = decode(damaged, sizeof(damaged), out + 1);
+            if (count == 2) {
+                assert(result.status == Status::Repaired && result.correctedBits == 2);
+                assert(result.adjustment == (extra ? -2 : 2));
+                assert(memcmp(out + 1, raw + 1, MAX_PAYLOAD) == 0);
+                assert(out[0] == 0xA5 && out[MAX_PAYLOAD + 1] == 0xA5);
+            } else {
+                assert(result.status == Status::Invalid && result.correctedBits == 0);
+                for (uint8_t byte : out) assert(byte == 0xA5);
+            }
         }
     }
     // Quatre zéros manquants dépassent la limite autorisée.
@@ -107,7 +115,9 @@ int main() {
         }
     }
 
-    // Ancien cas ambigu à plusieurs changements : aucune passe étendue autorisée.
+    // Ancien cas ambigu de la recherche étendue : -1 aux bits 95 et 286 (deux
+    // suites, non recherché) ou +2 au bit 411 (une suite de 99 zéros). Seule
+    // la seconde solution relève du modèle à un endroit et elle est unique.
     const uint8_t extendedAmbiguous[RAW_LENGTH] = {
         0x3F,0x64,0x3D,0x0A,0xFA,0xF0,0x03,0xAA,0x9E,0x59,0xAB,0x4E,
         0,0,0,0,0,0,0xBA,0xE4,0x49,0x98,0x5C,0x47,0,0,0,0,0,0,
@@ -115,9 +125,9 @@ int main() {
         0xBA,0xD6,0x18,0x29,0x65,0xC8,0x7A,0xA7,0xA1,0x60,
         0,0,0,0,0,0,0,0,0,0,0,0x02,0x91,0x96,0x55,0x78
     };
+    const Result extended = decode(extendedAmbiguous, RAW_LENGTH, out);
+    assert(extended.status == Status::Repaired && extended.bit == 411 && extended.adjustment == 2);
     memset(out, 0xA5, sizeof(out));
-    assert(decode(extendedAmbiguous, RAW_LENGTH, out).status == Status::Invalid);
-    for (uint8_t byte : out) assert(byte == 0xA5);
 
     // Ancien rejet à 14:28 : glissement + autre altération du CRC. Il doit
     // rester rejeté avec la recherche limitée à un seul changement.
@@ -153,6 +163,7 @@ int main() {
     for (uint8_t byte : out) assert(byte == 0xA5);
 
     // Glissement au milieu du paquet, vers le bit 256, et sur réponse courte.
+    // Deux glissements dans une suite plus courte que 64 zéros restent rejetés.
     const uint8_t slipLengths[] = {15, 49, 63};
     for (uint8_t length : slipLengths) {
         memset(raw, 0xAD, sizeof(raw));
@@ -164,8 +175,36 @@ int main() {
             slip(raw, damaged, start * 8 + 16, extra);
             assert(decode(damaged, sizeof(damaged), out).status == Status::Repaired);
             assert(memcmp(out, raw + 1, length) == 0);
+            slip(damaged, intermediate, start * 8 + 16, extra);
+            assert(decode(intermediate, sizeof(intermediate), out).status == Status::Invalid);
         }
     }
+
+    // Captures réelles du 31/10 (réponse de 63 octets, un zéro de trop deux
+    // fois) et du 09/11 (satellite, 49 octets, deux zéros perdus) : la seconde
+    // porte l'horodatage 26 11 09 08 40 12, cohérent avec sa réception.
+    const uint8_t realDoubleExtra[RAW_LENGTH] = {
+        0x3F,0x7E,0x80,0x6E,0x61,0x81,0x03,0x38,0x02,0xB1,0x03,0x29,0x01,0xF4,
+        0x04,0xF6,0x04,0xF6,0x02,0x1F,0,0,0,0,0,0,0,0,0x20,0,0,0x0D,
+        0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+        0x19,0x18,0x1A,0xB9,0xB4,0x1D,0x4A,0xAA
+    };
+    const uint8_t realDoubleExtraTail[] = {0x00,0x00,0x64,0x60,0x6A,0xE6};
+    Result real = decode(realDoubleExtra, RAW_LENGTH, out);
+    assert(real.status == Status::Repaired && real.adjustment == -2 && real.bit == 256);
+    assert(memcmp(out, realDoubleExtra + 1, 32) == 0);
+    assert(memcmp(out + 57, realDoubleExtraTail, sizeof(realDoubleExtraTail)) == 0);
+    const uint8_t realDoubleMissing[RAW_LENGTH] = {
+        0x31,0x08,0x80,0xAC,0x34,0x81,0x17,0x2A,0x00,0x4A,0x00,0x00,
+        0x26,0x11,0x09,0x08,0x40,0x12,0x28,0x01,0x00,0xC0,0x00,0xC3,
+        0x00,0x25,0x01,0x79,0x01,0x7C,0x04,0xF6,0,0,0,0,0,0,0,0,
+        0x04,0xF6,0,0,0,0,0,0,0,0x01,0x5D,0x04,0xAA,0xAA,0xAA,0x8C,
+        0xED,0xB7,0x97,0x0D,0x0C,0x8E,0x1D,0xE8,0x38,0x9C,0xAA,0x5C
+    };
+    const uint8_t realDoubleMissingTail[] = {0x04,0xF6,0,0,0,0,0,0,0,0};
+    real = decode(realDoubleMissing, RAW_LENGTH, out);
+    assert(real.status == Status::Repaired && real.adjustment == 2 && real.correctedBits == 2);
+    assert(memcmp(out + 39, realDoubleMissingTail, sizeof(realDoubleMissingTail)) == 0);
 
     // Formats courts et toutes les longueurs supportées : ignorer la marge.
     for (size_t length = HEADER_LENGTH; length <= MAX_PAYLOAD; ++length) {
@@ -195,5 +234,5 @@ int main() {
     for (size_t length = 0; length < MAX_PAYLOAD + 3; ++length)
         assert(decode(raw, length, out).status != Status::Repaired);
     assert(decode(raw, RAW_LENGTH + 1, out).status == Status::Invalid);
-    puts("OK: CRC, frames 6..63, single slips, rejection of multiple slips, ambiguity and bounds");
+    puts("OK: CRC, frames 6..63, single slips, double slips in long zero runs, rejection of other multiple slips, ambiguity and bounds");
 }

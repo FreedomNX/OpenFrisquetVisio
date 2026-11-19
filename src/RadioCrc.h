@@ -11,6 +11,9 @@ constexpr size_t MAX_PAYLOAD = 63;
 constexpr size_t RAW_LENGTH = 68;
 constexpr size_t HEADER_LENGTH = 6;
 constexpr size_t MIN_ZERO_RUN = 16;
+// Deux zéros ne sont ajoutés ou retirés que dans une longue suite (remplissage
+// des réponses de 63 octets), où ces doubles glissements ont été observés.
+constexpr size_t MIN_DOUBLE_ZERO_RUN = 64;
 
 enum class Status { Valid, Repaired, Invalid, Ambiguous, InvalidLength };
 inline const char* statusName(Status status) {
@@ -27,8 +30,8 @@ struct Result {
     Status status = Status::Invalid;
     size_t length = 0;
     size_t bit = 0; // Position dans la capture brute, MSB en premier.
-    int8_t adjustment = 0; // +1 : insérer un zéro, -1 : supprimer un zéro.
-    uint8_t correctedBits = 0; // Toujours 0 (aucune correction) ou 1.
+    int8_t adjustment = 0; // +1/+2 : insérer des zéros, -1/-2 : en supprimer.
+    uint8_t correctedBits = 0; // 0 (aucune correction), 1 ou 2 zéros.
 };
 
 inline uint16_t crc16(const uint8_t* data, size_t length) {
@@ -53,8 +56,9 @@ inline bool valid(const uint8_t* raw, size_t length) {
 }
 
 // Ne modifie jamais la capture d'origine, ni la sortie en cas de rejet.
-// Une seule insertion OU suppression de zéro, dans une seule suite après
-// l'en-tête. Aucune recherche de corrections à plusieurs bits.
+// Une seule insertion OU suppression d'un zéro, ou de deux zéros consécutifs
+// dans une suite d'au moins MIN_DOUBLE_ZERO_RUN bits, en un seul endroit après
+// l'en-tête. Aucune combinaison de changements dans plusieurs suites.
 // Les reconstructions identiques comptent une seule fois ; on examine toutes
 // les candidates avant d'accepter pour détecter une éventuelle ambiguïté.
 inline Result decode(const uint8_t* raw, size_t rawLength, uint8_t* payload) {
@@ -87,13 +91,19 @@ inline Result decode(const uint8_t* raw, size_t rawLength, uint8_t* payload) {
         if (bit - start < MIN_ZERO_RUN) continue;
         // Ne pas démarrer au milieu d'une suite commencée dans l'en-tête.
         if (!getBit(raw, start - 1)) continue;
-        for (int8_t adjustment = 1; adjustment >= -1; adjustment -= 2) {
+        // Toutes les candidates, à un et à deux zéros, comptent pour l'unicité.
+        const int8_t adjustments[] = {1, -1, 2, -2};
+        for (int8_t adjustment : adjustments) {
+            const size_t count = adjustment > 0 ? adjustment : -adjustment;
+            if (count == 2 && bit - start < MIN_DOUBLE_ZERO_RUN) continue;
+            // Une suppression lit des bits au-delà de la trame : ils doivent être capturés.
+            if (adjustment < 0 && frameLength * 8 + count > rawLength * 8) continue;
             memset(candidate, 0, frameLength);
             for (size_t out = 0; out < frameLength * 8; ++out) {
                 bool value;
                 if (out < start) value = getBit(raw, out);
-                else if (adjustment == 1) value = out == start ? false : getBit(raw, out - 1);
-                else value = getBit(raw, out + 1);
+                else if (adjustment > 0) value = out < start + count ? false : getBit(raw, out - count);
+                else value = getBit(raw, out + count);
                 if (value) candidate[out / 8] |= uint8_t(1U << (7 - out % 8));
             }
             if (!valid(candidate, result.length)) continue;
@@ -105,7 +115,7 @@ inline Result decode(const uint8_t* raw, size_t rawLength, uint8_t* payload) {
                 memcpy(unique, candidate, frameLength);
                 result.bit = start;
                 result.adjustment = adjustment;
-                result.correctedBits = 1;
+                result.correctedBits = static_cast<uint8_t>(count);
                 found = true;
             }
         }

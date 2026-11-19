@@ -583,8 +583,7 @@ bool Connect::handlePassiveReadResponse(uint16_t adresseMemoire, const byte* buf
         }
         memcpy(&resp, buff, sizeof(resp));
 
-        Date date = resp.date;
-        setDate(date);
+        setDateRecue(resp.date);
         return true;
     }
 
@@ -703,6 +702,11 @@ bool Connect::onReceive(byte* donnees, size_t length) {
             
             if(getZone(zoneId).getNumeroZone() == 0) {
                 error("[CONNECT] Impossible de mettre à jour la zone %d, numéro de zone invalide.", zoneId);
+                return false;
+            }
+
+            if(donneesZone.mode < Zone::MODE_ZONE::AUTO || donneesZone.mode > Zone::MODE_ZONE::HORS_GEL) {
+                error("[CONNECT] Zone %d : mode 0x%02X hors plage, trame ignorée.", zoneId, donneesZone.mode);
                 return false;
             }
 
@@ -855,7 +859,7 @@ void Connect::pollReads() {
         request.idAssociation = getIdAssociation();
         request.idMessage = incrementIdMessage();
         request.idReception = 1;
-        if (radio().beginRead(getId(), request, address, words, _readKind == ReadKind::Firmware ? 1 : 5)) {
+        if (radio().beginRead(getId(), request, address, words, 5)) {
             if (_readKind == ReadKind::Information && !_readAttempts) {
                 // Protéger seulement les commandes reçues pendant cette lecture,
                 // sans figer les observations ultérieures si leur envoi échoue.

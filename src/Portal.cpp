@@ -707,7 +707,8 @@ void Portal::handleGetConfig() {
   }
   json += "\"wifiHostname\":\"" + jsonEscape(String(w.hostname)) + "\",";
   json += "\"wifiSsid\":\"" + jsonEscape(String(w.ssid)) + "\",";
-  json += "\"wifiPass\":\"" + jsonEscape(String(w.password)) + "\",";
+  // Les mots de passe ne sont jamais relus : seulement s'ils sont enregistrés.
+  json += "\"wifiPassConfigured\":" + String(w.password.length() ? "true" : "false") + ",";
   json += "\"wifiStatic\":" + String(w.useStaticIp ? "true" : "false") + ",";
   json += "\"wifiIp\":\"" + jsonEscape(w.localIp.toString()) + "\",";
   json += "\"wifiGw\":\"" + jsonEscape(w.gateway.toString()) + "\",";
@@ -717,7 +718,7 @@ void Portal::handleGetConfig() {
   json += "\"mqttHost\":\"" + jsonEscape(String(m.host)) + "\",";
   json += "\"mqttPort\":" + jsonEscape(String(m.port)) + ",";
   json += "\"mqttUser\":\"" + jsonEscape(String(m.username)) + "\",";
-  json += "\"mqttPass\":\"" + jsonEscape(String(m.password)) + "\",";
+  json += "\"mqttPassConfigured\":" + String(m.password.length() ? "true" : "false") + ",";
   json += "\"mqttClientId\":\"" + jsonEscape(String(m.clientId)) + "\",";
   json += "\"mqttBaseTopic\":\"" + jsonEscape(String(m.baseTopic)) + "\",";
 
@@ -820,7 +821,10 @@ void Portal::handlePostConfig() {
   // Champs WiFi
   if (_srv.hasArg("wifiHostname")) w.hostname = _srv.arg("wifiHostname");
   if (_srv.hasArg("wifiSsid"))     w.ssid     = _srv.arg("wifiSsid");
-  if (_srv.hasArg("wifiPass"))     w.password = _srv.arg("wifiPass");
+  // Mot de passe vide ou absent : conserver celui enregistré. L'effacement
+  // (réseau ouvert, broker sans mot de passe) est demandé explicitement.
+  if (_srv.hasArg("wifiPass") && !_srv.arg("wifiPass").isEmpty()) w.password = _srv.arg("wifiPass");
+  else if (parseBoolArg(_srv.arg("wifiPassClear"), false)) w.password = "";
 
   // IP statique / DHCP
   if (_srv.hasArg("wifiStatic")) {
@@ -874,7 +878,8 @@ void Portal::handlePostConfig() {
   if (_srv.hasArg("mqttHost"))     m.host     = _srv.arg("mqttHost");
   if (_srv.hasArg("mqttPort"))     m.port     = (uint16_t)_srv.arg("mqttPort").toInt();
   if (_srv.hasArg("mqttUser"))     m.username = _srv.arg("mqttUser");
-  if (_srv.hasArg("mqttPass"))     m.password = _srv.arg("mqttPass");
+  if (_srv.hasArg("mqttPass") && !_srv.arg("mqttPass").isEmpty()) m.password = _srv.arg("mqttPass");
+  else if (parseBoolArg(_srv.arg("mqttPassClear"), false)) m.password = "";
   if (_srv.hasArg("mqttClientId")) m.clientId = _srv.arg("mqttClientId");
   if (_srv.hasArg("mqttBaseTopic"))m.baseTopic= _srv.arg("mqttBaseTopic");
 

@@ -153,7 +153,7 @@ struct Connect {
 };
 '''
 code += extract('bool Connect::envoyerZone(', (ROOT/'src/Frisquet/Connect.cpp').read_text())
-code += extract('static String programmationReadOnlyReason(', (ROOT/'src/Portal.cpp').read_text())
+code += extract('inline String programmationReadOnlyReason(', (ROOT/'src/ProgrammationPortail.h').read_text())
 code += r'''
 void Zone::saveConfig(){++saves;}
 void Zone::publishMqtt(){++publishes;actualiserDecouverte();publierMode();}
@@ -326,3 +326,25 @@ with tempfile.TemporaryDirectory(prefix='frisquet-zone-modes-') as temp:
     binary=Path(temp)/'test'
     subprocess.run(['c++','-std=c++11','-fsanitize=address,undefined','-fno-omit-frame-pointer','-I',str(ROOT/'src'),str(cpp),'-o',str(binary)],check=True)
     subprocess.run([str(binary)],check=True)
+
+FIXTURE = ROOT / "tests/fixtures/zone"
+for libs in sorted((ROOT / ".pio/libdeps").glob("*/")):
+    if (libs / "ArduinoJson/src/ArduinoJson.h").is_file() and (libs / "RadioLib/src/RadioLib.h").is_file():
+        break
+else:
+    raise SystemExit("Installer les dépendances avec pio pkg install -e heltec_wifi_lora_32_V3.")
+
+with tempfile.TemporaryDirectory() as directory:
+    binary = Path(directory) / "zone"
+    subprocess.run([
+        "c++", "-std=c++11", "-fsanitize=address,undefined", "-fno-omit-frame-pointer",
+        "-fno-sanitize-recover=undefined",
+        "-DBOARD_TTGO_LORA32", "-I", FIXTURE, "-I", ROOT / "include", "-I", ROOT / "src",
+        "-I", libs / "ArduinoJson/src", "-I", libs / "RadioLib/src",
+        FIXTURE / "scenarios.cpp", FIXTURE / "materiel.cpp",
+        ROOT / "src/Config.cpp", ROOT / "src/Frisquet/Zone.cpp", ROOT / "src/Frisquet/Connect.cpp",
+        ROOT / "src/Frisquet/Satellite.cpp", ROOT / "src/Frisquet/Chaudiere.cpp", ROOT / "src/Frisquet/FrisquetRadio.cpp",
+        ROOT / "src/Frisquet/FrisquetDevice.cpp", ROOT / "src/Frisquet/Utils.cpp",
+        "-o", binary,
+    ], check=True)
+    subprocess.run([binary], check=True)

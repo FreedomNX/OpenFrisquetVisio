@@ -58,6 +58,7 @@ tests/*
 !tests/fixtures/
 tests/fixtures/*
 !tests/fixtures/cooperative-radio/
+!tests/fixtures/zone/
 !tests/fixtures/pairing-recovery/
 !tests/fixtures/ota-auth/
 !tests/fixtures/monthly-consumption/

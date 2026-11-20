@@ -11,6 +11,7 @@ import re
 STATIC_ASSETS = (
     ("THEME_CSS", "theme.css", "text/css; charset=utf-8"),
     ("THEME_JS", "theme.js", "application/javascript; charset=utf-8"),
+    ("COMMANDE_ZONE_JS", "commande-zone.js", "application/javascript; charset=utf-8"),
     ("INDEX_HTML", "index.html", "text/html; charset=utf-8"),
     ("SETTINGS_HTML", "settings.html", "text/html; charset=utf-8"),
     ("PROGRAMMING_HTML", "programming.html", "text/html; charset=utf-8"),

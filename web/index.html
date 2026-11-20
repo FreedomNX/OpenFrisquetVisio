@@ -61,6 +61,7 @@
   </style>
   <link rel="stylesheet" href="/theme.css">
   <script src="/theme.js"></script>
+  <script src="/commande-zone.js"></script>
 </head>
 <body>
   <header class="topbar"><div class="shell topbar-inner">
@@ -135,7 +136,15 @@
     function renderZones(zones){
       const container=$("#zones");const enabled=(zones||[]).filter(zone=>zone.enabled);
       if(!enabled.length){container.innerHTML='<div class="empty">Aucune zone de chauffage n’est activée.</div>';return}
-      container.innerHTML=enabled.map(zone=>`<article class="zone"><div class="zone-head"><div class="zone-title"><span>🛋️</span><h3>Zone ${zone.id}</h3></div><span class="mode">${zone.mode||"Inconnu"}${zone.boost&&zone.mode!=="Boost"?" · Boost":""}</span></div><div class="zone-values"><div class="zone-value"><span>Ambiance</span><strong>${value(zone.ambientTemperature,"°C")}</strong></div><div class="zone-value"><span>Consigne</span><strong>${value(zone.setpointTemperature,"°C")}</strong></div><div class="zone-value"><span>Départ</span><strong>${value(zone.flowTemperature,"°C")}</strong></div><div class="zone-value"><span>Consigne départ</span><strong>${value(zone.flowSetpointTemperature,"°C")}</strong></div></div><div class="zone-source">Source : ${zone.source||"inconnue"}</div></article>`).join("")
+      container.innerHTML=enabled.map(zone=>`<article class="zone"><div class="zone-head"><div class="zone-title"><span>🛋️</span><h3>Zone ${zone.id}</h3></div><span class="mode">${zone.mode||"Inconnu"}${zone.boost&&zone.mode!=="Boost"?" · Boost":""}</span></div><div class="zone-values"><div class="zone-value"><span>Ambiance</span><strong>${value(zone.ambientTemperature,"°C")}</strong></div><div class="zone-value"><span>Consigne</span><strong>${value(zone.setpointTemperature,"°C")}</strong></div><div class="zone-value"><span>Départ</span><strong>${value(zone.flowTemperature,"°C")}</strong></div><div class="zone-value"><span>Consigne départ</span><strong>${value(zone.flowSetpointTemperature,"°C")}</strong></div></div><div class="zone-source">Source : ${zone.source||"inconnue"}</div><suivi-commande-zone data-zone="${zone.id}"></suivi-commande-zone></article>`).join("")
+      for(const carte of container.querySelectorAll?.("suivi-commande-zone") || []) {
+        const zone=enabled.find(item=>String(item.id)===carte.dataset.zone);
+        if(zone?.commande) carte.afficher(zone.commande, async () => {
+          const retour=await fetch("/api/commande/reessayer",{method:"POST",body:new URLSearchParams({zone:String(zone.id)})});
+          if(!retour.ok) throw new Error("Impossible de relancer la commande.");
+          await loadDashboard();
+        });
+      }
     }
     function renderMonthlyConsumption(data,prefix="monthlyConsumption"){
       const available=data&&Array.isArray(data.heating)&&Array.isArray(data.hotWater)&&data.heating.length===12&&data.hotWater.length===12;

@@ -34,6 +34,7 @@ tests/*
 !tests/test_sx1276_radio.py
 
 !tests/portal-theme.test.mjs
+!tests/commande-zone.test.mjs
 !tests/test_config_migration.py
 !tests/test_config_load_failure.py
 !tests/test_mqtt_discovery_cleanup.py

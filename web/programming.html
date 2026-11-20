@@ -82,7 +82,7 @@
       $('#changes').textContent=dirty?'Modifications non enregistrées':'Aucune modification';
       if(!zone) return;
       $('#mode').textContent='Mode actuel : '+zone.mode+'. Enregistrer ne change pas ce mode.';
-      $('#availability').textContent=!zone.editable ? zone.reason : !zone.known ? 'Aucune programmation connue. Le modèle affiché est Confort toute la journée ; vous pouvez définir votre semaine et l’enregistrer.' : zone.pending ? 'Programmation enregistrée. Envoi à la chaudière en attente…' : 'Programmation disponible.';
+      $('#availability').textContent=!zone.editable ? zone.reason : zone.failed ? 'Programmation non confirmée. La semaine demandée est affichée. Vous pouvez la modifier ou réessayer depuis la carte de la zone.' : !zone.known ? 'Aucune programmation connue. Le modèle affiché est Confort toute la journée ; vous pouvez définir votre semaine et l’enregistrer.' : zone.pending ? 'Programmation en attente de confirmation.' : 'Programmation disponible.';
     }
     function renderGrid() {
       $('#grid').replaceChildren();
@@ -171,8 +171,8 @@
         const response=await fetch('/api/programming',{method:'POST',body});const data=await response.json();
         if(!response.ok || !data.ok) throw new Error(data.err || 'Enregistrement impossible.');
         original=program;revision=data.revision;dirty=false;
-        const zone=zones.find(item=>item.id===selected);zone.program=program;zone.revision=revision;zone.known=true;zone.pending=data.pending===true;
-        message(zone.pending?'Programmation enregistrée. Elle sera envoyée à la chaudière au prochain cycle du Connect.':'Programmation enregistrée. Elle sera appliquée localement en mode Auto.');
+        const zone=zones.find(item=>item.id===selected);zone.program=program;zone.revision=revision;zone.known=true;zone.pending=data.pending===true;zone.failed=false;
+        message(zone.pending?'Programmation en attente de confirmation. Le suivi est visible sur la carte de la zone.':'Programmation enregistrée. Elle sera appliquée localement en mode Auto.');
       } catch(error) {message(error.message || 'Enregistrement impossible.',true);}
       finally {busy=false;refreshControls();}
     }

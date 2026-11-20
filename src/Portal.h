@@ -53,6 +53,7 @@ private:
   void handleProgrammationPage();
   void handleGetProgrammation();
   void handlePostProgrammation();
+  void handleReessaiZone();
   void handleGetConfig();        // GET /api/config
   void handlePostConfig();       // POST /api/config
   void handleReboot();           // POST /api/reboot

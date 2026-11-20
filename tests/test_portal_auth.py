@@ -35,7 +35,7 @@ methods = [extract(signature) for signature in (
 )]
 begin = methods[-1]
 # Only login and shared visual resources are public registrations.
-assert re.findall(r'_srv\.on\("([^"]+)"', begin) == ["/theme.css", "/theme.js", "/login", "/login"]
+assert re.findall(r'_srv\.on\("([^"]+)"', begin) == ["/theme.css", "/commande-zone.js", "/theme.js", "/login", "/login"]
 assert 'if (!requireAuthentication()) return;' in begin
 assert '"Cookie"' in begin
 assert "portalPassword" not in extract("void Portal::handleGetConfig(")
@@ -172,6 +172,7 @@ namespace WebAssets {
 struct StaticAsset{const uint8_t* gzipData;size_t gzipSize;const char* etag;const char* contentType;};
 const uint8_t* bytes(const char* text){return reinterpret_cast<const uint8_t*>(text);}
 const StaticAsset THEME_CSS={bytes("theme css"),9,"\"css\"","text/css; charset=utf-8"};
+const StaticAsset COMMANDE_ZONE_JS={bytes("suivi"),5,"\"suivi\"","application/javascript; charset=utf-8"};
 const StaticAsset THEME_JS={bytes("theme js"),8,"\"js\"","application/javascript; charset=utf-8"};
 const StaticAsset LOGO_PNG={bytes("logo png"),8,"\"png\"","image/png"};
 const StaticAsset INDEX_HTML={bytes("index"),5,"\"html\"","text/html; charset=utf-8"};
@@ -198,7 +199,7 @@ int main(){
     config._preferences.stored="";config.load();assert(config.portalPassword()=="admin");
     FrisquetManager fm;Portal p(fm);p.begin(false);assert(p._srv.cookiesCollected&&p._srv.etagsCollected);
     for(size_t i=0;i<p._srv.count;++i){
-        auto& r=p._srv.routes[i];if(r.uri=="/login"||r.uri=="/theme.css"||r.uri=="/theme.js")continue;
+        auto& r=p._srv.routes[i];if(r.uri=="/login"||r.uri=="/theme.css"||r.uri=="/theme.js"||r.uri=="/commande-zone.js")continue;
         p._srv.prepare(r.uri.c_str(),r.method);int before=p.handled;r.handler.run();
         assert(p.handled==before);assert(p._srv.code==(r.uri.startsWith("/api/")?401:303));
     }

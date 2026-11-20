@@ -176,7 +176,7 @@ class Zone {
         bool _statutConnu = false;
         byte _associationSatellite = 0;
         uint32_t _statut = 0, _ouverture = 0, _debutPeriode = 0;
-        uint32_t _revisionCommande = 0;
+        uint32_t _revisionCommande = 0, _dernierSuivi = 0;
         bool planifierFenetre(uint32_t maintenant);
         void demarrerCommande();
         uint8_t champModifie(Objet objet);
@@ -236,6 +236,7 @@ class Zone {
             MqttEntity thermostat;
             MqttEntity preset;
             MqttEntity regime;
+            MqttEntity suivi, reessai;
         } _mqttEntities;
 
         uint8_t _idZone = 0x00;

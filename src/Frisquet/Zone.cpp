@@ -361,6 +361,38 @@ void Zone::begin() {
     _mqttEntities.regime.component = "sensor";
     _mqttEntities.regime.stateTopic = MqttTopic(MqttManager::compose({device->baseTopic, "z" + String(getNumeroZone()), "regime"}));
     mqtt().registerEntity(*device, _mqttEntities.regime, true);
+    auto& suivi = _mqttEntities.suivi;
+    auto& bouton = _mqttEntities.reessai;
+    suivi.id = "suiviCommandeZ" + String(getNumeroZone());
+    suivi.component = "sensor";
+    bouton.id = "reessayerCommandeZ" + String(getNumeroZone());
+    bouton.component = "button";
+    if(_source == CONNECT && pilotageDisponible()) {
+        const String racine = MqttManager::compose({device->baseTopic, "z" + String(getNumeroZone()), "commande"});
+        suivi.name = "Suivi de commande Z" + String(getNumeroZone());
+        suivi.stateTopic = MqttTopic(racine, 0, true);
+        suivi.attributesTopic = suivi.stateTopic;
+        suivi.availabilityTopic = device->availabilityTopic;
+        suivi.set("value_template", "{{ value_json.etat }}");
+        mqtt().registerEntity(*device, suivi, true);
+        bouton.name = "Réessayer la commande Z" + String(getNumeroZone());
+        bouton.commandTopic = MqttTopic(racine + "/reessayer", 0, false);
+        JsonDocument disponibilite;
+        disponibilite.add<JsonObject>()["topic"] = device->availabilityTopic.full;
+        auto commande = disponibilite.add<JsonObject>();
+        commande["topic"] = suivi.stateTopic.full;
+        commande["value_template"] = "{{ 'online' if value_json.etat == 'Modification non confirmée' else 'offline' }}";
+        String conditions;
+        serializeJson(disponibilite, conditions);
+        bouton.setRaw("availability", conditions);
+        bouton.set("availability_mode", "all");
+        mqtt().registerEntity(*device, bouton, true);
+        mqtt().onCommand(bouton, [this](const String& p) { if(p == "PRESS") reessayer(); });
+    } else {
+        mqtt().removeEntityDiscovery(*device, suivi);
+        mqtt().removeEntityDiscovery(*device, bouton);
+    }
+
     _mqttPret = true;
     actualiserDecouverte();
 }
@@ -559,6 +591,7 @@ bool Zone::derogationActive() {
 
 void Zone::publishMqtt() {
     actualiserDecouverte();
+    if(_mqttEntities.suivi.stateTopic.full.length()) mqtt().publishState(_mqttEntities.suivi, suiviJson());
     mqtt().publishAvailability(_mqttEntities.mode, pilotageDisponible());
     publierMode();
     if(!isnan(getTemperatureAmbiante())) {
@@ -696,6 +729,10 @@ bool Zone::definirPreset(const String& preset) {
 
 void Zone::loop() {
     actualiserLivraison();
+    if(enAttente() && millis() - _dernierSuivi >= 5000 && mqtt().connected()) {
+        _dernierSuivi = millis();
+        mqtt().publishState(_mqttEntities.suivi, suiviJson());
+    }
     const bool connecte = mqtt().connected();
     if(connecte && !_mqttConnecte) publishMqtt();
     _mqttConnecte = connecte;
@@ -839,7 +876,7 @@ void Zone::demarrerCommande() {
     _livraison = Livraison::Attente;
     _fenetre = Fenetre::SansStatut;
     _tentative = 0;
-    _debutPeriode = millis();
+    _dernierSuivi = _debutPeriode = millis();
     planifierFenetre(_debutPeriode);
     ++_revisionCommande;
 }

@@ -80,6 +80,10 @@ créneau ; avant synchronisation, le cycle utilise le temps depuis le démarrage
 - Avec un satellite virtuel, définir le programme depuis **Programmation** (`/programming`). Auto nécessite un programme connu et l'heure chaudière synchronisée. Les dérogations locales prennent fin au prochain changement Confort/Réduit ; un programme constant ne permet pas de dérogation temporaire. Leur échéance est conservée au redémarrage. Choisir Auto ou modifier le programme local annule la dérogation. Avec le Connect, la gestion du programme et de la fin de dérogation reste confiée au système distant.
 - Les topics `zN/mode/set` acceptent les commandes `Confort` et `Réduit`, ainsi que les anciens noms `Confort permanent` et `Réduit permanent` pour compatibilité. Les états publiés utilisent les libellés `Confort` et `Réduit`.
 
+### Suivre une modification de zone dans Home Assistant
+
+Avec un Connect actif, le thermostat affiche la dernière consigne confirmée. Le capteur **Suivi de commande Z1** indique si la modification est en attente et le bouton **Réessayer la commande Z1** permet de la relancer. Ces deux entités MQTT peuvent être affichées sur une carte Entités standard.
+
 ### 🌐 Portail Web intégré
 - Configuration du **WiFi** et du **MQTT**
 - **Apparence du portail** : choix Clair, Sombre ou Auto dans **Paramètres → Système**. Auto utilise l’heure locale du navigateur : clair de 7 h à 20 h, sombre le reste du temps. Le choix est appliqué immédiatement sur toutes les pages, connexion comprise, et mémorisé par navigateur sans redémarrage de l’appareil.

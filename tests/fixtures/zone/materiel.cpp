@@ -20,6 +20,7 @@ void setTime(int h, int m, int s, int j, int mois, int an) {
 }
 
 WifiSimule WiFi;
+ReceptionMqtt receptionMqtt;
 std::map<String, String> publications;
 std::map<String, unsigned> nombrePublications;
 std::map<String, Preferences::Espace> Preferences::memoire;

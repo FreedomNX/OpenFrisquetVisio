@@ -405,6 +405,7 @@ void verifierAttenteProgramme() {
 
 void verifierRepriseConnect() {
     Banc banc;
+    banc.mqtt.begin(MqttManager::Options{});
     preparerConnect(banc);
     assert(banc.z1.appliquerConsigne(21));
     Zone restauree(ID_ZONE_1, banc.mqtt);
@@ -413,7 +414,28 @@ void verifierRepriseConnect() {
     restauree.begin();
     assert(restauree.nonConfirmee() && !restauree.enAttente());
     assert(restauree.getTemperatureConsigne() == 20 && restauree.demande().consigne == 21);
-    assert(restauree.reessayer() && restauree.enAttente());
+    const auto bouton = lireJson(publications.at("homeassistant/button/openFrisquetVisio/reessayerCommandeZ1/config"));
+    assert(bouton["availability_mode"] == "all");
+    assert(bouton["availability"][0]["topic"] == banc.appareil.availabilityTopic.full);
+    assert(bouton["availability"][1]["topic"] == "frisquet/z1/commande");
+    assert(strstr(bouton["availability"][1]["value_template"].as<const char*>(), "Modification non confirmée"));
+
+    const auto capteur = lireJson(publications.at("homeassistant/sensor/openFrisquetVisio/suiviCommandeZ1/config"));
+    assert(capteur["state_topic"] == "frisquet/z1/commande");
+    assert(capteur["json_attributes_topic"] == "frisquet/z1/commande");
+    restauree.publishMqtt();
+    auto suivi = lireJson(publications.at("frisquet/z1/commande"));
+    assert(suivi["etat"] == "Modification non confirmée");
+    assert(suivi["valeur_confirmee"] == 20 && suivi["valeur_demandee"] == 21);
+
+    char sujet[] = "frisquet/z1/commande/reessayer";
+    byte pression[] = {'P', 'R', 'E', 'S', 'S'};
+    assert(bouton["command_topic"] == sujet);
+    receptionMqtt(sujet, pression, sizeof(pression));
+    suivi = lireJson(publications.at("frisquet/z1/commande"));
+    assert(restauree.enAttente() && suivi["etat"] == "En attente de confirmation");
+    assert(restauree.getTemperatureConsigne() == 20);
+
     // Ancien format de la zone 1 : « oneCfg » est le nom historique en NVS.
     Preferences ancien;
     ancien.begin("oneCfg", false);

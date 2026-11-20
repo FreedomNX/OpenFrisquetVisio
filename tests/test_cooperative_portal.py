@@ -16,6 +16,10 @@ for name in ("handleSendRadio", "handleMemoryRead", "handleMemoryScan"):
 
 signatures = (
     "static bool isValidIPv4(",
+    "static bool fitsBytes(",
+    "static bool isValidHostname(",
+    "static bool isValidWifiPassword(",
+    "static bool isValidMqttBaseTopic(",
     "static bool parseBoolArg(",
     "bool Portal::requireRadioAvailable(",
     "bool Portal::requireDeveloperMode(",

@@ -233,6 +233,12 @@ Compilation et tests du traitement FIFO validés ; association et échanges radi
    - **Mode passif Connect** si une box Connect est déjà présente
 5. Sauvegarder → le module redémarre automatiquement
 
+L’enregistrement est refusé, avec un message indiquant le champ à corriger, si :
+le hostname ne fait pas 1 à 31 caractères (lettres, chiffres et tirets, sans tiret
+au début ni à la fin), le SSID dépasse 32 octets, le mot de passe Wi-Fi ne fait pas
+8 à 63 caractères (ou 64 chiffres hexadécimaux), ou le préfixe MQTT contient `+`
+ou `#`.
+
 Le mot de passe du portail se modifie dans **Paramètres → Système → Accès au portail**.
 Renseigner le nouveau mot de passe et sa confirmation, puis enregistrer.
 Laisser les deux champs vides conserve le mot de passe actuel. Il est sauvegardé

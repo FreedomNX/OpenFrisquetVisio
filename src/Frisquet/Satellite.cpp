@@ -2,6 +2,14 @@
 #include <math.h>
 #include "../Buffer.h"
 
+// Le transport accepte une réponse plus courte que la structure attendue et
+// renvoie alors la longueur reçue. Exiger la taille complète et une longueur
+// annoncée cohérente avant de lire l'état chaudière, la date ou une température.
+static bool reponseComplete(const void* reponse, size_t recu, size_t attendu) {
+    const size_t entete = sizeof(FrisquetRadio::RadioTrameHeader);
+    return recu == attendu && static_cast<const byte*>(reponse)[entete] == attendu - entete - 1;
+}
+
 void Satellite::loadConfig() {
     getPreferences().begin((String("satCfgZ") + String(getNumeroZone())).c_str(), false);
     setIdAssociation(getPreferences().getUChar("idAssociation", 0xFF));
@@ -200,7 +208,7 @@ bool Satellite::recupererInfosChaudiere() {
             length
         );
         
-        if(err != RADIOLIB_ERR_NONE) {
+        if(err != RADIOLIB_ERR_NONE || !reponseComplete(&donneesZones, length, sizeof(donneesZones))) {
             delay(30);
             continue;
         }
@@ -225,11 +233,12 @@ bool Satellite::recupererTemperatureCDC() {
         temperature16 temperatureCDC;
     } donneesTemperatureCDC;
 
-    size_t length = sizeof(donneesTemperatureCDC_t);
+    size_t length = 0;
     int16_t err;
 
     uint8_t retry = 0;
     do {
+        length = sizeof(donneesTemperatureCDC_t);
         err = this->radio().sendAsk(
             this->getId(),
             getConfig().boilerId(),
@@ -242,7 +251,8 @@ bool Satellite::recupererTemperatureCDC() {
             length
         );
 
-        if(err != RADIOLIB_ERR_NONE) {
+        if(err != RADIOLIB_ERR_NONE
+            || !reponseComplete(&donneesTemperatureCDC, length, sizeof(donneesTemperatureCDC))) {
             delay(30);
             continue;
         }
@@ -322,7 +332,7 @@ bool Satellite::envoyerTemperatureAmbiante() {
             length
         );
         
-        if(err != RADIOLIB_ERR_NONE) {
+        if(err != RADIOLIB_ERR_NONE || !reponseComplete(&donneesZones, length, sizeof(donneesZones))) {
             delay(30);
             continue;
         }
@@ -436,7 +446,7 @@ bool Satellite::envoyerConsigne() {
             length
         );
         
-        if(err != RADIOLIB_ERR_NONE) {
+        if(err != RADIOLIB_ERR_NONE || !reponseComplete(&donneesZones, length, sizeof(donneesZones))) {
             delay(30);
             continue;
         }

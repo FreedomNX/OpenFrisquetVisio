@@ -1110,7 +1110,7 @@ void Portal::handleStatus() {
   String json = "{";
   json += "\"apRunning\":"     + String(ap  ? "true" : "false") + ",";
   json += "\"staConnected\":"  + String(sta ? "true" : "false") + ",";
-  json += "\"ssid\":\""        + ssid + "\",";
+  json += "\"ssid\":\""        + jsonEscape(ssid) + "\",";
   json += "\"ip\":\""          + ip.toString() + "\",";
   json += "\"rssi\":"          + String(rssi) + ",";
   json += "\"uptimeMs\":"      + String(upMs) + ",";

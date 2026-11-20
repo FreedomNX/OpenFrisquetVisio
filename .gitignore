@@ -43,6 +43,7 @@ tests/*
 !tests/test_logs_levels.py
 !tests/portal-polling.test.mjs
 !tests/test_boiler_firmware.py
+!tests/test_portal_status_ssid.py
 !tests/test_firmware_version.py
 !tests/test_boiler_identity.py
 !tests/test_date_recue.py

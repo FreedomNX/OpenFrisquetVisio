@@ -180,28 +180,30 @@ void Chaudiere::publishMqtt() {
         _mqtt.publishState(_mqttEntities.puissanceInstantaneeChauffage, getPuissanceInstantaneeChauffage());
     }
 
+    // Ne mémoriser une consommation qu'une fois publiée : une valeur lue pendant
+    // une coupure MQTT serait sinon perdue jusqu'à son prochain changement.
     if (getConsommationChauffage() >= 0) {
-        if (_lastPubConsommationChauffage != getConsommationChauffage()) {
+        if (_lastPubConsommationChauffage != getConsommationChauffage()
+            && _mqtt.publishState(_mqttEntities.consommationChauffage, getConsommationChauffage())) {
             _lastPubConsommationChauffage = getConsommationChauffage();
-            _mqtt.publishState(_mqttEntities.consommationChauffage, getConsommationChauffage());
         }
     }
     if (getConsommationECS() >= 0) {
-        if (_lastPubConsommationECS != getConsommationECS()) {
+        if (_lastPubConsommationECS != getConsommationECS()
+            && _mqtt.publishState(_mqttEntities.consommationECS, getConsommationECS())) {
             _lastPubConsommationECS = getConsommationECS();
-            _mqtt.publishState(_mqttEntities.consommationECS, getConsommationECS());
         }
     }
 
     if (getConsommationAnnuelleChauffage() >= 0
-        && _lastPubConsommationAnnuelleChauffage != getConsommationAnnuelleChauffage()) {
+        && _lastPubConsommationAnnuelleChauffage != getConsommationAnnuelleChauffage()
+        && _mqtt.publishState(_mqttEntities.consommationAnnuelleChauffage, (float)getConsommationAnnuelleChauffage(), 0)) {
         _lastPubConsommationAnnuelleChauffage = getConsommationAnnuelleChauffage();
-        _mqtt.publishState(_mqttEntities.consommationAnnuelleChauffage, (float)getConsommationAnnuelleChauffage(), 0);
     }
     if (getConsommationAnnuelleECS() >= 0
-        && _lastPubConsommationAnnuelleECS != getConsommationAnnuelleECS()) {
+        && _lastPubConsommationAnnuelleECS != getConsommationAnnuelleECS()
+        && _mqtt.publishState(_mqttEntities.consommationAnnuelleECS, (float)getConsommationAnnuelleECS(), 0)) {
         _lastPubConsommationAnnuelleECS = getConsommationAnnuelleECS();
-        _mqtt.publishState(_mqttEntities.consommationAnnuelleECS, (float)getConsommationAnnuelleECS(), 0);
     }
 
     publishModeEcs();

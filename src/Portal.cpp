@@ -435,6 +435,17 @@ void Portal::handleUpdate() {
     return;
   }
 
+  // La requête multipart est entièrement lue : aucun autre fichier ne peut plus
+  // arriver. Update.end() valide l'image et sélectionne la partition de démarrage.
+  if (!Update.end(true)) {
+    _lastUpdateError = "Update.end a échoué";
+    Update.printError(Serial);
+    cancelHttpUpdate();
+    error("[PORTAIL] OTA HTTP: %s", _lastUpdateError.c_str());
+    _srv.send(500, "application/json; charset=utf-8", "{\"ok\":false,\"err\":\"Mise à jour échouée\"}");
+    return;
+  }
+
   const bool rebootScheduled = scheduleReboot(1500);
   _httpUpdateActive = false;
   _frisquetManager.radio().suspend(FrisquetRadio::Pause::HttpOta, false);
@@ -449,6 +460,12 @@ void Portal::handleUpdate() {
 void Portal::handleUpdateUpload() {
   HTTPUpload& upload = _srv.upload();
   if (upload.status == UPLOAD_FILE_START) {
+    if (_httpUpdateActive) {
+      // Second fichier dans la même requête : abandonner sans rien activer.
+      if (_lastUpdateError.length() == 0) _lastUpdateError = "Un seul fichier par mise à jour";
+      Update.abort();
+      return;
+    }
     _httpUpdateActive = true;
     _frisquetManager.radio().suspend(FrisquetRadio::Pause::HttpOta, true);
     _lastUpdateError = "";
@@ -466,12 +483,8 @@ void Portal::handleUpdateUpload() {
       Update.printError(Serial);
     }
   } else if (upload.status == UPLOAD_FILE_END) {
-    if (!Update.end(true)) {
-      _lastUpdateError = "Update.end a échoué";
-      Update.printError(Serial);
-    } else {
-      info("[PORTAIL] OTA HTTP: upload terminé (%u bytes)", upload.totalSize);
-    }
+    // Fin du fichier seulement : la partition est activée par handleUpdate().
+    info("[PORTAIL] OTA HTTP: fichier reçu (%u bytes)", upload.totalSize);
   } else if (upload.status == UPLOAD_FILE_ABORTED) {
     cancelHttpUpdate();
   }

@@ -80,6 +80,37 @@ créneau ; avant synchronisation, le cycle utilise le temps depuis le démarrage
 - Avec un satellite virtuel, définir le programme depuis **Programmation** (`/programming`). Auto nécessite un programme connu et l'heure chaudière synchronisée. Les dérogations locales prennent fin au prochain changement Confort/Réduit ; un programme constant ne permet pas de dérogation temporaire. Leur échéance est conservée au redémarrage. Choisir Auto ou modifier le programme local annule la dérogation. Avec le Connect, la gestion du programme et de la fin de dérogation reste confiée au système distant.
 - Les topics `zN/mode/set` acceptent les commandes `Confort` et `Réduit`, ainsi que les anciens noms `Confort permanent` et `Réduit permanent` pour compatibilité. Les états publiés utilisent les libellés `Confort` et `Réduit`.
 
+### Écran et bouton du Heltec V3
+
+Le firmware Heltec V3 détecte automatiquement l’OLED 128 × 64 à l’adresse I²C
+0x3C. Les cartes sans écran continuent de fonctionner normalement. Cette fonction
+est réservée au V3 ; elle n’active pas l’écran des autres modèles.
+
+Les pages présentent l’heure et l’état général, chaque zone activée (ambiance,
+consigne, mode et Boost), les mesures chaudière, puis l’adresse IP du portail,
+le Wi-Fi, MQTT et l’âge de la dernière trame radio valide. Une valeur inconnue
+est affichée `--`. L’indication « Radio ancienne » apparaît après 15 minutes
+sans trame valide ; elle concerne la réception globale, pas l’âge individuel
+de chaque mesure. L’écran n’ajoute aucune requête radio.
+
+- **PRG, écran éteint** : réveiller la dernière page, sans changer de page.
+- **PRG, appui court** : page suivante (après le délai de double appui).
+- **PRG, double appui** : retour à l’accueil.
+- **PRG, appui long de 2 secondes** : activer/arrêter le défilement toutes les
+  8 secondes. Ce choix temporaire ne provoque pas d’écriture en mémoire.
+- **RST** : redémarrage matériel ; ce bouton ne sert pas à naviguer.
+
+Dans **Paramètres → Système → Écran Heltec V3**, régler l’activation, la
+luminosité, la rotation à 180°, le défilement au démarrage et l’extinction après
+inactivité (60 secondes par défaut ; 0 pour toujours allumé). Enregistrer et
+redémarrer pour appliquer les réglages. L’extinction met seulement l’OLED en
+veille : Wi-Fi, MQTT et radio restent actifs. Aucun bouton ne modifie la chauffe.
+
+L’image est rafraîchie au plus une fois par seconde, par transferts courts
+différés pendant les transactions radio. Les boutons sont traités dans la
+boucle principale : une opération synchrone existante peut retarder leur prise
+en compte. Un écran débranché ou défaillant est désactivé jusqu’au redémarrage.
+
 ### 🌐 Portail Web intégré
 - Configuration du **WiFi** et du **MQTT**
 - **Apparence du portail** : choix Clair, Sombre ou Auto dans **Paramètres → Système**. Auto utilise l’heure locale du navigateur : clair de 7 h à 20 h, sombre le reste du temps. Le choix est appliqué immédiatement sur toutes les pages, connexion comprise, et mémorisé par navigateur sans redémarrage de l’appareil.
@@ -332,4 +363,4 @@ Mais bon, si ça marche, vous pouvez toujours m’offrir un café ☕ 😉
 **Année :** 2025  
 **Plateforme :** ESP32 (Heltec WiFi LoRa 32, SX1262)  
 **Compatibilité :** Home Assistant, MQTT, Frisquet Chaudière série Eco Radio Visio  
-**Version :** 26.11.09.2010
+**Version :** 26.11.20.1652

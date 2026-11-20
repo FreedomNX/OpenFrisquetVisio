@@ -21,6 +21,12 @@ void Config::load() {
     error("[CONFIG] Impossible de charger la configuration : sauvegarde désactivée jusqu'au redémarrage.");
   }
 
+  // Écran optionnel (Heltec V3).
+  displayEnabled(_preferences.getBool("screenOn", true));
+  displayBrightness(_preferences.getUChar("screenBright", 96));
+  displayTimeout(_preferences.getUShort("screenTimeout", 60));
+  displayFlip(_preferences.getBool("screenFlip", false));
+  displayAutoCycle(_preferences.getBool("screenCycle", false));
   // WIFI
   _developerMode = _preferences.getBool("developerMode", false);
   _portalPassword = _preferences.getString("portalPass", "admin");
@@ -103,6 +109,12 @@ void Config::save() {
     return;
   }
 
+  // Écran optionnel (Heltec V3).
+  _preferences.putBool("screenOn", displayEnabled());
+  _preferences.putUChar("screenBright", displayBrightness());
+  _preferences.putUShort("screenTimeout", displayTimeout());
+  _preferences.putBool("screenFlip", displayFlip());
+  _preferences.putBool("screenCycle", displayAutoCycle());
   // WIFI
   _preferences.putBool("developerMode", _developerMode);
   _preferences.putString("portalPass", _portalPassword);

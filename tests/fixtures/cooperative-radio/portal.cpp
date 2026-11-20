@@ -50,6 +50,19 @@ struct Config {
         uint16_t port = 1883;
     } mqtt;
     unsigned saves = 0;
+    bool screenOn = true, screenFlip = false, screenCycle = false;
+    uint8_t screenBrightness = 96;
+    uint16_t screenTimeout = 60;
+    bool displayEnabled() { return screenOn; }
+    void displayEnabled(bool v) { screenOn = v; }
+    bool displayFlip() { return screenFlip; }
+    void displayFlip(bool v) { screenFlip = v; }
+    bool displayAutoCycle() { return screenCycle; }
+    void displayAutoCycle(bool v) { screenCycle = v; }
+    uint8_t displayBrightness() { return screenBrightness; }
+    void displayBrightness(uint8_t v) { screenBrightness = v; }
+    uint16_t displayTimeout() { return screenTimeout; }
+    void displayTimeout(uint16_t v) { screenTimeout = v; }
     NetworkID network{{1, 2, 3, 4}};
     Wifi &getWiFiOptions() { return wifi; }
     Mqtt &getMQTTOptions() { return mqtt; }
@@ -202,19 +215,34 @@ int main(int argc, char **argv) {
     }
     if (std::string(argv[1]) == "config") {
         for (const char *field :
-             {"wifiIp", "wifiGw", "wifiMask", "wifiDns1", "wifiDns2", "networkID"}) {
+             {"wifiIp", "wifiGw", "wifiMask", "wifiDns1", "wifiDns2", "networkID",
+              "displayEnabled", "displayFlip", "displayAutoCycle", "displayBrightness", "displayTimeout"}) {
             Portal p;
             reserve(p);
             p._srv.args[field] = "invalide";
             p.handlePostConfig();
             assert(p._srv.status == 400 && p.reboots == 0 && p._frisquetManager.cfg.saves == 0);
             assert(p._frisquetManager.r.ownsObservation(8));
+            assert(p._frisquetManager.cfg.screenOn && p._frisquetManager.cfg.screenBrightness == 96);
+        }
+        for (const auto& invalid : {std::make_pair("displayBrightness", "0"), {"displayBrightness", "256"},
+                                   {"displayTimeout", "3601"}, {"displayTimeout", "-1"}}) {
+            Portal p;
+            p._srv.args = {{invalid.first, invalid.second}, {"wifiSsid", "ne-pas-modifier"}};
+            p.handlePostConfig();
+            assert(p._srv.status == 400 && p.reboots == 0 && p._frisquetManager.cfg.saves == 0);
+            assert(p._frisquetManager.cfg.wifi.ssid.empty());
         }
         Portal accepted;
         reserve(accepted);
+        accepted._srv.args = {{"displayEnabled", "false"}, {"displayBrightness", "255"},
+                              {"displayTimeout", "0"}, {"displayFlip", "true"}, {"displayAutoCycle", "true"}};
         accepted.handlePostConfig();
         assert(accepted._srv.status == 200 && accepted.reboots == 1 &&
                accepted._frisquetManager.cfg.saves == 1);
+        assert(!accepted._frisquetManager.cfg.screenOn && accepted._frisquetManager.cfg.screenFlip
+            && accepted._frisquetManager.cfg.screenCycle && accepted._frisquetManager.cfg.screenBrightness == 255
+            && accepted._frisquetManager.cfg.screenTimeout == 0);
         assert(!accepted._frisquetManager.r.ownsObservation(8) && accepted._frisquetManager.r.busy());
     } else {
         using Handler = void (Portal::*)();

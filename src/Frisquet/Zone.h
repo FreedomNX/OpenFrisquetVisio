@@ -51,7 +51,7 @@ class Zone {
         bool appliquerPreset(const String& preset);
         bool appliquerConsigne(float temperature);
         void confirmerMode(MODE_ZONE mode, byte options);
-        void confirmerMode() { confirmerMode(_mode, _modeOptions); }
+        void confirmerMode() { confirmerMode(_reglages.mode, _reglages.options); }
         MqttManager& mqtt() { return _mqtt; }
         void loadConfig();
         void saveConfig();
@@ -101,30 +101,113 @@ class Zone {
         
         uint32_t getLastChange() { return _lastChange; }
         uint32_t getLastEnvoi() { return _lastEnvoi; }
-        void refreshLastEnvoi() { _lastEnvoi = millis(); _programmationEnvoiEnAttente = false; }
+        void refreshLastEnvoi() { _lastEnvoi = millis(); }
         void refreshLastChange() { _lastChange = millis(); }
         
         SOURCE getSource() { return _source; }
         void setSource(SOURCE source) { _source = source; }
 
-        Programmation& getProgrammation() { return _programmation; };
-        void setProgrammation(const Programmation& programmation, bool recue = false) {
-            // Ne pas écraser une modification du portail avant son envoi réussi.
-            if(_programmationEnvoiEnAttente) return;
-            memcpy(&_programmation, &programmation, sizeof(programmation));
-            if(recue) _programmationRecue = true;
+        struct Reglages {
+            float confort = NAN, reduit = NAN, horsGel = NAN, boost = NAN, consigne = NAN;
+            MODE_ZONE mode = INCONNU;
+            byte options = 0x05;
+            Programmation programme;
+            bool programmeConnu = false;
+        };
+        enum class Objet : uint8_t { Aucun, Consigne, Confort, Reduit, HorsGel, Boost, Mode, Programme };
+        enum class Livraison : uint8_t { Repos, Attente, Confirmee, Echec };
+        static constexpr uint8_t MAX_FENETRES = 5;
+        void observerStatut(uint32_t reception, byte association);
+        void oublierStatut();
+        byte associationSatellite() const { return _associationSatellite; }
+        uint8_t tentative() const { return _tentative; }
+        int rangEmission(uint32_t maintenant) const;
+        bool enAttente() const { return _livraison == Livraison::Attente; }
+        bool nonConfirmee() const { return _livraison == Livraison::Echec; }
+        Reglages demande() const;
+        uint32_t revisionCommande() const { return _revisionCommande; }
+        bool reessayer();
+        void actualiserLivraison();
+        void confirmerCommande();
+        struct BlocZone {
+            // Profils codés entre 5 et 30 °C par pas de 0,5 °C, Boost inclus dans Confort.
+            temperature8 confort, reduit, horsGel;
+            // Options A154 : le Connect réel a été observé à 0x25 en Auto (octet A02F).
+            // La sélection Auto du firmware conserve 0x04 et le bit de régime en attendant validation sur chaudière.
+            byte mode = INCONNU, options = 0, reserve = 0;
+            Programmation programme;
+        };
+        static_assert(sizeof(BlocZone) == 48, "Taille du bloc A154");
+        BlocZone blocDemande() const;
+        bool reconnaitreReglages(const byte* bloc, size_t taille);
+        String suiviJson() const;
+        Programmation& getProgrammation() { return _reglages.programme; }
+        const Programmation& programmeEdite() const {
+            return programmationEnvoiEnAttente() || programmationNonConfirmee() ? _demande.reglages.programme : _reglages.programme;
         }
-        void modifierProgrammation(const Programmation& programmation) {
-            memcpy(&_programmation, &programmation, sizeof(programmation));
-            _programmationRecue = true;
-            _programmationEnvoiEnAttente = _source != SOURCE::SATELLITE_VIRTUEL;
-            if(_source == SOURCE::SATELLITE_VIRTUEL) _derogationFin = 0;
-            refreshLastChange();
+        void setProgrammation(const Programmation& programme, bool recue = false) {
+            _reglages.programme = programme;
+            if(recue) _reglages.programmeConnu = true;
+
         }
-        bool programmationEnvoiEnAttente() const { return _programmationEnvoiEnAttente; }
-        bool programmationRecue() const { return _programmationRecue; }
+        void modifierProgrammation(const Programmation& programme) {
+            modifier(Objet::Programme, [&]() { setProgrammation(programme, true); return true; });
+        }
+        bool programmationEnvoiEnAttente() const { return enAttente() && (_demande.champs & ProgrammeModifie); }
+        bool programmationNonConfirmee() const { return nonConfirmee() && (_demande.champs & ProgrammeModifie); }
+        bool programmeEditeConnu() const { return programmationRecue() || programmationEnvoiEnAttente() || programmationNonConfirmee(); }
+        bool programmationRecue() const { return _reglages.programmeConnu; }
 
     private:
+        enum Champ : uint8_t {
+            ConfortModifie = 1, ReduitModifie = 2, HorsGelModifie = 4,
+            BoostModifie = 8, ModeModifie = 16, ProgrammeModifie = 32
+        };
+        struct Demande {
+            Reglages reglages;
+            Objet objet = Objet::Aucun;
+            uint8_t champs = 0;
+        } _demande;
+        Reglages _reglages;
+        Livraison _livraison = Livraison::Repos;
+        uint8_t _tentative = 0;
+        enum class Fenetre : uint8_t { SansStatut, CycleEnCours, CycleSuivant };
+        Fenetre _fenetre = Fenetre::SansStatut;
+        bool _statutConnu = false;
+        byte _associationSatellite = 0;
+        uint32_t _statut = 0, _ouverture = 0, _debutPeriode = 0;
+        uint32_t _revisionCommande = 0;
+        bool planifierFenetre(uint32_t maintenant);
+        void demarrerCommande();
+        uint8_t champModifie(Objet objet);
+        float valeurObjet(const Reglages& reglages) const;
+        template<class F> bool modifier(Objet objet, F appliquer) {
+            // Les éditeurs de mode et de température travaillent sur les mêmes
+            // réglages. Une zone distante ne les publie qu'après confirmation.
+            const Reglages confirmes = _reglages;
+            const bool distante = _source == CONNECT;
+            const bool garderSemaine = distante && programmationNonConfirmee();
+            if(distante && enAttente()) _reglages = demande();
+            else if(garderSemaine) setProgrammation(_demande.reglages.programme, true);
+            if(!appliquer()) { _reglages = confirmes; return false; }
+            if(distante) {
+                // Chaque bloc A154 contient la semaine entière, même pour une consigne.
+                if(!enAttente()) _demande.champs = garderSemaine ? ProgrammeModifie : 0;
+                _demande.champs |= champModifie(objet);
+                _demande.reglages = _reglages;
+                _demande.objet = objet;
+                _reglages = confirmes;
+                demarrerCommande();
+            } else {
+                refreshLastChange();
+                if(objet == Objet::Programme) _derogationFin = 0;
+            }
+            saveConfig();
+            if(_mqttPret) publishMqtt();
+            return true;
+        }
+        bool definirPreset(const String& preset);
+        bool definirConsigne(float temperature);
         bool programmeLocal() const { return _source != SOURCE::CONNECT; }
         bool programmeDisponible() const;
         bool regimeProgramme(bool& confort, uint32_t* prochaineTransition = nullptr) const;
@@ -156,29 +239,9 @@ class Zone {
         } _mqttEntities;
 
         uint8_t _idZone = 0x00;
-
-        float _temperatureConfort = NAN;                       // Début 5°C -> max 30°C
-        float _temperatureReduit = NAN;                        // Début 5°C -> max 30°C
-        float _temperatureHorsGel = NAN;                       // Début 5°C -> max 30°C
-        float _temperatureDepart = NAN;   
+        float _temperatureDepart = NAN;
         float _temperatureConsigneDepart = NAN;
-        float _temperatureConsigne = NAN; 
         float _temperatureAmbiante = NAN;
-        float _temperatureBoost = NAN;
-
-        MODE_ZONE _mode = MODE_ZONE::INCONNU;            // 0x05 auto - 0x06 confort - 0x07 reduit - 0x08 hors gel
-        byte _modeOptions = 0x05;
-
-        // Octet « options » du bloc zone A154 (6e octet), au format de l'octet
-        // A02F du satellite (voir Satellite.h : 0x20 Auto, 0x02 Dérogation,
-        // 0x01 Confort, 0x04 état interne, 0x10 Hors Gel ; 0x40 Boost côté Connect).
-        // Un Connect réel y recopie la dernière valeur A02F lue (ex. 0x25 en Auto) ;
-        // l'émission du firmware conserve 0x04 pour Auto en attendant validation
-        // sur chaudière. Seuls les bits 0x01, 0x02 et 0x40 sont interprétés ici.
-        Programmation _programmation;
-        // Programme confirmé par radio, défini sur le portail ou restauré de NVS.
-        bool _programmationRecue = false;
-        bool _programmationEnvoiEnAttente = false;
 
         Preferences _preferences;
 

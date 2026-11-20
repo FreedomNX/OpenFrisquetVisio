@@ -91,7 +91,6 @@ class Satellite : public FrisquetDevice {
         bool _modeVirtuel = false;
         bool _ecrasement = false;
         bool _observationPending = false;
-        uint32_t _observationLastChange = 0;
         byte _observationPacket[23] = {};
         bool applyObservation(byte* request, byte* reply, size_t length);
 

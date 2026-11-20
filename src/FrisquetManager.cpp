@@ -2,6 +2,10 @@
 #include "Version.h"
 #include "Buffer.h"
 
+namespace {
+volatile uint32_t instantReceptionMs = 0;
+}
+
 FrisquetManager::FrisquetManager(FrisquetRadio &radio, Config &cfg, MqttManager &mqtt)
     :   _radio(radio), _cfg(cfg), _mqtt(mqtt),
         _zone1(ID_ZONE_1, mqtt), _zone2(ID_ZONE_2, mqtt), _zone3(ID_ZONE_3, mqtt),
@@ -94,6 +98,7 @@ void FrisquetManager::begin()
     _radio.onReceive([]()
                      {
     if(!FrisquetRadio::interruptReceive) {
+        instantReceptionMs = millis();
         FrisquetRadio::receivedFlag = true;
     } });
     _radio.startReceive();
@@ -139,6 +144,8 @@ void FrisquetManager::loop()
     if (_cfg.useSatelliteZ3()) {
         _satelliteZ3.loop();
     }
+    // Les écritures de zone passent après les lectures, la sonde et les satellites.
+    if (_cfg.useConnect()) _connect.envoiZones();
 }
 
 void FrisquetManager::initDS18B20()
@@ -188,9 +195,11 @@ void FrisquetManager::onRadioReceive()
     float rssi = NAN;
     int16_t err = RADIOLIB_ERR_NONE;
 
+    uint32_t reception = millis();
     // Priorité au paquet matériel : traiter le tampon logiciel en premier
     // pouvait effacer le drapeau d'une autre trame encore présente dans le SX1262.
     if (_radio.hasReceivedPacket()) {
+        if (FrisquetRadio::receivedFlag) reception = instantReceptionMs;
         FrisquetRadio::receivedFlag = false;
         err = _radio.readData(buff, 0);
 
@@ -208,7 +217,7 @@ void FrisquetManager::onRadioReceive()
         // Drapeau périmé : ne pas relire le matériel ni interrompre une réception
         // éventuellement en cours. Le registre IRQ est aussi vérifié par loop().
         FrisquetRadio::receivedFlag = false;
-        if (!_radio.popBufferedPacket(buff, length, &rssi)) return;
+        if (!_radio.popBufferedPacket(buff, length, &rssi, &reception)) return;
         info("[RADIO] Réutilisation paquet bufferisé : %d bytes", length);
     }
 
@@ -223,6 +232,7 @@ void FrisquetManager::onRadioReceive()
     }
 
     FrisquetRadio::RadioTrameHeader *header = (FrisquetRadio::RadioTrameHeader *)buff;
+    if (_cfg.useConnect() && !_cfg.useConnectPassive()) _connect.observerSatellite(buff, length, reception);
     if (_cfg.useConnect() &&
         (header->idDestinataire == _connect.getId() ||
          (_cfg.useConnectPassive() && header->idExpediteur == _connect.getId() && BoilerIdentity::valid(header->idDestinataire)))) {

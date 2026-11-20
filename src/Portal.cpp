@@ -506,7 +506,7 @@ static String programmationHex(const Zone::Programmation& programmation) {
 }
 
 static String programmationRevision(Zone& zone) {
-  return String(zone.programmationRecue() ? "1" : "0") + programmationHex(zone.getProgrammation());
+  return String(zone.programmeEditeConnu() ? "1" : "0") + programmationHex(zone.programmeEdite());
 }
 
 void Portal::handleGetProgrammation() {
@@ -524,10 +524,11 @@ void Portal::handleGetProgrammation() {
     json += ",\"enabled\":" + String(enabled[i] ? "true" : "false");
     json += ",\"editable\":" + String(reason.isEmpty() ? "true" : "false");
     json += ",\"reason\":\"" + jsonEscape(reason) + "\"";
-    json += ",\"known\":" + String(zone.programmationRecue() ? "true" : "false");
+    json += ",\"known\":" + String(zone.programmeEditeConnu() ? "true" : "false");
+    json += ",\"failed\":" + String(zone.programmationNonConfirmee() ? "true" : "false");
     json += ",\"pending\":" + String(zone.programmationEnvoiEnAttente() ? "true" : "false");
     json += ",\"mode\":\"" + jsonEscape(zone.getNomMode()) + "\"";
-    json += ",\"program\":\"" + programmationHex(zone.getProgrammation()) + "\"";
+    json += ",\"program\":\"" + programmationHex(zone.programmeEdite()) + "\"";
     json += ",\"revision\":\"" + programmationRevision(zone) + "\"}";
   }
   json += "]}";
@@ -564,7 +565,6 @@ void Portal::handlePostProgrammation() {
     return;
   }
   zone.modifierProgrammation(programmation);
-  zone.saveConfig();
   info("[PORTAIL] Programmation de la zone %d enregistrée (%s).", index + 1,
        zone.programmationEnvoiEnAttente() ? "envoi Connect en attente" : "programme local");
   _srv.send(200, "application/json; charset=utf-8", "{\"ok\":true,\"revision\":\"" + programmationRevision(zone)

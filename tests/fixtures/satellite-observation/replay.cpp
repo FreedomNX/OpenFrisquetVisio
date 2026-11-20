@@ -28,7 +28,7 @@ struct MqttManager {
         ++publications;
     }
 };
-struct Config {};
+struct Config {byte boilerId(){return 0x80;}};
 constexpr int ID_CHAUDIERE = 0x80;
 constexpr int RADIOLIB_ERR_NONE = 0;
 constexpr int RADIOLIB_SX126X_MAX_PACKET_LENGTH = 255;
@@ -41,6 +41,7 @@ struct fword {
     byte b[2];
     uint16_t toUInt16() const { return (uint16_t(b[0]) << 8) | b[1]; }
 };
+struct temperature8 {byte value;};
 struct temperature16 : fword {float toFloat() const { return toUInt16() / 10.0f; }};
 struct Date {Date(const byte*) {}};
 struct Chaudiere {
@@ -61,6 +62,7 @@ struct FrisquetDevice {
     unsigned dateUpdates=0;
     FrisquetDevice(FrisquetRadio& radio, Config&, MqttManager&, byte id): link(radio), id(id) {}
     FrisquetRadio& radio() {return link;}
+    Config config; Config& getConfig(){return config;}
     byte getId() {return id;}
     byte getIdMessage() {return message;}
     byte getIdAssociation() {return association;}
@@ -80,8 +82,9 @@ uint8_t Zone::getIdZone() {return _idZone;}
 bool Zone::programmeDisponible() const {return true;}
 void Zone::setPilotageActif(bool actif) {_pilotageActif=actif;}
 void Zone::setTemperatureAmbiante(float value) {_temperatureAmbiante=value;}
-void Zone::setTemperatureConsigne(float value) {_temperatureConsigne=value;}
-float Zone::getTemperatureConsigne() {return _temperatureConsigne;}
+bool Zone::reconnaitreReglages(const byte*, size_t) {return false;}
+void Zone::setTemperatureConsigne(float value) {_reglages.consigne=value;}
+float Zone::getTemperatureConsigne() {return _reglages.consigne;}
 void Satellite::saveConfig() {}
 void Satellite::publishMqtt() {}
 bool Satellite::envoyerConsigne() {assert(false && "le test ne doit jamais émettre de commande radio"); return false;}
@@ -141,7 +144,7 @@ int main() {
             memset(request.data(), 0xDD, request.size()); // la requête conservée doit être une copie indépendante
             satellite.pollObservation();
             printf("octet=0x%02X source=%s demande=%u observe=%u mode=%s regime=%s boost=%s\n",
-                raw, source==Zone::CONNECT ? "Connect" : "satellite", zone._mode,
+                raw, source==Zone::CONNECT ? "Connect" : "satellite", zone._reglages.mode,
                 zone._modeObserve, zone._mqttEntities.preset.value.c_str(),
                 zone._mqttEntities.regime.value.c_str(), zone._mqttEntities.boost.value.c_str());
 
@@ -167,44 +170,29 @@ int main() {
         assert(!mqtt.publications);
     }
     for (unsigned raw : {0x21,0x24,0x22,0x23,0x26,0x27,0x00,0x04,0x10,0x41,0x08,0x40,0x60,0x80,0xff}) {
-        for (bool pending : {false,true}) {
-            for (unsigned zoneNumber=1;zoneNumber<=3;++zoneNumber) {
-                MqttManager mqtt; Config config; FrisquetRadio radio; Chaudiere boiler;
-                const byte id=zoneNumber+7;
-                Zone zone(id,mqtt); zone.setSource(Zone::CONNECT); zone._mqttPret=true;
-                zone.setMode(Zone::CONFORT); zone.setModeOptions(0x41);
-                zone._lastChange=0; zone._lastEnvoi=0;
-                Satellite satellite(radio,config,mqtt,zone,boiler);
-                auto request=makeRequest(0x25); request[1]=id;
-                request[11]=0x2F+5*(zoneNumber-1);
-                radio.reply=makeReply(0x25); radio.reply[0]=id;
-                // Contredire volontairement la requête pour vérifier la source utilisée.
-                radio.reply[24+(zoneNumber-1)*10]=raw;
-                assert(satellite.onReceive(request.data(),request.size()));
-                // Une commande reçue pendant l’attente reste demandée ; la réponse
-                // chaudière antérieure fournit seulement l’état observé.
-                zone._lastChange=pending ? 2 : 0;
-                zone.setTemperatureConsigne(23.5f);
-                satellite.pollObservation();
-                if (pending) assert(zone.getTemperatureConsigne()==23.5f);
-                const bool invalid=raw==0x08 || raw==0x40 || raw==0x60 || raw==0x80 || raw==0xff;
-                if (invalid) assert(zone._modeObserve==Zone::INCONNU);
-                else {
-                    const auto expected=raw==0x10 ? Zone::HORS_GEL : (raw&0x22) ? Zone::AUTO : (raw&1) ? Zone::CONFORT : Zone::REDUIT;
-                    assert(zone._modeObserve==expected);
-                    if (raw&2) assert(zone._mqttEntities.preset.value==((raw&1) ? "Dérogation Confort" : "Dérogation Réduit"));
-                    assert(bool(zone._optionsObservees&0x40)==bool(raw&0x40));
-                }
-                if (pending || invalid) {
-                    assert(zone._mode==Zone::CONFORT && zone._modeOptions==0x41);
-                }
-                // Une commande toujours en attente ne fige pas les observations
-                // suivantes si aucune nouvelle commande n'arrive pendant l'échange.
-                request[3]++;
-                radio.reply[3]++;
-                assert(satellite.onReceive(request.data(),request.size()));
-                satellite.pollObservation();
-                assert(zone.getTemperatureConsigne()!=23.5f);
+        for (unsigned zoneNumber=1;zoneNumber<=3;++zoneNumber) {
+            MqttManager mqtt; Config config; FrisquetRadio radio; Chaudiere boiler;
+            const byte id=zoneNumber+7;
+            Zone zone(id,mqtt); zone.setSource(Zone::CONNECT); zone._mqttPret=true;
+            zone.setMode(Zone::CONFORT); zone.setModeOptions(0x41);
+            Satellite satellite(radio,config,mqtt,zone,boiler);
+            auto request=makeRequest(0x25); request[1]=id;
+            request[11]=0x2F+5*(zoneNumber-1);
+            radio.reply=makeReply(0x25); radio.reply[0]=id;
+            // Contredire volontairement la requête pour vérifier la source utilisée.
+            radio.reply[24+(zoneNumber-1)*10]=raw;
+            assert(satellite.onReceive(request.data(),request.size()));
+            satellite.pollObservation();
+            const bool invalid=raw==0x08 || raw==0x40 || raw==0x60 || raw==0x80 || raw==0xff;
+            if (invalid) assert(zone._modeObserve==Zone::INCONNU);
+            else {
+                const auto expected=raw==0x10 ? Zone::HORS_GEL : (raw&0x22) ? Zone::AUTO : (raw&1) ? Zone::CONFORT : Zone::REDUIT;
+                assert(zone._modeObserve==expected);
+                if (raw&2) assert(zone._mqttEntities.preset.value==((raw&1) ? "Dérogation Confort" : "Dérogation Réduit"));
+                assert(bool(zone._optionsObservees&0x40)==bool(raw&0x40));
+            }
+            if (invalid) {
+                assert(zone._reglages.mode==Zone::CONFORT && zone._reglages.options==0x41);
             }
         }
     }
@@ -260,21 +248,18 @@ int main() {
             }
         }
     }
-    // Sans grand bloc, ne pas confirmer un mode chaudière Connect inconnu,
-    // ni écraser une nouvelle commande reçue pendant cette lecture courte.
-    for(bool pending: {false,true}) {
+    // Une réponse courte fournit la consigne, mais aucun mode chaudière Connect.
+    {
         MqttManager mqtt;Config config;FrisquetRadio radio;Chaudiere boiler;
         Zone zone(8,mqtt);zone.setSource(Zone::CONNECT);zone._mqttPret=true;
-        zone.setMode(Zone::CONFORT);zone._lastChange=0;zone._lastEnvoi=0;
+        zone.setMode(Zone::CONFORT);
         Satellite satellite(radio,config,mqtt,zone,boiler);
         auto request=legacyRequest;radio.reply=legacyReply;
         assert(satellite.onReceive(request.data(),request.size()));
-        if(pending){zone._lastChange=2;zone.setTemperatureConsigne(23.5f);}
         satellite.pollObservation();
-        assert(zone._temperatureAmbiante==22.5f);
-        assert(zone.getTemperatureConsigne()==(pending ? 23.5f : 21.5f));
+        assert(zone._temperatureAmbiante==22.5f && zone.getTemperatureConsigne()==21.5f);
         assert(zone._modeObserve==Zone::INCONNU);
         assert(!satellite.dateUpdates && !boiler.stateUpdates);
     }
-    puts("OK : modes, commandes en attente, réponses longues et capture ancienne A033 de neuf octets, validation et absence de données chaudière inventées.");
+    puts("OK : modes, réponses longues et capture ancienne A033 de neuf octets, validation et absence de données chaudière inventées.");
 }

@@ -69,6 +69,7 @@ tests/fixtures/*
 !tests/test_cooperative_portal.py
 !tests/test_portal_network_limits.py
 !tests/test_cooperative_commands.py
+!tests/test_diagnostic_passive_connect.py
 !tests/test_satellite_observation.py
 !tests/fixtures/satellite-observation/
 

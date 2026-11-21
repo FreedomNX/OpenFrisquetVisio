@@ -123,6 +123,9 @@ en compte. Un écran débranché ou défaillant est désactivé jusqu’au redé
 - Informations système et réseau
 - Envoi de trame radio personnalisée (debug)
 - Lecture de zones mémoire (debug)
+  En Connect passif, ces outils n’émettent jamais au nom du Connect, dont l’identité est celle de la box :
+  la lecture mémoire passe par le satellite Z1 s’il est associé, et une trame brute dont l’expéditeur
+  est le Connect (`7E`) est refusée.
 
 Les pages du portail se trouvent dans le dossier **`web/`**. Lors d'une compilation
 PlatformIO, le script `tools/generate_web_assets.py` les transforme en ressources

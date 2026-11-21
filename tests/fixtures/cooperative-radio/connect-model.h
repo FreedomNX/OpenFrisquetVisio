@@ -84,8 +84,12 @@ struct Chaudiere {
     void setPuissanceInstantaneeChauffage(float v) { powerHeat = v; }
     void setModeFonctionnement(uint16_t v) { state = v; }
     void setPression(float v) { pressure = v; }
-    void setConsommationChauffage(int v) { heat = v; }
-    void setConsommationECS(int v) { consEcs = v; }
+    uint32_t jourConsommation = 0;
+    void setConsommationVeille(int h, int e, uint32_t jour) {
+        heat = h;
+        consEcs = e;
+        jourConsommation = jour;
+    }
     void setConsommationAnnuelle(int h, int e) {
         annualHeat = h;
         annualEcs = e;

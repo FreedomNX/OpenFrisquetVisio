@@ -73,6 +73,16 @@ int main() {
     put(consumption, 27, 456);
     assert(m.connect.applyConsumption(consumption.data(), consumption.size()));
     assert(m.boiler.consEcs == 123 && m.boiler.heat == 456);
+    assert(m.boiler.jourConsommation == 0);
+    // 1er janvier : l'heure chaudière avance, seul un nouveau relevé reçoit une date.
+    const uint32_t premierJanvier = 1798761600;
+    seconds = premierJanvier + 3599;
+    assert(m.connect.applyConsumption(consumption.data(), consumption.size()));
+    assert(m.boiler.jourConsommation == 0);
+    seconds++;
+    assert(m.connect.applyConsumption(consumption.data(), consumption.size()));
+    assert(m.boiler.jourConsommation == premierJanvier / 86400 - 1);
+    seconds += 86400;
     assert(!m.connect.applyConsumption(nullptr, consumption.size()));
     for (size_t n = 0; n < consumption.size(); ++n)
         assert(!m.connect.applyConsumption(consumption.data(), n));
@@ -83,6 +93,8 @@ int main() {
         assert(!m.connect.applyConsumption(bad.data(), bad.size()));
     }
     assert(m.boiler.consEcs == 123 && m.boiler.heat == 456);
+
+    assert(m.boiler.jourConsommation == premierJanvier / 86400 - 1);
 
     auto ecs = response(9);
     ecs[8] = 9;

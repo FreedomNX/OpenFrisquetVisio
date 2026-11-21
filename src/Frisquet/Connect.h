@@ -82,8 +82,6 @@ class Connect : public FrisquetDevice {
         void setTemperatureECS(float temperature);
         void setTemperatureCDC(float temperature);
 
-        void setConsommationECS(int16_t consommation);
-        void setConsommationChauffage(int16_t consommation);
         bool setConsommationAnnuelle(const byte* donnees, size_t length, bool anneePrecedente = false);
         bool applyInformation(const byte* data, size_t length, const uint32_t* zoneChanges = nullptr);
         bool applyBoilerStatus(const byte* data, size_t length);

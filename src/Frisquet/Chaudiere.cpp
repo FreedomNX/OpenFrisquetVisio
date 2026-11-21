@@ -277,8 +277,10 @@ void Chaudiere::setTemperatureCDC(float temperature) {
     _temperatureCDC = temperature;
 }
 
-void Chaudiere::setConsommationECS(int16_t consommation) {
-    _consommationGazECS = consommation;
+void Chaudiere::setConsommationVeille(int16_t chauffage, int16_t ecs, uint32_t jour) {
+    _consommationGazChauffage = chauffage;
+    _consommationGazECS = ecs;
+    _jourConsommation = jour;
 }
 
 void Chaudiere::setConsommationAnnuelle(int32_t chauffage, int32_t ecs) {
@@ -286,9 +288,6 @@ void Chaudiere::setConsommationAnnuelle(int32_t chauffage, int32_t ecs) {
     _consommationAnnuelleECS = ecs;
 }
 
-void Chaudiere::setConsommationChauffage(int16_t consommation) {
-    _consommationGazChauffage = consommation;
-}
 
 String Chaudiere::getNomModeECS() const {
     switch (getModeECS()) {

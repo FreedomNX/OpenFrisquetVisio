@@ -24,8 +24,6 @@ def run_connect_fixture(directory, scenario, extra_methods=(), services=False):
         "void Connect::setTemperatureECS(",
         "void Connect::setTemperatureCDC(",
         "void Connect::setPression(",
-        "void Connect::setConsommationECS(",
-        "void Connect::setConsommationChauffage(",
         "Connect::MODE_ECS Connect::getModeECS(",
         "bool Connect::setModeECS(MODE_ECS",
         "bool Connect::setModeECS(const String&",

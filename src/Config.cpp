@@ -76,6 +76,7 @@ void Config::load() {
   _useConnectPassive = _preferences.getBool("useConnectPass", false);
   _useSondeExterieure = _preferences.getBool("useSondeExt", false);
   _useDS18B20 = _preferences.getBool("useDS18B20", false);
+  useSondeExistante(!_useSondeExterieure && _preferences.getBool("probeExisting", false));
   _useSatelliteZ1 = _preferences.getBool("useSatelliteZ1", false);
   _useSatelliteZ2 = _preferences.getBool("useSatelliteZ2", false);
   _useSatelliteZ3 = _preferences.getBool("useSatelliteZ3", false);
@@ -153,6 +154,7 @@ void Config::save() {
   _preferences.putBool("useConnectPass", _useConnectPassive);
   _preferences.putBool("useSondeExt", _useSondeExterieure);
   _preferences.putBool("useDS18B20", _useDS18B20);
+  _preferences.putBool("probeExisting", _useSondeExistante);
   _preferences.putBool("useSatelliteZ1", _useSatelliteZ1);
   _preferences.putBool("useSatelliteZ2", _useSatelliteZ2);
   _preferences.putBool("useSatelliteZ3", _useSatelliteZ3);

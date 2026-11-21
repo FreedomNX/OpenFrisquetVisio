@@ -210,6 +210,15 @@ bool Connect::applyInformation(const byte* data, size_t length, const uint32_t* 
     return true;
 }
 
+// A02E contient l'octet d'état chaudière puis le jour de semaine, comme dans
+// le bloc A029 des satellites. Ne pas interpréter le mot entier comme l'état.
+bool Connect::applyBoilerStatus(const byte* data, size_t length) {
+    const size_t prefix = sizeof(FrisquetRadio::RadioTrameHeader) + 1;
+    if (!data || length != prefix + 2 || data[prefix - 1] != 2) return false;
+    _chaudiere.setEtatChaudiere(data[prefix]);
+    return true;
+}
+
 bool Connect::applyConsumption(const byte* data, size_t length) {
     struct {
         FrisquetRadio::RadioTrameHeader header;
@@ -415,6 +424,11 @@ bool Connect::envoyerModeECS() {
 }
 
 bool Connect::handlePassiveReadResponse(uint16_t adresseMemoire, const byte* buff, size_t length) {
+    if (adresseMemoire == 0xA02E) {
+        if (!applyBoilerStatus(buff, length)) return false;
+        publishMqtt();
+        return true;
+    }
     const uint16_t addrInformations = 0x79E0;
     const uint16_t addrInformations2 = 0x79FC;
     const uint16_t addrConsommation = 0x7A18;
@@ -772,7 +786,7 @@ void Connect::loop() {
     if (_temperatureSchedules[0].due(600, 180)
         || _temperatureSchedules[1].due(600, 360)
         || _temperatureSchedules[2].due(600, 480)) {
-        startReads(ReadKind::Information, ReadKind::Information);
+        startReads(ReadKind::Information, ReadKind::Status);
         return;
     }
     // Créneaux horaires distincts pour les lectures moins fréquentes.
@@ -798,6 +812,7 @@ void Connect::startReads(ReadKind first, ReadKind last) {
     switch (first) {
         case ReadKind::Firmware: info("[CONNECT] Récupération initiale des informations..."); break;
         case ReadKind::Information: info("[CONNECT] Récupération des températures..."); break;
+        case ReadKind::Status: info("[CONNECT] Récupération du statut chaudière..."); break;
         case ReadKind::Consumption: info("[CONNECT] Récupération des consommations..."); break;
         case ReadKind::Ecs: info("[CONNECT] Récupération du mode ECS..."); break;
         case ReadKind::Annual:
@@ -825,6 +840,7 @@ void Connect::pollReads() {
         switch (_readKind) {
             case ReadKind::Firmware: address = 0x7541; words = 2; break;
             case ReadKind::Information: address = 0x79F2 + getConfig().boilerMemoryOffset(); words = 0x1C; break;
+            case ReadKind::Status: address = 0xA02E; words = 1; break;
             case ReadKind::Consumption: address = 0x7A18 + getConfig().boilerMemoryOffset(); words = 0x1C; break;
             case ReadKind::Annual: address = 0xA063; words = 0x18; break;
             case ReadKind::PreviousAnnual: address = 0xA07B; words = 0x18; break;
@@ -861,6 +877,7 @@ void Connect::pollReads() {
         switch (_readKind) {
             case ReadKind::Firmware: success = setVersionFirmware(data, length); break;
             case ReadKind::Information: success = applyInformation(data, length, _readZoneChanges); break;
+            case ReadKind::Status: success = applyBoilerStatus(data, length); break;
             case ReadKind::Consumption: success = applyConsumption(data, length); break;
             case ReadKind::Annual: success = setConsommationAnnuelle(data, length); break;
             case ReadKind::PreviousAnnual: success = setConsommationAnnuelle(data, length, true); break;
@@ -891,6 +908,7 @@ void Connect::completeRead(bool success, int16_t result) {
             case ReadKind::Consumption: _lastRecuperationConsommation = millis(); break;
             case ReadKind::Ecs: _lastRecuperationModeECS = millis(); break;
             case ReadKind::Annual: break;
+            case ReadKind::Status: break;
             case ReadKind::PreviousAnnual: break;
             case ReadKind::Firmware: break;
             case ReadKind::None: return;
@@ -908,6 +926,9 @@ void Connect::completeRead(bool success, int16_t result) {
             case ReadKind::Information:
                 error(initial ? "[CONNECT] Échec de la récupération initiale des températures."
                     : "[CONNECT] Échec de la récupération des températures.");
+                break;
+            case ReadKind::Status:
+                error("[CONNECT] Statut chaudière A02E indisponible ; état précédent conservé.");
                 break;
             case ReadKind::Consumption:
                 error(initial ? "[CONNECT] Échec de la récupération initiale des consommations."

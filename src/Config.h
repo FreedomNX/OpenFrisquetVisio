@@ -34,6 +34,7 @@ class Config {
         bool _useConnectPassive = false;
         bool _useSondeExterieure = false;
         bool _useDS18B20 = false;
+        bool _useSondeExistante = false;
         bool _useSatelliteZ1 = false;
         bool _useSatelliteZ2 = false;
         bool _useSatelliteZ3 = false;
@@ -89,7 +90,18 @@ class Config {
         bool useConnectPassive() { return _useConnectPassive; }
         bool useConnectPassive(bool useConnectPassive) { _useConnectPassive = useConnectPassive; return _useConnectPassive; }
         bool useSondeExterieure() { return _useSondeExterieure; }
-        bool useSondeExterieure(bool useSondeExterieure) { _useSondeExterieure = useSondeExterieure; return _useSondeExterieure; }
+        bool useSondeExterieure(bool useSondeExterieure) {
+            _useSondeExterieure = useSondeExterieure;
+            if (useSondeExterieure) _useSondeExistante = false;
+            return _useSondeExterieure;
+        }
+        // Choix d'affichage/configuration : une sonde déjà reliée à la chaudière
+        // ne doit jamais activer l'émulation radio d'une sonde extérieure.
+        bool useSondeExistante() const { return _useSondeExistante; }
+        void useSondeExistante(bool enabled) {
+            _useSondeExistante = enabled;
+            if (enabled) { _useSondeExterieure = false; _useDS18B20 = false; }
+        }
         bool useDS18B20() { return _useDS18B20; }
         bool useDS18B20(bool useDS18B20) { _useDS18B20 = useDS18B20; return _useDS18B20; }
         bool useSatelliteZ1() { return _useSatelliteZ1; }

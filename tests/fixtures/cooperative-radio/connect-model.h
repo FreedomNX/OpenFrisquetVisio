@@ -73,6 +73,9 @@ struct Chaudiere {
           pressure = -999;
     int heat = -999, consEcs = -999, annualHeat = -999, annualEcs = -999;
     uint16_t state = 0xffff;
+    byte boilerStatus = 0;
+    bool statusKnown = false;
+    void setEtatChaudiere(byte value) { boilerStatus = value; statusKnown = true; }
     void setTemperatureExterieure(float v) { outdoor = v; }
     void setTemperatureECS(float v) { ecs = v; }
     void setTemperatureCDC(float v) { cdc = v; }

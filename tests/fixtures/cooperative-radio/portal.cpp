@@ -82,7 +82,13 @@ struct Config {
     void useConnectPassive(bool v) { _useConnectPassive = v; }
     bool _useSondeExterieure = true;
     bool useSondeExterieure() { return _useSondeExterieure; }
-    void useSondeExterieure(bool v) { _useSondeExterieure = v; }
+    void useSondeExterieure(bool v) { _useSondeExterieure = v; if(v) _useSondeExistante = false; }
+    bool _useSondeExistante = false;
+    bool useSondeExistante() { return _useSondeExistante; }
+    void useSondeExistante(bool v) {
+        _useSondeExistante = v;
+        if(v) { _useSondeExterieure = false; _useDS18B20 = false; }
+    }
     bool _useDS18B20 = true;
     bool useDS18B20() { return _useDS18B20; }
     void useDS18B20(bool v) { _useDS18B20 = v; }
@@ -220,6 +226,7 @@ int main(int argc, char **argv) {
             {"wifiHostname", "mon_heltec"}, {"wifiSsid", "0123456789abcdef0123456789abcdefX"},
             {"wifiPass", "court"}, {"mqttBaseTopic", "frisquet/#"},
             {"displayEnabled", "invalide"}, {"displayFlip", "invalide"}, {"displayAutoCycle", "invalide"},
+            {"useSondeExistante", "invalide"},
             {"displayBrightness", "invalide"}, {"displayTimeout", "invalide"}};
         for (const auto &[field, value] : invalid) {
             Portal p;
@@ -256,6 +263,12 @@ int main(int argc, char **argv) {
             && accepted._frisquetManager.cfg.screenCycle && accepted._frisquetManager.cfg.screenBrightness == 255
             && accepted._frisquetManager.cfg.screenTimeout == 0);
         assert(!accepted._frisquetManager.r.ownsObservation(8) && accepted._frisquetManager.r.busy());
+        Portal existingProbe;
+        existingProbe._srv.args = {{"useSondeExt", "false"}, {"useDS18B20", "false"}, {"useSondeExistante", "true"}};
+        existingProbe.handlePostConfig();
+        const auto& probe = existingProbe._frisquetManager.cfg;
+        assert(existingProbe._srv.status == 200 && probe._useSondeExistante);
+        assert(!probe._useSondeExterieure && !probe._useDS18B20);
     } else {
         using Handler = void (Portal::*)();
         for (Handler handler : {&Portal::handlePairConnect, &Portal::handlePairSondeExt,

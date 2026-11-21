@@ -27,6 +27,23 @@ void put(std::vector<byte> &data, size_t at, uint16_t value) {
 
 int main() {
     Model m;
+    assert(!m.boiler.statusKnown);
+    assert(!m.connect.applyBoilerStatus(nullptr, 9));
+    auto status = response(9);
+    status[7] = 0x29; status[8] = 6;
+    assert(m.connect.applyBoilerStatus(status.data(), status.size()));
+    assert(m.boiler.statusKnown && m.boiler.boilerStatus == 0x29);
+    for (size_t size = 0; size < 9; ++size)
+        assert(!m.connect.applyBoilerStatus(status.data(), size));
+    for (byte declared : {0, 1, 3, 255}) {
+        auto bad = status; bad[6] = declared; bad[7] = 0;
+        assert(!m.connect.applyBoilerStatus(bad.data(), bad.size()));
+        assert(m.boiler.boilerStatus == 0x29);
+    }
+    auto longStatus = status; longStatus.push_back(0);
+    assert(!m.connect.applyBoilerStatus(longStatus.data(), longStatus.size()));
+    status[7] = 0x28; status[8] = 1; // Disparition de l'anomalie, indépendamment du jour.
+    assert(m.connect.applyBoilerStatus(status.data(), status.size()) && m.boiler.boilerStatus == 0x28);
     auto information = response(63);
     put(information, 7, 215);
     put(information, 19, 205);

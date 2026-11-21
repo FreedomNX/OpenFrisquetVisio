@@ -16,6 +16,7 @@ def run_connect_fixture(directory, scenario, extra_methods=(), services=False):
     signatures = (
         "bool Connect::setVersionFirmware(",
         "bool Connect::applyInformation(",
+        "bool Connect::applyBoilerStatus(",
         "bool Connect::applyConsumption(",
         "bool Connect::applyEcs(",
         "bool Connect::setConsommationAnnuelle(",

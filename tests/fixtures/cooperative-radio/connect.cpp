@@ -101,6 +101,10 @@ Radio::Packet reply(const R &r) {
         }
     if (address(r) == 0xa0fc)
         result.data[8] = 9;
+    if (address(r) == 0xa02e) {
+        result.data[7] = 0x29; // Fonctionnement avec anomalie ; le jour n'est pas l'état.
+        result.data[8] = 6;
+    }
     return result;
 }
 void tick(FrisquetManager &m, uint32_t t) {
@@ -120,15 +124,15 @@ int main() {
     boot._zone2.source = Zone::SOURCE::SATELLITE;
     tick(boot, 0);
     assert(boot._radio.busy() && boot._sondeExterieure.calls == 0);
-    const uint16_t addresses[] = {0x7541, 0x79f2, 0x7a18, 0xa063, 0xa07b, 0xa0fc};
+    const uint16_t addresses[] = {0x7541, 0x79f2, 0xa02e, 0x7a18, 0xa063, 0xa07b, 0xa0fc};
     uint32_t start = 0;
-    for (unsigned i = 0; i < 6; ++i) {
+    for (unsigned i = 0; i < 7; ++i) {
         tick(boot, start + 29);
         assert(boot._radio.sent.size() == i);
         tick(boot, start + 30);
         assert(address(boot._radio) == addresses[i]);
         answer(boot, start + 40);
-        if (i < 5) {
+        if (i < 6) {
             const uint32_t gap = 100;
             if (gap) {
                 tick(boot, start + 40 + gap - 1);
@@ -139,7 +143,8 @@ int main() {
             assert(boot._radio.busy());
         }
     }
-    assert(boot._connect._readKind == Kind::None && boot._radio.sent.size() == 6);
+    assert(boot._connect._readKind == Kind::None && boot._radio.sent.size() == 7);
+    assert(boot.boiler.statusKnown && boot.boiler.boilerStatus == 0x29);
     assert(boot._connect._boilerFirmware.directPower() &&
            boot._connect._boilerFirmware.build == 11);
     assert(boot._zone1.ambient == 21.5f && boot._zone1.setpoint == 20.5f &&
@@ -159,12 +164,12 @@ int main() {
         seconds = 0;
         tick(model, 0);
         const uint16_t offset = boiler == 0x84 ? 0xc8 : 0;
-        const uint16_t registers[] = {0x7541, uint16_t(0x79f2 + offset),
+        const uint16_t registers[] = {0x7541, uint16_t(0x79f2 + offset), 0xa02e,
                                       uint16_t(0x7a18 + offset), 0xa063, 0xa07b, 0xa0fc};
-        const byte words[] = {2, 0x1c, 0x1c, 0x18, 0x18, 1};
+        const byte words[] = {2, 0x1c, 1, 0x1c, 0x18, 0x18, 1};
         // Ni la version ni l'année précédente ne modifient une valeur MQTT.
-        const unsigned published[] = {0, 1, 2, 3, 3, 4};
-        for (unsigned i = 0; i < 6; ++i) {
+        const unsigned published[] = {0, 1, 2, 3, 4, 4, 5};
+        for (unsigned i = 0; i < 7; ++i) {
             const uint32_t begin = i * 140;
             if (i) tick(model, begin);
             tick(model, begin + 30);
@@ -179,6 +184,31 @@ int main() {
         }
         assert(model._connect._readKind == Kind::None && !model._radio.busy());
         assert(model._zone1.ambient == 21.5f && model.boiler.heat == 456);
+        assert(model.boiler.statusKnown && model.boiler.boilerStatus == 0x29);
+    }
+
+    // La collecte périodique lit également A02E. Une réponse courte ne remplace
+    // pas le statut et la deuxième tentative permet de récupérer l'anomalie.
+    for (byte boiler : {0x80, 0x84}) {
+        FrisquetManager periodic;
+        periodic._cfg.boiler = boiler;
+        periodic._connect._initialReadPending = false;
+        seconds = 180;
+        tick(periodic, 180000); tick(periodic, 180030); answer(periodic, 180040);
+        tick(periodic, 180140); tick(periodic, 180170);
+        assert(address(periodic._radio) == 0xA02E && periodic._radio.sent.back()[9] == 1);
+        auto shortReply = reply(periodic._radio); shortReply.data.resize(8);
+        periodic._radio.packets.push_back(shortReply); tick(periodic, 180180);
+        assert(!periodic.boiler.statusKnown);
+        tick(periodic, 180280); tick(periodic, 180310); answer(periodic, 180320);
+        assert(periodic._connect._readKind == Kind::None && periodic.boiler.boilerStatus == 0x29);
+        // Au créneau suivant, la disparition de l'anomalie est récupérée aussi.
+        seconds = 360;
+        tick(periodic, 360000); tick(periodic, 360030); answer(periodic, 360040);
+        tick(periodic, 360140); tick(periodic, 360170);
+        auto recovery = reply(periodic._radio); recovery.data[7] = 0x28;
+        periodic._radio.packets.push_back(recovery); tick(periodic, 360180);
+        assert(periodic.boiler.boilerStatus == 0x28 && periodic._connect._readKind == Kind::None);
     }
 
     // Réponse au-delà de la première fenêtre de 408 ms, sur la première ou
@@ -313,15 +343,17 @@ int main() {
     // émission.
     FrisquetManager absent;
     absent._connect._initialReadPending = false;
+    absent.boiler.setEtatChaudiere(0x29);
     seconds = 180;
     tick(absent, 180000);
-    for (unsigned i = 1; absent._connect._readKind != Kind::None && i < 3000; ++i)
+    for (unsigned i = 1; absent._connect._readKind != Kind::None && i < 5000; ++i)
         tick(absent, 180000 + i * 10);
-    assert(absent._connect._readKind == Kind::None && absent._radio.sent.size() == 10);
+    assert(absent._connect._readKind == Kind::None && absent._radio.sent.size() == 20);
     assert(absent._radio.sent[0][3] == 1 && absent._radio.sent[4][3] == 1 &&
            absent._radio.sent[5][3] == 2);
     tick(absent, clockMs + 10);
-    assert(absent._radio.sent.size() == 10 && absent.boiler.publishes == 0);
+    assert(absent._radio.sent.size() == 20 && absent.boiler.publishes == 0);
+    assert(absent.boiler.statusKnown && absent.boiler.boilerStatus == 0x29);
 
     // Une suspension abandonne le résultat périmé ; la collecte initiale reprend
     // après libération, y compris si la version n'avait pas encore été décodée.
@@ -515,17 +547,17 @@ int main() {
         const uint32_t base = slot * 1000;
         tick(overlap, base);
         tick(overlap, base + 30);
-        for (unsigned i = 0; i < 6; ++i) {
+        for (unsigned i = 0; i < 7; ++i) {
             answer(overlap, base + 40 + i * 140);
-            if (i < 5) {
+            if (i < 6) {
                 tick(overlap, base + 140 + i * 140);
                 tick(overlap, base + 170 + i * 140);
             }
         }
-        for (unsigned i = 840; i <= 1140; i += 10)
+        for (unsigned i = 980; i <= 1280; i += 10)
             tick(overlap, base + i);
         assert(overlap._connect._readKind == Kind::None && !overlap._radio.busy());
-        assert(overlap._radio.sent.size() == 6 && !overlap._connect._initialReadPending);
+        assert(overlap._radio.sent.size() == 7 && !overlap._connect._initialReadPending);
     }
 
     // Entre deux lectures initiales, envoyer d'abord la commande ECS différée.

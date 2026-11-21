@@ -65,6 +65,61 @@ Zone::Programmation programmeReduit() {
     return programme;
 }
 
+void verifierStatutChaudiereConnect() {
+    for (byte boiler : {0x80, 0x84}) {
+        Banc banc;
+        banc.config.useConnect(true);
+        banc.config.boilerId(boiler);
+        banc.connect.setIdAssociation(0xAC);
+        initialiser(banc.z1, Zone::CONNECT);
+        initialiser(banc.z2, Zone::CONNECT);
+        initialiser(banc.z3, Zone::CONNECT);
+        banc.chaudiere.begin();
+        banc.chaudiere.publishMqtt();
+        const char* topic = "frisquet/chaudiere/anomalieChaudiere";
+        assert(publications.at(topic) == "None");
+        auto collecter = [&](unsigned objectif, byte etat) {
+            size_t traite = emissions.size();
+            for (unsigned tour = 0; tour < 2000; ++tour) {
+                banc.connect.pollReads();
+                banc.connect.loop();
+                if (emissions.size() > traite) {
+                    const auto& tx = emissions.back();
+                    assert(tx.size() == 10 && tx[0] == boiler && tx[1] == 0x7E && tx[5] == 3);
+                    const uint16_t adresse = (tx[6] << 8) | tx[7];
+                    const unsigned octets = 2 * ((tx[8] << 8) | tx[9]);
+                    reception.assign(7 + octets, 0);
+                    reception[0] = tx[1]; reception[1] = tx[0]; reception[2] = tx[2];
+                    reception[3] = tx[3]; reception[4] = 0x81; reception[5] = 3; reception[6] = octets;
+                    if (adresse == 0x7541) {reception[7] = 0x19; reception[8] = 2; reception[10] = 0x11;}
+                    if (adresse == 0xA02E) {assert(octets == 2); reception[7] = etat; reception[8] = 6;}
+                    if (adresse == 0xA0FC) reception[8] = 8;
+                    traite = emissions.size();
+                }
+                if (emissions.size() == objectif && reception.empty() && !banc.radio.busy()) return;
+                tempsMs += 10;
+            }
+            assert(false && "collecte Connect non terminée");
+        };
+        collecter(7, 0x29);
+        assert(banc.chaudiere.etatChaudiereConnu() && publications.at(topic) == "ON");
+        setTime(0, 3, 0, 21, 11, 26);
+        collecter(9, 0x28);
+        assert(publications.at(topic) == "OFF");
+
+        Banc passif;
+        passif.config.useConnect(true); passif.config.useConnectPassive(true);
+        passif.config.boilerId(boiler); passif.connect.setIdAssociation(0xAC);
+        passif.chaudiere.begin();
+        passif.connect.loop(); passif.connect.pollReads();
+        assert(emissions.empty() && !passif.radio.busy());
+        Trame requete = {boiler, 0x7E, 0xAC, 0x51, 1, 3, 0xA0, 0x2E, 0, 1};
+        reception = {0x7E, boiler, 0xAC, 0x51, 0x81, 3, 2, 0x29, 6};
+        assert(passif.connect.onReceive(requete.data(), requete.size()));
+        assert(publications.at(topic) == "ON" && emissions.empty());
+    }
+}
+
 void verifierCreneaux() {
     byte semaine[42] = {};
     semaine[0] = 1;
@@ -688,6 +743,7 @@ void verifierPilotagePhysiqueEtPortail() {
 } // namespace
 
 int main(int argc, char** argv) {
+    verifierStatutChaudiereConnect();
     assert(argc == 2);
     verifierCaptures(argv[1]);
     verifierRelectures();

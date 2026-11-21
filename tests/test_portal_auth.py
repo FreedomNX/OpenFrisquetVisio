@@ -134,6 +134,7 @@ struct WebServer {
         return String();
     }
     HTTPMethod method(){return requestMethod;}
+    bool hasArg(const char* name){return !strcmp(name,"password") || !strcmp(name,"portalPassword") || !strcmp(name,"portalPasswordConfirm");}
     String arg(const char* name){
         if(!strcmp(name,"password"))return password;
         if(!strcmp(name,"portalPassword"))return newPassword;

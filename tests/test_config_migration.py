@@ -149,6 +149,22 @@ int main() {
     reset(); seed("sysconfig", "networkID", pairedId);
     Config current; current.load(); expect(current, pairedId);
     assert(Preferences::legacyOpens == 0);
+    assert(!current.useSondeExistante()); // Une ancienne configuration n'invente pas une sonde.
+    for (unsigned mode : {0U, 1U, 2U, 3U}) {
+        current.useSondeExterieure(mode >= 2);
+        current.useDS18B20(mode == 3);
+        current.useSondeExistante(mode == 1);
+        current.save();
+        Config probeReboot; probeReboot.load();
+        assert(probeReboot.useSondeExistante() == (mode == 1));
+        assert(probeReboot.useSondeExterieure() == (mode >= 2));
+        assert(probeReboot.useDS18B20() == (mode == 3));
+        probeReboot.save(); // Une sauvegarde sans changement conserve la sélection.
+        Config again; again.load(); assert(again.useSondeExistante() == (mode == 1));
+    }
+    current.useSondeExistante(true);
+    assert(!current.useSondeExterieure() && !current.useDS18B20());
+    current.useSondeExterieure(true); assert(!current.useSondeExistante());
     reset(); Config fresh; fresh.load(); expect(fresh, NetworkID());
     reset(); Preferences::nvs["net-conf"];
     Config noLegacyId; noLegacyId.load(); expect(noLegacyId, NetworkID());

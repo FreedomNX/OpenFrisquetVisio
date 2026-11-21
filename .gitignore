@@ -22,6 +22,7 @@ tests/*
 !tests/test_web_assets.py
 !tests/test_local_screen.py
 !tests/screen-settings.test.mjs
+!tests/probe-mode.test.mjs
 
 !tests/test_zone_modes.py
 !tests/test_satellite_mode.py

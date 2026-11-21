@@ -797,6 +797,7 @@ void Portal::handleGetConfig() {
           String(_frisquetManager.config().useSondeExterieure() ? "true" : "false") + ",";
   json += "\"useDS18B20\":" +
           String(_frisquetManager.config().useDS18B20() ? "true" : "false") + ",";
+  json += "\"useSondeExistante\":" + String(_frisquetManager.config().useSondeExistante() ? "true" : "false") + ",";
     // Zones présentes
     json += "\"useZone1\":" +
       String(_frisquetManager.config().useZone1() ? "true" : "false") + ",";
@@ -832,6 +833,13 @@ void Portal::handlePostConfig() {
   }
 
   auto& cfg = _frisquetManager.config();
+  if (_srv.hasArg("useSondeExistante")) {
+    const String value = _srv.arg("useSondeExistante");
+    if (value != "true" && value != "false" && value != "1" && value != "0") {
+      _srv.send(400, "application/json; charset=utf-8", "{\"ok\":false,\"err\":\"Choix de sonde existante invalide\"}");
+      return;
+    }
+  }
 #if defined(OFV_SCREEN_V3)
   uint16_t screenBrightness = cfg.displayBrightness(), screenTimeout = cfg.displayTimeout();
   bool validScreen = true;
@@ -1015,6 +1023,9 @@ void Portal::handlePostConfig() {
     bool cur = _frisquetManager.config().useDS18B20();
     bool v = parseBoolArg(_srv.arg("useDS18B20"), cur);
     _frisquetManager.config().useDS18B20(v);
+  }
+  if (_srv.hasArg("useSondeExistante")) {
+    cfg.useSondeExistante(parseBoolArg(_srv.arg("useSondeExistante"), cfg.useSondeExistante()));
   }
     if (_srv.hasArg("useZone1")) {
       bool cur = _frisquetManager.config().useZone1();

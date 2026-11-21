@@ -86,6 +86,7 @@ class Connect : public FrisquetDevice {
         void setConsommationChauffage(int16_t consommation);
         bool setConsommationAnnuelle(const byte* donnees, size_t length, bool anneePrecedente = false);
         bool applyInformation(const byte* data, size_t length, const uint32_t* zoneChanges = nullptr);
+        bool applyBoilerStatus(const byte* data, size_t length);
         bool applyConsumption(const byte* data, size_t length);
         bool applyEcs(const byte* data, size_t length);
 
@@ -120,7 +121,7 @@ class Connect : public FrisquetDevice {
         RadioSchedule _consommationSchedule;
         RadioSchedule _ecsSchedule;
         bool _initialReadPending = true;
-        enum class ReadKind : uint8_t { Firmware, Information, Consumption, Annual, PreviousAnnual, Ecs, None };
+        enum class ReadKind : uint8_t { Firmware, Information, Status, Consumption, Annual, PreviousAnnual, Ecs, None };
         void startReads(ReadKind first, ReadKind last);
         void completeRead(bool success, int16_t result);
         // Une collecte parcourt un intervalle contigu de lectures ; None signifie repos.

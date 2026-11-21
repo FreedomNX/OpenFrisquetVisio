@@ -33,7 +33,7 @@ struct Connect {
              _lastRecuperationModeECS = 0, _lastEnvoiZone = 0;
     RadioSchedule _temperatureSchedules[3], _consommationSchedule, _ecsSchedule;
     Zone _zone1, _zone2, _zone3;
-    enum class ReadKind { Firmware, Information, Consumption, Annual, PreviousAnnual, Ecs, None };
+    enum class ReadKind { Firmware, Information, Status, Consumption, Annual, PreviousAnnual, Ecs, None };
     ReadKind _readKind = ReadKind::None;
     void startReads(ReadKind, ReadKind) { assert(false); }
     void envoiZones() { assert(false); }

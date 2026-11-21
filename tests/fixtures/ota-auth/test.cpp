@@ -174,11 +174,24 @@ int main() {
         p._srv.finish();
         assert(p._srv.status == 500 && !p._frisquetManager.r.busy() && !tasks && Update.aborts == 1);
     }
+    // Deux fichiers dans la même requête : la partition n'est jamais activée.
+    {
+        Portal p;
+        for (int file = 0; file < 2; ++file) {
+            p.upload(UPLOAD_FILE_START); p.upload(UPLOAD_FILE_WRITE); p.upload(UPLOAD_FILE_END);
+        }
+        p._srv.finish();
+        assert(p._srv.status == 500 && !Update.ends && Update.aborts >= 1 && Update.begins == 1);
+        assert(!tasks && !p._frisquetManager.r.busy() && !p._httpUpdateActive);
+    }
     for (bool success : {false, true}) {
         Portal p;
         taskOk = success;
         p.upload(UPLOAD_FILE_START); p.upload(UPLOAD_FILE_WRITE); p.upload(UPLOAD_FILE_END);
+        // La fin du fichier n'active rien : seul le handler final appelle Update.end().
+        assert(!Update.ends);
         p._srv.finish();
+        assert(Update.ends == 1);
         assert(p._srv.status == (success ? 200 : 500) && tasks == 1);
         assert(p._frisquetManager.r.busy() == success);
         p._frisquetManager.r.suspend(R::Pause::Reboot, false);

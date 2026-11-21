@@ -4,7 +4,17 @@
 #include <TimeLib.h>
 #include <stdlib.h>
 
+constexpr uint8_t Zone::MAX_FENETRES;
+
 namespace {
+// Départs choisis autour des quatre pics mesurés sur Z1.
+// Les mêmes délais après le statut propre à Z2 ou Z3 restent à confirmer.
+constexpr uint32_t ouvertures[] = {120000, 264000, 408000, 552000};
+constexpr uint32_t cycleStatut = 600000, toleranceStatut = 2500;
+constexpr uint32_t espacement = 1000, margeEmission = 400;
+constexpr uint32_t finEmissions = 2 * espacement + margeEmission;
+constexpr uint32_t finConfirmation = 5000, attenteStatut = 610000;
+
 String nomPreset(Zone::MODE_ZONE mode, byte options) {
     if(mode == Zone::MODE_ZONE::AUTO) {
         if(options & 0x02) return (options & 0x01) ? "Dérogation Confort" : "Dérogation Réduit";
@@ -24,7 +34,7 @@ String nomRegime(Zone::MODE_ZONE mode, byte options) {
 }
 
 void Zone::loadConfig() {
-    bool checkMigration = false;
+    bool migrerProgramme = false;
 
     _preferences.begin("zoneCfg" + getNumeroZone(), false);
 
@@ -39,17 +49,29 @@ void Zone::loadConfig() {
 
     Zone::Programmation programmation;
     const size_t tailleProgrammation = _preferences.getBytes("prog", &programmation, sizeof(programmation));
-    _programmationRecue = false;
+    _reglages.programmeConnu = false;
     setProgrammation(programmation,
         tailleProgrammation == sizeof(programmation) && _preferences.getBool("progValid", false));
-    if(programmationRecue() && _preferences.getBool("progPending", false)) {
-        _programmationEnvoiEnAttente = true;
-        refreshLastChange();
+    if(_source == CONNECT && _preferences.getBytesLength("demandeV1") == sizeof(_demande)
+        && _preferences.getBytes("demandeV1", &_demande, sizeof(_demande)) == sizeof(_demande)
+        && _demande.objet > Objet::Aucun && _demande.objet <= Objet::Programme) {
+        // Après une coupure, le résultat radio est inconnu. L'utilisateur peut relancer.
+        _livraison = Livraison::Echec;
+    } else if(_source == CONNECT && programmationRecue() && _preferences.getBool("progPending", false)) {
+        _demande.reglages = _reglages;
+        _demande.objet = Objet::Programme;
+        _demande.champs = ProgrammeModifie;
+        _reglages.programmeConnu = false;
+        demarrerCommande();
+        migrerProgramme = true;
+    } else {
+        _demande = Demande{};
     }
 
     _derogationFin = _preferences.getUInt("derogFin", 0);
     _preferences.end();
     if(boostActif()) actualiserConsigne();
+    if(migrerProgramme) saveConfig();
 }
 
 void Zone::saveConfig() {   
@@ -63,11 +85,18 @@ void Zone::saveConfig() {
     _preferences.putFloat("tempBoost", getTemperatureBoost());
     const size_t tailleProgrammation = _preferences.putBytes("prog", &getProgrammation(), sizeof(getProgrammation()));
     _preferences.putBool("progValid", programmationRecue() && tailleProgrammation == sizeof(getProgrammation()));
-    _preferences.putBool("progPending", programmationEnvoiEnAttente());
     _preferences.putFloat("tempAmbiante", getTemperatureAmbiante());
     _preferences.putFloat("tempConsigne", getTemperatureConsigne());
     _preferences.putUInt("derogFin", _derogationFin);
 
+    if(enAttente() || nonConfirmee()) {
+        if(_preferences.putBytes("demandeV1", &_demande, sizeof(_demande)) == sizeof(_demande)) {
+            _preferences.putBool("progPending", false);
+        }
+    } else {
+        _preferences.putBool("progPending", false);
+        if(_preferences.isKey("demandeV1")) _preferences.remove("demandeV1");
+    }
     _preferences.end();
 }
 
@@ -158,11 +187,11 @@ void Zone::begin() {
         float temperature;
         if(NumberParsing::finiteDecimal(payload.c_str(), temperature)) {
             info("[ZONE %d] Modification de la température confort à %0.2f.", getNumeroZone(), temperature);
-            setTemperatureConfort(temperature);
-            actualiserConsigne();
-            mqtt().publishState(_mqttEntities.temperatureConfort, getTemperatureConfort());
-            refreshLastChange();
-            saveConfig();
+            modifier(Objet::Confort, [&]() {
+                setTemperatureConfort(temperature);
+                actualiserConsigne();
+                return true;
+            });
         }
     });
 
@@ -185,11 +214,11 @@ void Zone::begin() {
         float temperature;
         if(NumberParsing::finiteDecimal(payload.c_str(), temperature)) {
             info("[ZONE %d] Modification de la température réduit à %0.2f.", getNumeroZone(), temperature);
-            setTemperatureReduit(temperature);
-            actualiserConsigne();
-            mqtt().publishState(_mqttEntities.temperatureReduit, getTemperatureReduit());
-            refreshLastChange();
-            saveConfig();
+            modifier(Objet::Reduit, [&]() {
+                setTemperatureReduit(temperature);
+                actualiserConsigne();
+                return true;
+            });
         }
     });
 
@@ -212,11 +241,11 @@ void Zone::begin() {
         float temperature;
         if(NumberParsing::finiteDecimal(payload.c_str(), temperature)) {
             info("[ZONE %d] Modification de la température hors-gel à %0.2f.", getNumeroZone(), temperature);
-            setTemperatureHorsGel(temperature);
-            actualiserConsigne();
-            mqtt().publishState(_mqttEntities.temperatureHorsGel, getTemperatureHorsGel());
-            refreshLastChange();
-            saveConfig();
+            modifier(Objet::HorsGel, [&]() {
+                setTemperatureHorsGel(temperature);
+                actualiserConsigne();
+                return true;
+            });
         }
     });
 
@@ -259,12 +288,16 @@ void Zone::begin() {
         float temperature;
         if(NumberParsing::finiteDecimal(payload.c_str(), temperature)) {
             info("[ZONE %d] Modification de la température de boost à %0.2f.", getNumeroZone(), temperature);
-            setTemperatureBoost(temperature);
-            actualiserConsigne();
-            mqtt().publishState(_mqttEntities.temperatureBoost, getTemperatureBoost());
-            saveConfig();
-            if(boostActif()) {
-                refreshLastChange();
+            if(boostActif() || (enAttente() && (demande().options & 0x40))) {
+                modifier(Objet::Boost, [&]() {
+                    setTemperatureBoost(temperature);
+                    actualiserConsigne();
+                    return true;
+                });
+            } else {
+                setTemperatureBoost(temperature);
+                saveConfig();
+                publishMqtt();
             }
         }
     });
@@ -282,11 +315,11 @@ void Zone::begin() {
         if(payload.equalsIgnoreCase("ON")) {
             appliquerPreset("Boost");
         } else if(payload.equalsIgnoreCase("OFF")) {
-            desactiverBoost();
-            actualiserConsigne();
-            saveConfig();
-            refreshLastChange();
-            publierMode();
+            modifier(Objet::Mode, [&]() {
+                desactiverBoost();
+                actualiserConsigne();
+                return true;
+            });
         }
     });
 
@@ -328,6 +361,38 @@ void Zone::begin() {
     _mqttEntities.regime.component = "sensor";
     _mqttEntities.regime.stateTopic = MqttTopic(MqttManager::compose({device->baseTopic, "z" + String(getNumeroZone()), "regime"}));
     mqtt().registerEntity(*device, _mqttEntities.regime, true);
+    auto& suivi = _mqttEntities.suivi;
+    auto& bouton = _mqttEntities.reessai;
+    suivi.id = "suiviCommandeZ" + String(getNumeroZone());
+    suivi.component = "sensor";
+    bouton.id = "reessayerCommandeZ" + String(getNumeroZone());
+    bouton.component = "button";
+    if(_source == CONNECT && pilotageDisponible()) {
+        const String racine = MqttManager::compose({device->baseTopic, "z" + String(getNumeroZone()), "commande"});
+        suivi.name = "Suivi de commande Z" + String(getNumeroZone());
+        suivi.stateTopic = MqttTopic(racine, 0, true);
+        suivi.attributesTopic = suivi.stateTopic;
+        suivi.availabilityTopic = device->availabilityTopic;
+        suivi.set("value_template", "{{ value_json.etat }}");
+        mqtt().registerEntity(*device, suivi, true);
+        bouton.name = "Réessayer la commande Z" + String(getNumeroZone());
+        bouton.commandTopic = MqttTopic(racine + "/reessayer", 0, false);
+        JsonDocument disponibilite;
+        disponibilite.add<JsonObject>()["topic"] = device->availabilityTopic.full;
+        auto commande = disponibilite.add<JsonObject>();
+        commande["topic"] = suivi.stateTopic.full;
+        commande["value_template"] = "{{ 'online' if value_json.etat == 'Modification non confirmée' else 'offline' }}";
+        String conditions;
+        serializeJson(disponibilite, conditions);
+        bouton.setRaw("availability", conditions);
+        bouton.set("availability_mode", "all");
+        mqtt().registerEntity(*device, bouton, true);
+        mqtt().onCommand(bouton, [this](const String& p) { if(p == "PRESS") reessayer(); });
+    } else {
+        mqtt().removeEntityDiscovery(*device, suivi);
+        mqtt().removeEntityDiscovery(*device, bouton);
+    }
+
     _mqttPret = true;
     actualiserDecouverte();
 }
@@ -335,27 +400,27 @@ void Zone::begin() {
 
 void Zone::setTemperatureConfort(float temperature) {
     if(isnan(temperature)) {
-        this->_temperatureConfort = NAN;
+        this->_reglages.confort = NAN;
         return;
     }
     temperature = round(temperature * 2) / 2.0f;
-    this->_temperatureConfort = std::min(30.0f, std::max(5.0f, temperature));
+    this->_reglages.confort = std::min(30.0f, std::max(5.0f, temperature));
 }
 void Zone::setTemperatureReduit(float temperature) {
     if(isnan(temperature)) {
-        this->_temperatureReduit = NAN;
+        this->_reglages.reduit = NAN;
         return;
     }
     temperature = round(temperature * 2) / 2.0f;
-    this->_temperatureReduit = std::min(30.0f, std::max(5.0f, temperature));
+    this->_reglages.reduit = std::min(30.0f, std::max(5.0f, temperature));
 }
 void Zone::setTemperatureHorsGel(float temperature) {
     if(isnan(temperature)) {
-        this->_temperatureHorsGel = NAN;
+        this->_reglages.horsGel = NAN;
         return;
     }
     temperature = round(temperature * 2) / 2.0f;
-    this->_temperatureHorsGel = std::min(30.0f, std::max(5.0f, temperature));
+    this->_reglages.horsGel = std::min(30.0f, std::max(5.0f, temperature));
 }
 void Zone::setTemperatureAmbiante(float temperature) {
     if(isnan(temperature)) {
@@ -366,19 +431,19 @@ void Zone::setTemperatureAmbiante(float temperature) {
 }
 void Zone::setTemperatureConsigne(float temperature) {
     if(isnan(temperature)) {
-        this->_temperatureConsigne = NAN;
+        this->_reglages.consigne = NAN;
         return;
     }
-    this->_temperatureConsigne = std::min(30.0f, std::max(5.0f, temperature));
+    this->_reglages.consigne = std::min(30.0f, std::max(5.0f, temperature));
 }
 void Zone::setTemperatureBoost(float temperature) {
     if(isnan(temperature)) {
-        this->_temperatureBoost = NAN;
+        this->_reglages.boost = NAN;
         return;
     }
     temperature = round(temperature * 2) / 2.0f;
-    //this->_temperatureBoost = std::min(30.0f, std::max(5.0f, temperature));
-    this->_temperatureBoost = std::min(5.0f, std::max(0.5f, temperature));
+    //this->_reglages.boost = std::min(30.0f, std::max(5.0f, temperature));
+    this->_reglages.boost = std::min(5.0f, std::max(0.5f, temperature));
 }
 void Zone::setTemperatureDepart(float temperature) {
     this->_temperatureDepart = temperature;
@@ -388,16 +453,16 @@ void Zone::setTemperatureConsigneDepart(float temperature) {
 }
 
 float Zone::getTemperatureConfort() {
-    return this->_temperatureConfort;
+    return this->_reglages.confort;
 }
 float Zone::getTemperatureReduit() {
-    return this->_temperatureReduit;
+    return this->_reglages.reduit;
 }
 float Zone::getTemperatureHorsGel() {
-    return this->_temperatureHorsGel;
+    return this->_reglages.horsGel;
 }
 float Zone::getTemperatureConsigne() {
-    return this->_temperatureConsigne;
+    return this->_reglages.consigne;
 }
 float Zone::getTemperatureAmbiante() {
     return this->_temperatureAmbiante;
@@ -409,11 +474,11 @@ float Zone::getTemperatureConsigneDepart() {
     return this->_temperatureConsigneDepart;
 }
 float Zone::getTemperatureBoost() {
-    return this->_temperatureBoost;
+    return this->_reglages.boost;
 }
 
 Zone::MODE_ZONE Zone::getMode() {
-    return (MODE_ZONE)this->_mode;
+    return (MODE_ZONE)this->_reglages.mode;
 }
 
 void Zone::setMode(MODE_ZONE mode, bool confort, bool derogation) {
@@ -432,20 +497,20 @@ void Zone::setMode(MODE_ZONE mode, bool confort, bool derogation) {
             optionsMode = 0x10;
             break;
         case MODE_ZONE::INCONNU:
-            _mode = mode;
+            _reglages.mode = mode;
             return;
         default:
             // Valeur hors plage (trame inattendue) : conserver le mode courant.
             return;
     }
-    _mode = mode;
+    _reglages.mode = mode;
 
     // Même codage que Satellite::MODE pour les bits Confort, Dérogation,
     // Auto et Hors Gel. Préserver le Boost et les bits non interprétés.
-    _modeOptions = (_modeOptions & ~0x17) | optionsMode;
+    _reglages.options = (_reglages.options & ~0x17) | optionsMode;
     // Le bit Auto reçu précédemment ne doit pas survivre à un passage
     // en Confort/Réduit permanent ou en Hors Gel.
-    if(mode != MODE_ZONE::AUTO) _modeOptions &= ~0x20;
+    if(mode != MODE_ZONE::AUTO) _reglages.options &= ~0x20;
 }
 void Zone::setMode(const String& mode, bool confort, bool derogation) {
   if (mode.equalsIgnoreCase("Auto")) {
@@ -467,14 +532,14 @@ void Zone::setMode(const String& mode, bool confort, bool derogation) {
 }
 
 String Zone::getNomMode() {
-    return getMode() == MODE_ZONE::INCONNU ? "Inconnu" : nomPreset(_mode, _modeOptions);
+    return getMode() == MODE_ZONE::INCONNU ? "Inconnu" : nomPreset(_reglages.mode, _reglages.options);
 }
 
 byte Zone::getModeOptions() {
-    return this->_modeOptions;
+    return this->_reglages.options;
 }
 void Zone::setModeOptions(byte modeOptions) {
-    this->_modeOptions = modeOptions;
+    this->_reglages.options = modeOptions;
 }
 
 uint8_t Zone::getIdZone() {
@@ -482,13 +547,13 @@ uint8_t Zone::getIdZone() {
 }
 
 void Zone::activerBoost() {
-    _modeOptions |= 0b01000000;
+    _reglages.options |= 0b01000000;
 }
 void Zone::desactiverBoost() {
-    _modeOptions &= ~0b01000000;
+    _reglages.options &= ~0b01000000;
 }
 bool Zone::boostActif() {
-    return (_modeOptions & 0b01000000) != 0;
+    return (_reglages.options & 0b01000000) != 0;
 }
 uint8_t Zone::getNumeroZone() {
     switch(_idZone) {
@@ -504,28 +569,29 @@ uint8_t Zone::getNumeroZone() {
 }
 bool Zone::confortActif() {
     return 
-        _mode == MODE_ZONE::CONFORT || 
-        (_mode == MODE_ZONE::AUTO && (_modeOptions & 0b00000001) != 0);
+        _reglages.mode == MODE_ZONE::CONFORT ||
+        (_reglages.mode == MODE_ZONE::AUTO && (_reglages.options & 0b00000001) != 0);
 }
 
 bool Zone::reduitActif() {
     return 
-        _mode == MODE_ZONE::REDUIT || 
-        (_mode == MODE_ZONE::AUTO && (_modeOptions & 0b00000001) == 0);
+        _reglages.mode == MODE_ZONE::REDUIT ||
+        (_reglages.mode == MODE_ZONE::AUTO && (_reglages.options & 0b00000001) == 0);
 }
 
 bool Zone::horsGelActif() {
-    return _mode == MODE_ZONE::HORS_GEL;
+    return _reglages.mode == MODE_ZONE::HORS_GEL;
 }
 
 bool Zone::derogationActive() {
     return 
-        _mode == MODE_ZONE::AUTO && (_modeOptions & 0b00000010) != 0;
+        _reglages.mode == MODE_ZONE::AUTO && (_reglages.options & 0b00000010) != 0;
 }
 
 
 void Zone::publishMqtt() {
     actualiserDecouverte();
+    if(_mqttEntities.suivi.stateTopic.full.length()) mqtt().publishState(_mqttEntities.suivi, suiviJson());
     mqtt().publishAvailability(_mqttEntities.mode, pilotageDisponible());
     publierMode();
     if(!isnan(getTemperatureAmbiante())) {
@@ -555,14 +621,14 @@ void Zone::publishMqtt() {
 }
 
 bool Zone::programmeDisponible() const {
-    return _programmationRecue && timeStatus() != timeNotSet && year(::now()) >= 2020;
+    return _reglages.programmeConnu && timeStatus() != timeNotSet && year(::now()) >= 2020;
 }
 
 bool Zone::regimeProgramme(bool& confort, uint32_t* prochaineTransition) const {
     if(!programmeDisponible()) return false;
     const time_t current = ::now();
     const unsigned slot = (weekday(current) - 1) * 48 + hour(current) * 2 + minute(current) / 30;
-    const auto* bytes = reinterpret_cast<const uint8_t*>(&_programmation);
+    const auto* bytes = reinterpret_cast<const uint8_t*>(&_reglages.programme);
     confort = ZoneProgram::comfort(bytes, slot);
     if(prochaineTransition) {
         const uint32_t delay = ZoneProgram::nextTransition(bytes, slot, (minute(current) % 30) * 60 + second(current));
@@ -587,6 +653,14 @@ void Zone::actualiserConsigne() {
 }
 
 bool Zone::appliquerConsigne(float temperature) {
+    return modifier(Objet::Consigne, [&]() { return definirConsigne(temperature); });
+}
+
+bool Zone::appliquerPreset(const String& preset) {
+    return modifier(Objet::Mode, [&]() { return definirPreset(preset); });
+}
+
+bool Zone::definirConsigne(float temperature) {
     if(!pilotageDisponible() || !isfinite(temperature) || temperature < 5 || temperature > 30) return false;
     if(confortActif()) {
         const float profil = temperature - (boostActif() ? getTemperatureBoost() : 0);
@@ -600,13 +674,10 @@ bool Zone::appliquerConsigne(float temperature) {
         return false;
     }
     actualiserConsigne();
-    refreshLastChange();
-    saveConfig();
-    publishMqtt();
     return true;
 }
 
-bool Zone::appliquerPreset(const String& preset) {
+bool Zone::definirPreset(const String& preset) {
     if(!pilotageDisponible()) {
         info("[ZONE Z%d] Commande ignorée : pilotage inactif.", getNumeroZone());
         return false;
@@ -614,10 +685,10 @@ bool Zone::appliquerPreset(const String& preset) {
     // Home Assistant ajoute « none » à son sélecteur : retirer l'option
     // temporaire en conservant le régime permanent, ou reprendre Auto.
     if(preset == "none") {
-        if(getMode() == MODE_ZONE::AUTO) return appliquerPreset("Auto");
-        if(getMode() == MODE_ZONE::CONFORT) return appliquerPreset("Confort");
-        if(getMode() == MODE_ZONE::REDUIT) return appliquerPreset("Réduit");
-        if(getMode() == MODE_ZONE::HORS_GEL) return appliquerPreset("Hors Gel");
+        if(getMode() == MODE_ZONE::AUTO) return definirPreset("Auto");
+        if(getMode() == MODE_ZONE::CONFORT) return definirPreset("Confort");
+        if(getMode() == MODE_ZONE::REDUIT) return definirPreset("Réduit");
+        if(getMode() == MODE_ZONE::HORS_GEL) return definirPreset("Hors Gel");
         return false;
     }
     MODE_ZONE cible = MODE_ZONE::INCONNU;
@@ -653,13 +724,15 @@ bool Zone::appliquerPreset(const String& preset) {
     desactiverBoost();
     if(boost) activerBoost();
     actualiserConsigne();
-    refreshLastChange();
-    saveConfig();
-    publishMqtt();
     return true;
 }
 
 void Zone::loop() {
+    actualiserLivraison();
+    if(enAttente() && millis() - _dernierSuivi >= 5000 && mqtt().connected()) {
+        _dernierSuivi = millis();
+        mqtt().publishState(_mqttEntities.suivi, suiviJson());
+    }
     const bool connecte = mqtt().connected();
     if(connecte && !_mqttConnecte) publishMqtt();
     _mqttConnecte = connecte;
@@ -688,9 +761,9 @@ void Zone::confirmerMode(MODE_ZONE mode, byte options) {
 void Zone::publierMode() {
     // Le virtuel possède son état. Pour le physique/Connect, attendre un retour
     // radio ou une réponse réussie avant d'annoncer le changement demandé.
-    MODE_ZONE mode = _source == SOURCE::SATELLITE_VIRTUEL ? _mode : _modeObserve;
+    MODE_ZONE mode = _source == SOURCE::SATELLITE_VIRTUEL ? _reglages.mode : _modeObserve;
     if(_source == SOURCE::SATELLITE_VIRTUEL && mode == MODE_ZONE::AUTO && !programmeDisponible()) mode = MODE_ZONE::INCONNU;
-    const byte options = _source == SOURCE::SATELLITE_VIRTUEL ? _modeOptions : _optionsObservees;
+    const byte options = _source == SOURCE::SATELLITE_VIRTUEL ? _reglages.options : _optionsObservees;
     mqtt().publishState(_mqttEntities.thermostat, mode == MODE_ZONE::INCONNU ? "None" : mode == MODE_ZONE::AUTO ? "auto" : "heat");
     mqtt().publishState(_mqttEntities.preset, nomPreset(mode, options));
     if(mode != MODE_ZONE::INCONNU) mqtt().publishState(_mqttEntities.mode, nomPreset(mode, options));
@@ -742,4 +815,206 @@ void Zone::actualiserDecouverte() {
     }
     mqtt().registerEntity(*device, _mqttEntities.thermostat, true);
     mqtt().publishAvailability(_mqttEntities.mode, pilotageDisponible());
+}
+
+void Zone::observerStatut(uint32_t reception, byte association) {
+    // Une sauvegarde peut provoquer un statut supplémentaire. Les réémissions
+    // et ces statuts hors cycle ne doivent pas déplacer un repère récent.
+    if(_statutConnu) {
+        if(_associationSatellite != association) oublierStatut();
+        else if(static_cast<int32_t>(reception - _statut) < static_cast<int32_t>(cycleStatut - toleranceStatut)) return;
+    }
+    _statut = reception;
+    _statutConnu = true;
+    _associationSatellite = association;
+    if(enAttente() && _fenetre == Fenetre::CycleSuivant) {
+        _ouverture = reception + ouvertures[0];
+        _fenetre = Fenetre::CycleEnCours;
+        publishMqtt();
+    }
+    actualiserLivraison();
+}
+
+void Zone::oublierStatut() {
+    _statutConnu = false;
+    if(_fenetre != Fenetre::SansStatut && enAttente()) {
+        if(_fenetre == Fenetre::CycleSuivant || static_cast<int32_t>(millis() - _ouverture) < 0) --_tentative;
+        _fenetre = Fenetre::SansStatut;
+        _debutPeriode = millis();
+        publishMqtt();
+    }
+}
+
+bool Zone::planifierFenetre(uint32_t maintenant) {
+    if(!_statutConnu || _tentative >= MAX_FENETRES) return false;
+    const uint32_t age = maintenant - _statut;
+    if(age > cycleStatut + toleranceStatut) return false;
+    // Après le dernier pic, la carte peut déjà estimer le premier du cycle
+    // suivant. Seul le prochain statut de cette zone autorisera son émission.
+    _fenetre = Fenetre::CycleSuivant;
+    _ouverture = _statut + cycleStatut + ouvertures[0];
+    for(uint32_t ouverture : ouvertures) {
+        if(age < ouverture + finEmissions) {
+            _ouverture = _statut + ouverture;
+            _fenetre = Fenetre::CycleEnCours;
+            break;
+        }
+    }
+    ++_tentative;
+    _debutPeriode = maintenant;
+    return true;
+}
+
+int Zone::rangEmission(uint32_t maintenant) const {
+    if(!enAttente() || _fenetre != Fenetre::CycleEnCours) return -1;
+    const uint32_t ecoule = maintenant - _ouverture;
+    if(ecoule >= finEmissions || ecoule % espacement >= margeEmission) return -1;
+    return ecoule / espacement;
+}
+
+void Zone::demarrerCommande() {
+    _livraison = Livraison::Attente;
+    _fenetre = Fenetre::SansStatut;
+    _tentative = 0;
+    _dernierSuivi = _debutPeriode = millis();
+    planifierFenetre(_debutPeriode);
+    ++_revisionCommande;
+}
+
+bool Zone::reessayer() {
+    if(!nonConfirmee() || !pilotageDisponible() || _source != CONNECT) return false;
+    demarrerCommande();
+    publishMqtt();
+    return true;
+}
+
+void Zone::actualiserLivraison() {
+    const uint32_t maintenant = millis();
+    if(_statutConnu && maintenant - _statut > cycleStatut + toleranceStatut) {
+        if(_fenetre == Fenetre::CycleSuivant) oublierStatut();
+        else _statutConnu = false;
+    }
+    if(!enAttente()) return;
+    if(_fenetre != Fenetre::SansStatut) {
+        if(static_cast<int32_t>(maintenant - (_ouverture + finConfirmation)) < 0) return;
+        _fenetre = Fenetre::SansStatut;
+        _debutPeriode = maintenant;
+        if(_tentative == MAX_FENETRES) {
+            _livraison = Livraison::Echec;
+            info("[ZONE %d] Modification non confirmée après cinq fenêtres.", getNumeroZone());
+        } else {
+            planifierFenetre(maintenant);
+        }
+    } else if(!planifierFenetre(maintenant)) {
+        if(maintenant - _debutPeriode < attenteStatut) return;
+        _livraison = Livraison::Echec;
+        info("[ZONE %d] Aucun statut périodique récent pour planifier la commande.", getNumeroZone());
+    }
+    publishMqtt();
+}
+
+void Zone::confirmerCommande() {
+    _reglages = demande();
+    confirmerMode();
+    _livraison = Livraison::Confirmee;
+    refreshLastChange();
+    refreshLastEnvoi();
+    saveConfig();
+    publishMqtt();
+}
+
+uint8_t Zone::champModifie(Objet objet) {
+    switch(objet) {
+        case Objet::Consigne: return confortActif() ? ConfortModifie : reduitActif() ? ReduitModifie : HorsGelModifie;
+        case Objet::Confort: return ConfortModifie;
+        case Objet::Reduit: return ReduitModifie;
+        case Objet::HorsGel: return HorsGelModifie;
+        case Objet::Boost: return BoostModifie;
+        case Objet::Mode: return ModeModifie;
+        case Objet::Programme: return ProgrammeModifie;
+        default: return 0;
+    }
+}
+
+Zone::Reglages Zone::demande() const {
+    // Les modifications du satellite entre deux envois restent acquises pour
+    // tous les champs que l'utilisateur n'a pas modifiés.
+    Reglages resultat = _reglages;
+    const auto& saisie = _demande.reglages;
+    const uint8_t champs = _demande.champs;
+    if(champs & ConfortModifie) resultat.confort = saisie.confort;
+    if(champs & ReduitModifie) resultat.reduit = saisie.reduit;
+    if(champs & HorsGelModifie) resultat.horsGel = saisie.horsGel;
+    if(champs & BoostModifie) resultat.boost = saisie.boost;
+    if(champs & ModeModifie) {
+        resultat.mode = saisie.mode;
+        resultat.options = saisie.options;
+    }
+    if(champs & ProgrammeModifie) {
+        resultat.programme = saisie.programme;
+        resultat.programmeConnu = true;
+    }
+    if(champs & ~ProgrammeModifie) {
+        const bool confort = resultat.mode == CONFORT || (resultat.mode == AUTO && (resultat.options & 1));
+        resultat.consigne = resultat.mode == HORS_GEL ? resultat.horsGel : confort ? resultat.confort : resultat.reduit;
+        if(confort && (resultat.options & 0x40)) resultat.consigne = std::min(30.0f, resultat.consigne + resultat.boost);
+    }
+    return resultat;
+}
+
+Zone::BlocZone Zone::blocDemande() const {
+    const auto& d = demande();
+    BlocZone bloc;
+    bloc.confort = (d.options & 0x40) ? std::min(30.0f, d.confort + d.boost) : d.confort;
+    bloc.reduit = d.reduit;
+    bloc.horsGel = d.horsGel;
+    bloc.mode = d.mode;
+    bloc.options = d.options;
+    bloc.programme = d.programme;
+    return bloc;
+}
+
+bool Zone::reconnaitreReglages(const byte* donnees, size_t taille) {
+    if((!enAttente() && !nonConfirmee()) || taille != sizeof(BlocZone)) return false;
+    const BlocZone attendu = blocDemande();
+    if(memcmp(donnees, &attendu, sizeof(attendu)) != 0) return false;
+    confirmerCommande();
+    return true;
+}
+
+float Zone::valeurObjet(const Reglages& reglages) const {
+    switch(_demande.objet) {
+        case Objet::Consigne: return reglages.consigne;
+        case Objet::Confort: return reglages.confort;
+        case Objet::Reduit: return reglages.reduit;
+        case Objet::HorsGel: return reglages.horsGel;
+        case Objet::Boost: return reglages.boost;
+        default: return NAN;
+    }
+}
+
+String Zone::suiviJson() const {
+    static const char* const etats[] = {"Au repos", "En attente de confirmation", "Modification confirmée", "Modification non confirmée"};
+    static const char* const objets[] = {"", "Consigne", "Confort", "Réduit", "Hors Gel", "Supplément Boost", "Mode", "Programmation"};
+    JsonDocument doc;
+    doc["etat"] = etats[static_cast<unsigned>(_livraison)];
+    doc["objet"] = objets[static_cast<unsigned>(_demande.objet)];
+    doc["tentative"] = _tentative;
+    if(_demande.objet == Objet::Mode) {
+        doc["mode_demande"] = nomPreset(demande().mode, demande().options);
+    }
+    const float confirmee = valeurObjet(_reglages), demandee = valeurObjet(_demande.reglages);
+    if(isfinite(confirmee)) doc["valeur_confirmee"] = confirmee;
+    if(isfinite(demandee)) doc["valeur_demandee"] = demandee;
+    if(enAttente()) {
+        doc["synchronisation"] = _fenetre == Fenetre::SansStatut;
+        doc["max_tentatives"] = MAX_FENETRES;
+        const uint32_t duree = _fenetre != Fenetre::SansStatut ? _ouverture + finConfirmation - _debutPeriode : attenteStatut;
+        const uint32_t ecoule = millis() - _debutPeriode;
+        doc["duree_ms"] = duree;
+        doc["restant_ms"] = duree > ecoule ? duree - ecoule : 0;
+    }
+    String json;
+    serializeJson(doc, json);
+    return json;
 }

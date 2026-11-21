@@ -1,4 +1,5 @@
 #include "Portal.h"
+#include "ProgrammationPortail.h"
 #include <WiFi.h>
 #include <ESPmDNS.h>
 #include <Update.h>
@@ -364,6 +365,7 @@ void Portal::begin(bool startApFallbackIfNoWifi) {
   _srv.on("/theme.css", HTTP_GET, [this] {
     sendStaticAsset(WebAssets::THEME_CSS);
   });
+  _srv.on("/commande-zone.js", HTTP_GET, [this] { sendStaticAsset(WebAssets::COMMANDE_ZONE_JS); });
   _srv.on("/theme.js", HTTP_GET, [this] {
     sendStaticAsset(WebAssets::THEME_JS);
   });
@@ -378,6 +380,7 @@ void Portal::begin(bool startApFallbackIfNoWifi) {
   onAuthenticated("/api/dashboard", HTTP_GET, &Portal::handleDashboard);
   onAuthenticated("/programming", HTTP_GET, &Portal::handleProgrammationPage);
   onAuthenticated("/api/programming", HTTP_GET, &Portal::handleGetProgrammation);
+  onAuthenticated("/api/commande/reessayer", HTTP_POST, &Portal::handleReessaiZone);
   onAuthenticated("/api/programming", HTTP_POST, &Portal::handlePostProgrammation);
   onAuthenticated("/api/config", HTTP_GET, &Portal::handleGetConfig);
   onAuthenticated("/api/config", HTTP_POST, &Portal::handlePostConfig);
@@ -505,21 +508,7 @@ static String programmationHex(const Zone::Programmation& programmation) {
 }
 
 static String programmationRevision(Zone& zone) {
-  return String(zone.programmationRecue() ? "1" : "0") + programmationHex(zone.getProgrammation());
-}
-
-static String programmationReadOnlyReason(Config& cfg, Connect& connect, Zone& zone, bool enabled) {
-  if(!enabled) return "Cette zone est désactivée.";
-  if(zone.getSource() == Zone::SOURCE::SATELLITE_VIRTUEL) return "";
-  if(!cfg.useConnect()) return "Activez le Connect virtuel pour modifier la programmation.";
-  if(cfg.useConnectPassive()) return "Le Connect est en écoute passive : programmation en lecture seule.";
-  if(zone.getSource() != Zone::SOURCE::CONNECT) return "La modification de programmation nécessite une zone pilotée par le Connect.";
-  if(!connect.estAssocie()) return "Associez le Connect avant de modifier la programmation.";
-  if(zone.getMode() == Zone::MODE_ZONE::INCONNU || isnan(zone.getTemperatureConfort()) ||
-     isnan(zone.getTemperatureReduit()) || isnan(zone.getTemperatureHorsGel())) {
-    return "Les paramètres de la zone doivent être récupérés avant de modifier sa programmation.";
-  }
-  return "";
+  return String(zone.programmeEditeConnu() ? "1" : "0") + programmationHex(zone.programmeEdite());
 }
 
 void Portal::handleGetProgrammation() {
@@ -537,15 +526,31 @@ void Portal::handleGetProgrammation() {
     json += ",\"enabled\":" + String(enabled[i] ? "true" : "false");
     json += ",\"editable\":" + String(reason.isEmpty() ? "true" : "false");
     json += ",\"reason\":\"" + jsonEscape(reason) + "\"";
-    json += ",\"known\":" + String(zone.programmationRecue() ? "true" : "false");
+    json += ",\"known\":" + String(zone.programmeEditeConnu() ? "true" : "false");
+    json += ",\"failed\":" + String(zone.programmationNonConfirmee() ? "true" : "false");
     json += ",\"pending\":" + String(zone.programmationEnvoiEnAttente() ? "true" : "false");
     json += ",\"mode\":\"" + jsonEscape(zone.getNomMode()) + "\"";
-    json += ",\"program\":\"" + programmationHex(zone.getProgrammation()) + "\"";
+    json += ",\"program\":\"" + programmationHex(zone.programmeEdite()) + "\"";
     json += ",\"revision\":\"" + programmationRevision(zone) + "\"}";
   }
   json += "]}";
   _srv.sendHeader("Cache-Control", "no-store");
   _srv.send(200, "application/json; charset=utf-8", json);
+}
+
+void Portal::handleReessaiZone() {
+  const String numero = _srv.arg("zone");
+  auto& connect = _frisquetManager.connect();
+  Zone* zones[] = {&connect.getZone1(), &connect.getZone2(), &connect.getZone3()};
+  if(numero.length() != 1 || numero[0] < '1' || numero[0] > '3') {
+    _srv.send(400, "text/plain", "Zone invalide.");
+    return;
+  }
+  if(!zones[numero[0] - '1']->reessayer()) {
+    _srv.send(409, "text/plain", "Aucune commande à relancer.");
+    return;
+  }
+  _srv.send(200, "text/plain", "Nouvelle tentative en cours.");
 }
 
 void Portal::handlePostProgrammation() {
@@ -577,7 +582,6 @@ void Portal::handlePostProgrammation() {
     return;
   }
   zone.modifierProgrammation(programmation);
-  zone.saveConfig();
   info("[PORTAIL] Programmation de la zone %d enregistrée (%s).", index + 1,
        zone.programmationEnvoiEnAttente() ? "envoi Connect en attente" : "programme local");
   _srv.send(200, "application/json; charset=utf-8", "{\"ok\":true,\"revision\":\"" + programmationRevision(zone)
@@ -704,6 +708,7 @@ void Portal::handleDashboard() {
     json += "\"ambientTemperature\":" + jsonFloat(zone.getTemperatureAmbiante()) + ",";
     json += "\"setpointTemperature\":" + jsonFloat(zone.getTemperatureConsigne()) + ",";
     json += "\"flowTemperature\":" + jsonFloat(zone.getTemperatureDepart()) + ",";
+    if(zone.getSource() == Zone::CONNECT && zone.pilotageDisponible()) json += "\"commande\":" + zone.suiviJson() + ",";
     json += "\"flowSetpointTemperature\":" + jsonFloat(zone.getTemperatureConsigneDepart());
     json += "}";
   };

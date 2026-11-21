@@ -66,6 +66,7 @@ struct FrisquetRadio {
 struct Zone {
     enum class SOURCE { CONNECT, SATELLITE_PHYSIQUE };
     enum class MODE_ZONE { INCONNU, CONFORT };
+    bool reconnaitreReglages(const byte*,size_t){return false;}
     struct Programmation {byte data[42];};
     float ambient=NAN,setpoint=NAN;
     unsigned publishes=0,saves=0;
@@ -93,6 +94,8 @@ struct Satellite {
     unsigned _observationLastChange=0;
     bool _observationPending=false;
     Satellite(byte n):number(n){}
+    struct Config {byte boilerId(){return 0x80;}} config;
+    Config& getConfig(){return config;}
     byte getNumeroZone(){return number;}
     byte getId(){return 7+number;}
     byte getIdMessage(){return message;}

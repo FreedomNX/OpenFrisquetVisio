@@ -53,7 +53,7 @@ bool FrisquetRadio::bufferUnexpectedPacket(const byte* donnees, size_t length) {
     return false;
 }
 
-bool FrisquetRadio::popBufferedPacket(byte* donnees, size_t& length, float* rssi) {
+bool FrisquetRadio::popBufferedPacket(byte* donnees, size_t& length, float* rssi, uint32_t* reception) {
     purgeBufferedPackets();
 
     for (BufferedPacket& packet : _rxBuffer) {
@@ -67,6 +67,7 @@ bool FrisquetRadio::popBufferedPacket(byte* donnees, size_t& length, float* rssi
 
         memcpy(donnees, packet.data, length);
         if (rssi) *rssi = packet.rssi;
+        if (reception) *reception = packet.timestamp;
         if (length >= sizeof(RadioTrameHeader)) {
             RadioTrameHeader header;
             memcpy(&header, donnees, sizeof(header));

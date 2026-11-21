@@ -13,6 +13,7 @@ struct Service {
     void loop() { ++calls; }
     void pollObservation() { ++polls; }
     void pollReads() {}
+    void envoiZones() {}
 };
 struct Config {
     bool useZone1() { return true; }

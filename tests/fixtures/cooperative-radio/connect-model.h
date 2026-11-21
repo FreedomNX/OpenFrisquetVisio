@@ -53,6 +53,7 @@ struct Zone {
     unsigned publishes = 0, calls = 0;
     float ambient = -999, setpoint = -999, departure = -999, target = -999;
     uint32_t changed = 0, sent = 0;
+    bool enAttente() const {return false;}
     uint32_t getLastChange() { return changed; }
     uint32_t getLastEnvoi() { return sent; }
     SOURCE getSource() { return source; }

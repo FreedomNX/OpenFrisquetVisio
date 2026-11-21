@@ -168,7 +168,7 @@ class FrisquetRadio : public Radio {
         if (previous && !_suspended) { receivedFlag = false; startReceive(); }
     }
 
-    bool popBufferedPacket(byte* donnees, size_t& length, float* rssi = nullptr);
+    bool popBufferedPacket(byte* donnees, size_t& length, float* rssi = nullptr, uint32_t* reception = nullptr);
     bool hasBufferedPacket();
 
     static volatile bool receivedFlag;

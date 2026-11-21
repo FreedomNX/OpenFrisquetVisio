@@ -49,7 +49,8 @@ class Connect : public FrisquetDevice {
         const ConsommationsMensuelles& getConsommationsMensuelles() const { return _consommationsMensuelles; }
         const ConsommationsMensuelles& getConsommationsAnneePrecedente() const { return _consommationsAnneePrecedente; }
 
-        bool envoyerZone(Zone& zone);
+        void envoiZones();
+        void observerSatellite(const byte* donnees, size_t taille, uint32_t reception);
         bool envoyerModeECS();
 
         float getTemperatureExterieure();
@@ -97,12 +98,20 @@ class Connect : public FrisquetDevice {
         void setModeECSFromRaw(uint8_t rawModeECS);
         uint8_t encodeModeECSForSend();
 
-        void envoiZones();
-
-        bool _envoiZ1 = false;
-        bool _envoiZ2 = false;
-        bool _envoiZ3 = false;
-
+        bool envoyerZone(Zone& zone, uint8_t rang);
+        void verifierContexteEcoute();
+        uint32_t _generationEcoute = 0;
+        bool recevoirConfirmation(const FrisquetRadio::RadioTrameHeader& entete, const byte* donnees, size_t taille);
+        enum class EtatEnvoi : uint8_t { Initial, Incomplet, ProgrammeInconnu, ErreurRadio, Emis };
+        struct Envoi {
+            EtatEnvoi etat = EtatEnvoi::Initial;
+            uint32_t revision = 0, generationRadio = 0;
+            byte messages[32] = {};
+            byte tentative = 0, prochainRang = 0, rangsEmis = 0;
+            byte messagesFenetre[3] = {};
+        } _envois[3];
+        uint8_t _prochaineZone = 0;
+        bool _aDejaEmis = false;
         uint32_t _lastRecuperationTemperatures = 0;
         uint32_t _lastRecuperationModeECS = 0;
         uint32_t _lastRecuperationConsommation = 0;

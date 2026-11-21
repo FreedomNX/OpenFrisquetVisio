@@ -489,6 +489,10 @@ bool Satellite::onReceive(byte* donnees, size_t length) {
                 configurationBuffer.getBytes(parametres, sizeof(parametres));
                 Zone::Programmation programmation;
                 configurationBuffer.getBytes((byte*)&programmation, sizeof(programmation));
+                if(header->idDestinataire == getConfig().boilerId() && header->idAssociation == getIdAssociation()
+                   && _zone.reconnaitreReglages(donnees + sizeof(*header) + sizeof(requete), 48)) {
+                    info("[SATELLITE Z%d] Commande confirmée par les réglages A154 du satellite.", getNumeroZone());
+                }
                 _zone.setProgrammation(programmation, true);
                 _zone.saveConfig();
                 info("[SATELLITE Z%d] Programmation hebdomadaire reçue.", getNumeroZone());
@@ -512,7 +516,6 @@ bool Satellite::onReceive(byte* donnees, size_t length) {
                     expected.idReception |= 0x80;
                     if (!radio().beginObservation(getId(), expected)) return false;
                     memcpy(_observationPacket, donnees, sizeof(_observationPacket));
-                    _observationLastChange = _zone.getLastChange();
                     _observationPending = true;
                     return true;
                 }
@@ -620,11 +623,6 @@ bool Satellite::applyObservation(byte* request, byte* buffZones, size_t lengthRx
     _zone.setTemperatureAmbiante(donneesSatellite->temperatureAmbiante.toFloat());
 
     if(! getEcrasement()) {
-        const auto modeDemande = _zone.getMode();
-        const byte optionsDemandees = _zone.getModeOptions();
-        const float consigneDemandee = _zone.getTemperatureConsigne();
-        const bool commandeConnectEnAttente = _zone.getSource() == Zone::SOURCE::CONNECT
-            && _zone.getLastChange() > _zone.getLastEnvoi();
         // La réponse chaudière confirme aussi une zone Connect,
         // sans attendre une nouvelle écriture de configuration A154.
         const byte modeConfirme = _zone.getSource() == Zone::SOURCE::CONNECT
@@ -632,15 +630,8 @@ bool Satellite::applyObservation(byte* request, byte* buffZones, size_t lengthRx
         if(setModeFromRaw(modeConfirme)) {
             _zone.confirmerMode();
         }
-        if(commandeConnectEnAttente) {
-            _zone.setMode(modeDemande);
-            _zone.setModeOptions(optionsDemandees);
-        }
-        // Seule une commande arrivée pendant cet échange protège la consigne.
-        const bool nouvelleConsigne = commandeConnectEnAttente
-            && _zone.getLastChange() != _observationLastChange;
-        _zone.setTemperatureConsigne(nouvelleConsigne ? consigneDemandee
-            : donneesSatellite->temperatureConsigne.toFloat());
+        // La consigne observée et les réglages demandés au Connect sont conservés séparément.
+        _zone.setTemperatureConsigne(donneesSatellite->temperatureConsigne.toFloat());
         saveConfig();
         _zone.saveConfig();
         publishMqtt();

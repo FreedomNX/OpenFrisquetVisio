@@ -258,3 +258,13 @@ for(const name of ['index','logs','radio-logs']) {
     p.requests[1].finish();await flush();assert.equal(p.timers.size,0);
   });
 }
+
+test('programmation : une semaine non confirmée reste visible après expiration', async()=>{
+  const p=page('programming');
+  const saisie={...programmingData.zones[0], program:'AA'.repeat(42), pending:true};
+  p.requests[0].finish({ok:true,zones:[saisie]});await flush();
+  await p.click();
+  p.requests[1].finish({ok:true,zones:[{...saisie,pending:false,failed:true}]});await flush();
+  assert.match(p.element('#availability').textContent,/Programmation non confirmée/);
+  assert.equal(p.evaluate('encodeProgram(draft)'),saisie.program);
+});

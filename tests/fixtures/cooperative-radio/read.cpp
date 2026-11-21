@@ -118,7 +118,9 @@ int main() {
     assert(take(mixed) == 0 && mixed.reads == 4);
     n = sizeof(out);
     float rssi = 0;
-    assert(mixed.popBufferedPacket(out, n, &rssi));
+    uint32_t reception = 0;
+    assert(mixed.popBufferedPacket(out, n, &rssi, &reception));
+    assert(reception == 60);
     assert(out[3] == 99 && n == 55 && rssi == -55);
     R ttl;
     clockMs = 0;

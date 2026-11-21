@@ -33,95 +33,90 @@ void Connect::saveConfig() {
     getPreferences().end();
 }
 
-bool Connect::envoyerZone(Zone& zone) {
-    if(! estAssocie()) {
+bool Connect::envoyerZone(Zone& zone, uint8_t rang) {
+    const auto& d = zone.demande();
+    const bool satellitePhysique = (zone.getIdZone() == ID_ZONE_1 && getConfig().useSatelliteZ1())
+        || (zone.getIdZone() == ID_ZONE_2 && getConfig().useSatelliteZ2())
+        || (zone.getIdZone() == ID_ZONE_3 && getConfig().useSatelliteZ3());
+    auto& envoi = _envois[zone.getNumeroZone() - 1];
+    if(envoi.revision != zone.revisionCommande() || envoi.generationRadio != radio().operationGeneration()) {
+        envoi = Envoi{};
+        envoi.revision = zone.revisionCommande();
+        envoi.generationRadio = radio().operationGeneration();
+    }
+    if(envoi.tentative != zone.tentative()) {
+        envoi.tentative = zone.tentative();
+        envoi.prochainRang = 0;
+        envoi.rangsEmis = 0;
+    }
+    if(rang < envoi.prochainRang) return false;
+    if(!isfinite(d.confort) || !isfinite(d.reduit) || !isfinite(d.horsGel) || d.mode == Zone::INCONNU
+        || ((d.options & 0x40) && !isfinite(d.boost))) {
+        if(envoi.etat != EtatEnvoi::Incomplet)
+            error("[CONNECT] Impossible d'envoyer la zone %d, configuration incomplète.", zone.getNumeroZone());
+        envoi.etat = EtatEnvoi::Incomplet;
+        return false;
+    }
+    if(satellitePhysique && !d.programmeConnu) {
+        if(envoi.etat != EtatEnvoi::ProgrammeInconnu)
+            info("[CONNECT] Zone %d en attente d'une programmation connue (radio ou mémoire).", zone.getNumeroZone());
+        envoi.etat = EtatEnvoi::ProgrammeInconnu;
         return false;
     }
 
-    if(isnan(zone.getTemperatureConfort()) || isnan(zone.getTemperatureReduit()) || isnan(zone.getTemperatureHorsGel()) || zone.getMode() == Zone::MODE_ZONE::INCONNU || zone.getNumeroZone() == 0) {
-        error("[CONNECT] Impossible d'envoyer la zone %d, configuration incomplète.", zone.getNumeroZone());
-        return false;
-    }
-
-    info("[CONNECT] Envoi de la zone %d.", zone.getNumeroZone());
-
-    if(zone.getIdZone() == ID_ZONE_1 && getConfig().useSatelliteVirtualZ1()) {
-        return true;
-    } else if(zone.getIdZone() == ID_ZONE_2 && getConfig().useSatelliteVirtualZ2()) {
-        return true;
-    } else if(zone.getIdZone() == ID_ZONE_3 && getConfig().useSatelliteVirtualZ3()) {
-        return true;
-    }
-
-    const bool satellitePhysique =
-        (zone.getIdZone() == ID_ZONE_1 && getConfig().useSatelliteZ1()) ||
-        (zone.getIdZone() == ID_ZONE_2 && getConfig().useSatelliteZ2()) ||
-        (zone.getIdZone() == ID_ZONE_3 && getConfig().useSatelliteZ3());
-    if(satellitePhysique && !zone.programmationRecue()) {
-        info("[CONNECT] Zone %d en attente d'une programmation connue (radio ou mémoire).", zone.getNumeroZone());
-        return false;
-    }
-    
     struct {
-        temperature8 temperatureConfort;    // Début 5°C -> 0 = 50 = 5°C - MAX 30°C
-        temperature8 temperatureReduit;     // Début 5°C -> 0 = 50 = 5°C - MAX Confort
-        temperature8 temperatureHorsGel;     // Début 5°C -> 0 = 50 = 5°C - MAX Hors gel
-        uint8_t mode = 0x00; 
-        byte modeOptions = 0b00000100;
-        // Même format que l'octet A02F du satellite (voir Zone.h et Satellite.h).
-        // Un Connect réel envoie ici la dernière valeur A02F lue (0x25 en Auto) ;
-        // le firmware conserve 0x04 pour Auto en attendant validation sur chaudière.
-        // Boost (0x40) et bits non interprétés conservés par Zone::setMode().
-        byte inconnu1 = 0x00;
-        Zone::Programmation programmation;
-    } payload;
-    static_assert(sizeof(payload) == 48, "La configuration zone doit contenir 48 octets");
-    
-    if(zone.boostActif()) {
-        payload.temperatureConfort = std::min(30.0f, zone.getTemperatureConfort() + zone.getTemperatureBoost());
-    } else {
-        payload.temperatureConfort = zone.getTemperatureConfort();
+        FrisquetRadio::RadioTrameHeader entete;
+        FrisquetRadio::RadioTrameInit ecriture;
+        Zone::BlocZone contenu;
+    } trame{};
+    static_assert(sizeof(trame) == 63, "Longueur de la commande de zone");
+    envoi.prochainRang = rang + 1;
+    const byte message = incrementIdMessage();
+    trame.entete.idDestinataire = getConfig().boilerId();
+    trame.entete.idExpediteur = getId();
+    trame.entete.idAssociation = getIdAssociation();
+    trame.entete.idMessage = message;
+    trame.entete.idReception = zone.getIdZone();
+    trame.entete.type = FrisquetRadio::INIT;
+    trame.ecriture = {0xA154, 24, 0xA154, 24, sizeof(trame.contenu)};
+    trame.contenu = zone.blocDemande();
+    // Le gestionnaire traite l'accusé comme tout autre paquet reçu. La radio
+    // reste disponible pour les autres échanges pendant toute l'attente.
+    FrisquetRadio::interruptReceive = true;
+    const auto resultat = radio().transmit(reinterpret_cast<byte*>(&trame), sizeof(trame));
+    FrisquetRadio::receivedFlag = false;
+    const auto reception = radio().startReceive();
+    FrisquetRadio::interruptReceive = false;
+    if(reception != RADIOLIB_ERR_NONE) error("[CONNECT] Réarmement de la réception impossible (code %d).", reception);
+    if(resultat != RADIOLIB_ERR_NONE) {
+        if(envoi.etat != EtatEnvoi::ErreurRadio)
+            error("[CONNECT] Échec de l'émission de la zone %d (code %d).", zone.getNumeroZone(), resultat);
+        envoi.etat = EtatEnvoi::ErreurRadio;
+        return true; // Espacer aussi les erreurs d'émission.
     }
-    payload.temperatureReduit = zone.getTemperatureReduit();
-    payload.temperatureHorsGel = zone.getTemperatureHorsGel();
-    payload.mode = zone.getMode();
-    payload.modeOptions = zone.getModeOptions();
-    payload.programmation = zone.getProgrammation();
-    
-    byte buff[RADIOLIB_SX126X_MAX_PACKET_LENGTH];
-    size_t length = 0;
-    int16_t err;
+    if(envoi.etat != EtatEnvoi::Emis)
+        info("[CONNECT] Envoi de la zone %d effectué, en attente de confirmation.", zone.getNumeroZone());
+    envoi.etat = EtatEnvoi::Emis;
+    logRadio(false, reinterpret_cast<const byte*>(&trame), sizeof(trame));
+    envoi.messagesFenetre[rang] = message;
+    envoi.rangsEmis |= 1U << rang;
+    envoi.messages[message / 8] |= 1U << (message % 8);
+    return true;
+}
 
-    uint8_t retry = 0;
-    do {
-        err = this->radio().sendInit(
-            this->getId(), 
-            getConfig().boilerId(),
-            this->getIdAssociation(),
-            this->incrementIdMessage(),
-            zone.getIdZone(), 
-            0xA154,
-            0x0018,
-            0xa154,
-            0x0018,
-            (byte*)&payload,
-            sizeof(payload),
-            buff,
-            length
-        );
-
-        if(err != RADIOLIB_ERR_NONE) {
-            delay(100);
-            continue;
-        }
-
-        // La réponse attendue confirme l'écriture A154. Publier le mode
-        // envoyé sans attendre un prochain échange du satellite physique.
-        zone.confirmerMode((Zone::MODE_ZONE)payload.mode, payload.modeOptions);
-        return true;
-    } while(retry++ < 1);
-
-    return false;
+bool Connect::recevoirConfirmation(const FrisquetRadio::RadioTrameHeader& h, const byte* donnees, size_t taille) {
+    if(h.type != FrisquetRadio::INIT || h.idExpediteur != getConfig().boilerId() || h.idDestinataire != getId()
+        || h.idAssociation != getIdAssociation() || taille != 49 || donnees[0] != 48) return false;
+    const byte id = h.idReception & 0x7f;
+    if(id != ID_ZONE_1 && id != ID_ZONE_2 && id != ID_ZONE_3) return false;
+    auto& zone = getZone(id);
+    auto& envoi = _envois[zone.getNumeroZone() - 1];
+    if((!zone.enAttente() && !zone.nonConfirmee()) || envoi.revision != zone.revisionCommande()
+        || envoi.generationRadio != radio().operationGeneration()
+        || !(envoi.messages[h.idMessage / 8] & (1U << (h.idMessage % 8)))
+        || !zone.reconnaitreReglages(donnees + 1, taille - 1)) return false;
+    info("[CONNECT] Zone %d : commande confirmée par la chaudière.", zone.getNumeroZone());
+    return true;
 }
 
 bool Connect::setVersionFirmware(const byte* response, size_t length) {
@@ -176,7 +171,7 @@ bool Connect::applyInformation(const byte* data, size_t length, const uint32_t* 
 
     if(getZone1().getSource() == Zone::SOURCE::CONNECT) {
         getZone1().setTemperatureAmbiante(buff.temperatureAmbianteZ1.toFloat());
-        if (!zoneChanges || getZone1().getLastChange() == zoneChanges[0])
+        if (!getZone1().enAttente() && (!zoneChanges || getZone1().getLastChange() == zoneChanges[0]))
             getZone1().setTemperatureConsigne(buff.temperatureConsigneZ1.toFloat());
     }
     getZone1().setTemperatureDepart(buff.temperatureDepartZ1.toFloat());
@@ -184,7 +179,7 @@ bool Connect::applyInformation(const byte* data, size_t length, const uint32_t* 
 
     if(getZone2().getSource() == Zone::SOURCE::CONNECT) {
         getZone2().setTemperatureAmbiante(buff.temperatureAmbianteZ2.toFloat());
-        if (!zoneChanges || getZone2().getLastChange() == zoneChanges[1])
+        if (!getZone2().enAttente() && (!zoneChanges || getZone2().getLastChange() == zoneChanges[1]))
             getZone2().setTemperatureConsigne(buff.temperatureConsigneZ2.toFloat());
     }
     getZone2().setTemperatureDepart(buff.temperatureDepartZ2.toFloat());
@@ -192,7 +187,7 @@ bool Connect::applyInformation(const byte* data, size_t length, const uint32_t* 
 
     if(getZone3().getSource() == Zone::SOURCE::CONNECT) {
         getZone3().setTemperatureAmbiante(buff.temperatureAmbianteZ3.toFloat());
-        if (!zoneChanges || getZone3().getLastChange() == zoneChanges[2])
+        if (!getZone3().enAttente() && (!zoneChanges || getZone3().getLastChange() == zoneChanges[2]))
             getZone3().setTemperatureConsigne(buff.temperatureConsigneZ3.toFloat());
     }
     getZone3().setTemperatureDepart(buff.temperatureDepartZ3.toFloat());
@@ -677,6 +672,7 @@ bool Connect::onReceive(byte* donnees, size_t length) {
     }
 
     if(header.type == FrisquetRadio::MessageType::INIT) {
+        if(header.isAck()) return recevoirConfirmation(header, donnees + sizeof(header), length - sizeof(header));
         FrisquetRadio::RadioTrameInit requete;
         if(readBuffer.remainingLength() < sizeof(requete)) { return false; }
         readBuffer.getBytes((byte*)&requete, sizeof(requete));
@@ -684,51 +680,37 @@ bool Connect::onReceive(byte* donnees, size_t length) {
         if(requete.adresseMemoireEcriture.toUInt16() == 0xA154 && requete.tailleMemoireEcriture.toUInt16() == 0x0018) { // Modification Zone
             info("[CONNECT] Réception trame Zone (idExpediteur=%d idReception(raw)=%d)", header.idExpediteur, header.idReception);
 
-            struct {
-                temperature8 temperatureConfort;    // Début 5°C -> 0 = 50 = 5°C - MAX 30°C
-                temperature8 temperatureReduit;     // Début 5°C -> 0 = 50 = 5°C - MAX Confort
-                temperature8 temperatureHorsGel;     // Début 5°C -> 0 = 50 = 5°C - MAX Hors gel
-                uint8_t mode = 0x00; 
-                byte modeOptions = 0b00000100;
-                byte inconnu1 = 0x00;
-                Zone::Programmation programmation;
-            } donneesZone;
-
+            Zone::BlocZone donneesZone;
             if(requete.longueurDonneesEcriture != sizeof(donneesZone) || readBuffer.remainingLength() < sizeof(donneesZone)) { return false; }
             readBuffer.getBytes((byte*)&donneesZone, sizeof(donneesZone));
 
-            // Le champ `idReception` peut contenir le bit 0x80 (ACK) : Ajout d'un masque
-            uint8_t zoneId = header.idReception & 0x7F;
-            
-            if(getZone(zoneId).getNumeroZone() == 0) {
-                error("[CONNECT] Impossible de mettre à jour la zone %d, numéro de zone invalide.", zoneId);
+            const byte zoneId = header.idReception & 0x7F;
+            if(zoneId != ID_ZONE_1 && zoneId != ID_ZONE_2 && zoneId != ID_ZONE_3) {
+                error("[CONNECT] Impossible de mettre à jour la zone, identifiant invalide : %d.", zoneId);
                 return false;
             }
-
-            if(donneesZone.mode < Zone::MODE_ZONE::AUTO || donneesZone.mode > Zone::MODE_ZONE::HORS_GEL) {
+            if(!passive && (header.idExpediteur != getConfig().boilerId() || header.idDestinataire != getId()
+                || header.idAssociation != getIdAssociation())) return false;
+            if(donneesZone.mode < Zone::AUTO || donneesZone.mode > Zone::HORS_GEL) {
                 error("[CONNECT] Zone %d : mode 0x%02X hors plage, trame ignorée.", zoneId, donneesZone.mode);
                 return false;
             }
 
-            getZone(zoneId).setProgrammation(donneesZone.programmation, true);
-            getZone(zoneId).confirmerMode((Zone::MODE_ZONE)donneesZone.mode, donneesZone.modeOptions);
-            // Conserver une commande locale en attente pendant l'acquisition.
-            if(!getZone(zoneId).programmationEnvoiEnAttente() && getZone(zoneId).getLastChange() <= getZone(zoneId).getLastEnvoi()) {
-                getZone(zoneId).setMode((Zone::MODE_ZONE)donneesZone.mode);
-                getZone(zoneId).setModeOptions(donneesZone.modeOptions);
-                getZone(zoneId).setTemperatureReduit(donneesZone.temperatureReduit.toFloat());
-                getZone(zoneId).setTemperatureHorsGel(donneesZone.temperatureHorsGel.toFloat());
-                if(getZone(zoneId).boostActif()) {
-                    //getZone(zoneId).setTemperatureBoost(donneesZone.temperatureConfort.toFloat());
-                } else {
-                    getZone(zoneId).setTemperatureConfort(donneesZone.temperatureConfort.toFloat());
-                }
+            auto& zone = getZone(zoneId);
+            zone.setProgrammation(donneesZone.programme, true);
+            zone.setMode(static_cast<Zone::MODE_ZONE>(donneesZone.mode));
+            zone.setModeOptions(donneesZone.options);
+            zone.setTemperatureReduit(donneesZone.reduit.toFloat());
+            zone.setTemperatureHorsGel(donneesZone.horsGel.toFloat());
+            if(!zone.boostActif()) zone.setTemperatureConfort(donneesZone.confort.toFloat());
+            if(passive || !zone.reconnaitreReglages(reinterpret_cast<const byte*>(&donneesZone), sizeof(donneesZone))) {
+                info("[CONNECT] Mise à jour zone %d (id %d), publication MQTT locale.", zone.getNumeroZone(), zoneId);
+                zone.confirmerMode();
+                zone.saveConfig();
+                zone.publishMqtt();
+            } else {
+                info("[CONNECT] Zone %d : commande confirmée par la relecture A154 de la chaudière.", zone.getNumeroZone());
             }
-
-            //Sauvegarde de la conf de la zone en NVs
-            getZone(zoneId).saveConfig();
-            info("[CONNECT] Mise à jour zone %d (id %d), publication MQTT locale.", getZone(zoneId).getNumeroZone(), zoneId );
-            getZone(zoneId).publishMqtt();
 
             if (passive) {
                 publishMqtt();
@@ -801,10 +783,6 @@ void Connect::loop() {
     if (_ecsSchedule.due(3600, 420)) {
         startReads(ReadKind::Ecs, ReadKind::Ecs);
         return;
-    }
-    const uint32_t now = millis();
-    if (now - _lastEnvoiZone >= 30000 || _lastEnvoiZone == 0) {
-        envoiZones();
     }
 }
 
@@ -970,36 +948,79 @@ void Connect::completeRead(bool success, int16_t result) {
     }
 }
 
+// L’écoute des statuts sert aussi au Connect utilisé sans émulation de satellite.
+void Connect::verifierContexteEcoute() {
+    if(_generationEcoute == radio().operationGeneration()) return;
+    _generationEcoute = radio().operationGeneration();
+    _zone1.oublierStatut();
+    _zone2.oublierStatut();
+    _zone3.oublierStatut();
+}
+
+void Connect::observerSatellite(const byte* donnees, size_t taille, uint32_t reception) {
+    if(taille < sizeof(FrisquetRadio::RadioTrameHeader)) return;
+    FrisquetRadio::RadioTrameHeader h;
+    memcpy(&h, donnees, sizeof(h));
+    if(h.idDestinataire != getConfig().boilerId() || h.type != FrisquetRadio::INIT
+        || (h.idExpediteur != ID_ZONE_1 && h.idExpediteur != ID_ZONE_2 && h.idExpediteur != ID_ZONE_3)) return;
+    Zone& zone = getZone(h.idExpediteur);
+    if(zone.getSource() != Zone::CONNECT) return;
+    verifierContexteEcoute();
+    const byte* contenu = donnees + sizeof(h);
+    if(h.idReception == 1 && taille == sizeof(h) + sizeof(FrisquetRadio::RadioTrameInit) + 8) {
+        FrisquetRadio::RadioTrameInit requete;
+        memcpy(&requete, contenu, sizeof(requete));
+        const uint16_t consigne = 0xA02F + 5 * (zone.getNumeroZone() - 1);
+        const bool blocZones = requete.adresseMemoireLecture.toUInt16() == 0xA029 && requete.tailleMemoireLecture.toUInt16() == 21;
+        // Comme Satellite::applyObservation, reconnaître aussi l’écriture de consigne
+        // accompagnée d’une lecture d’un seul mot (A033 sur un ancien satellite Z1).
+        const bool unMot = requete.tailleMemoireLecture.toUInt16() == 1;
+        if((blocZones || unMot) && requete.adresseMemoireEcriture.toUInt16() == consigne && requete.tailleMemoireEcriture.toUInt16() == 4
+            && requete.longueurDonneesEcriture == 8) zone.observerStatut(reception, h.idAssociation);
+        return;
+    }
+    // L’accusé satellite → chaudière arrête les émissions de cette fenêtre.
+    // L’accusé final chaudière → Connect est traité par recevoirConfirmation().
+    if(h.idReception != (getId() | 0x80) || h.idAssociation != zone.associationSatellite() || !zone.enAttente()
+        || taille != sizeof(h) + 1 + sizeof(Zone::BlocZone) || contenu[0] != sizeof(Zone::BlocZone)) return;
+    auto& envoi = _envois[zone.getNumeroZone() - 1];
+    if(envoi.revision != zone.revisionCommande() || envoi.tentative != zone.tentative()
+        || envoi.generationRadio != _generationEcoute) return;
+    const auto attendu = zone.blocDemande();
+    for(uint8_t rang = 0; rang < 3; ++rang) {
+        if((envoi.rangsEmis & (1U << rang)) && envoi.messagesFenetre[rang] == h.idMessage
+            && memcmp(contenu + 1, &attendu, sizeof(attendu)) == 0) {
+            envoi.prochainRang = 3;
+            return;
+        }
+    }
+}
+
 void Connect::envoiZones() {
-    if(estAssocie()) {
-        if(getConfig().useZone1() && getZone1().getSource() == Zone::SOURCE::CONNECT && (_zone1.programmationEnvoiEnAttente() || _zone1.getLastChange() > _zone1.getLastEnvoi())) {
-            info("[CONNECT] Envoi de la zone 1.");
-            if(envoyerZone(_zone1)) {
-                info("[CONNECT] Envoi réussi !");
-                _zone1.publishMqtt();
-                _zone1.refreshLastEnvoi();
-                _envoiZ1 = false;
-            }
+    verifierContexteEcoute();
+    if(!_zone1.enAttente() && !_zone2.enAttente() && !_zone3.enAttente()) return;
+    if(getConfig().useConnectPassive() || !estAssocie() || radio().busy() || _readKind != ReadKind::None
+        || FrisquetRadio::receivedFlag || radio().hasReceivedPacket() || radio().hasBufferedPacket()) return;
+    const uint32_t maintenant = millis();
+    if(_aDejaEmis && maintenant - _lastEnvoiZone < 1000) return;
+    // Les créneaux d’émission programmés ne concernent que les satellites virtuels.
+    const uint32_t heure = RadioSchedule::clockSeconds();
+    if((getConfig().useSatelliteZ1() && getConfig().useSatelliteVirtualZ1() && RadioSchedule::satelliteWindow(heure, 1))
+        || (getConfig().useSatelliteZ2() && getConfig().useSatelliteVirtualZ2() && RadioSchedule::satelliteWindow(heure, 2))
+        || (getConfig().useSatelliteZ3() && getConfig().useSatelliteVirtualZ3() && RadioSchedule::satelliteWindow(heure, 3))) return;
+    Zone* zones[] = {&_zone1, &_zone2, &_zone3};
+    const bool actives[] = {getConfig().useZone1(), getConfig().useZone2(), getConfig().useZone3()};
+    for(uint8_t i = 0; i < 3; ++i) {
+        const uint8_t index = (_prochaineZone + i) % 3;
+        Zone& zone = *zones[index];
+        if(!actives[index] || zone.getSource() != Zone::CONNECT || !zone.enAttente()) continue;
+        const int rang = zone.rangEmission(maintenant);
+        if(rang >= 0 && envoyerZone(zone, rang)) {
+            _aDejaEmis = true;
+            _lastEnvoiZone = maintenant;
+            _prochaineZone = (index + 1) % 3;
+            return;
         }
-        if(getConfig().useZone2() && getZone2().getSource() == Zone::SOURCE::CONNECT && (_zone2.programmationEnvoiEnAttente() || _zone2.getLastChange() > _zone2.getLastEnvoi())) {
-            info("[CONNECT] Envoi de la zone 2 (id=%d numero=%d).", _zone2.getIdZone(), _zone2.getNumeroZone());
-            if(envoyerZone(_zone2)) {
-                info("[CONNECT] Envoi réussi !");
-                _zone2.publishMqtt();
-                _zone2.refreshLastEnvoi();
-                _envoiZ2 = false;
-            }
-        }
-        if(getConfig().useZone3() && getZone3().getSource() == Zone::SOURCE::CONNECT && (_zone3.programmationEnvoiEnAttente() || _zone3.getLastChange() > _zone3.getLastEnvoi())) {
-            info("[CONNECT] Envoi de la zone 3 (id=%d numero=%d).", _zone3.getIdZone(), _zone3.getNumeroZone());
-            if(envoyerZone(_zone3)) {
-                info("[CONNECT] Envoi réussi !");
-                _zone3.publishMqtt();
-                _zone3.refreshLastEnvoi();
-                _envoiZ3 = false;
-            }
-        }
-        _lastEnvoiZone = millis();
     }
 }
 

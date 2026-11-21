@@ -12,6 +12,7 @@
 
 #include "Frisquet/FrisquetRadio.h"
 #include "FrisquetManager.h"
+#include "LocalScreen.h"
 
 class App {
 public:
@@ -29,6 +30,9 @@ private:
   OTA _ota;
 
   FrisquetManager _frisquetManager;
+#if defined(OFV_SCREEN_V3)
+  LocalScreen _screen;
+#endif
 
   // Portail
   Portal* _portal = nullptr;

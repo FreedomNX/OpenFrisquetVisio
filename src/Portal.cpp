@@ -742,6 +742,17 @@ void Portal::handleGetConfig() {
 
   String json = "{";
   json += "\"developerMode\":" + String(_frisquetManager.config().developerMode() ? "true" : "false") + ",";
+#if defined(OFV_SCREEN_V3)
+  const auto& screenCfg = _frisquetManager.config();
+  json += "\"displaySupported\":true,";
+  json += "\"displayEnabled\":" + String(screenCfg.displayEnabled() ? "true" : "false") + ",";
+  json += "\"displayBrightness\":" + String(screenCfg.displayBrightness()) + ",";
+  json += "\"displayTimeout\":" + String(screenCfg.displayTimeout()) + ",";
+  json += "\"displayFlip\":" + String(screenCfg.displayFlip() ? "true" : "false") + ",";
+  json += "\"displayAutoCycle\":" + String(screenCfg.displayAutoCycle() ? "true" : "false") + ",";
+#else
+  json += "\"displaySupported\":false,";
+#endif
   if (_frisquetManager.config().developerMode()) {
     const auto& cfg = _frisquetManager.config();
     json += "\"radioRxBandwidth\":" + String(cfg.radioRxBandwidth(), 1) + ",";
@@ -821,6 +832,23 @@ void Portal::handlePostConfig() {
   }
 
   auto& cfg = _frisquetManager.config();
+#if defined(OFV_SCREEN_V3)
+  uint16_t screenBrightness = cfg.displayBrightness(), screenTimeout = cfg.displayTimeout();
+  bool validScreen = true;
+  for (const char* name : {"displayEnabled", "displayFlip", "displayAutoCycle"}) {
+    if (_srv.hasArg(name)) {
+      const String value = _srv.arg(name);
+      if (value != "true" && value != "false") validScreen = false;
+    }
+  }
+  if ((_srv.hasArg("displayBrightness") && !parseDecimalArg(_srv.arg("displayBrightness"), 1, 255, screenBrightness))
+      || (_srv.hasArg("displayTimeout") && !parseDecimalArg(_srv.arg("displayTimeout"), 0, 3600, screenTimeout))) validScreen = false;
+  if (!validScreen) {
+    _srv.send(400, "application/json; charset=utf-8",
+              "{\"ok\":false,\"err\":\"Écran : luminosité de 1 à 255, veille de 0 à 3600 secondes, options true/false\"}");
+    return;
+  }
+#endif
   // Ne jamais renvoyer le mot de passe dans GET /api/config. Un champ vide
   // conserve la valeur existante ; valider avant toute mutation de paramètres.
   const String portalPassword = _srv.arg("portalPassword");
@@ -1043,6 +1071,13 @@ void Portal::handlePostConfig() {
   }
 
   if (changePortalPassword) cfg.portalPassword(portalPassword);
+#if defined(OFV_SCREEN_V3)
+  if (_srv.hasArg("displayEnabled")) cfg.displayEnabled(_srv.arg("displayEnabled") == "true");
+  if (_srv.hasArg("displayFlip")) cfg.displayFlip(_srv.arg("displayFlip") == "true");
+  if (_srv.hasArg("displayAutoCycle")) cfg.displayAutoCycle(_srv.arg("displayAutoCycle") == "true");
+  cfg.displayBrightness(static_cast<uint8_t>(screenBrightness));
+  cfg.displayTimeout(screenTimeout);
+#endif
   if (hasBandwidth) cfg.radioRxBandwidth(rxBandwidth);
   if (hasBypass) cfg.radioLnaBypass(lnaBypass);
   _frisquetManager.config().save();

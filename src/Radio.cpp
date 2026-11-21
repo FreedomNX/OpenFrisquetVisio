@@ -202,6 +202,10 @@ bool Radio::hasReceivedPacket() {
 }
 
 int16_t Radio::finishReceive(int16_t result, const char* operation, const uint8_t* data, size_t requestedLength) {
+    if (result == RADIOLIB_ERR_NONE) {
+        _hasValidReception = true;
+        _lastValidReceptionMs = millis();
+    }
     // Relever le RSSI avant le prochain réarmement.
     const bool packetRead = result == RADIOLIB_ERR_NONE || result == RADIOLIB_ERR_CRC_MISMATCH;
     _lastPacketRSSI = packetRead ? _radio.getRSSI() : NAN;

@@ -18,6 +18,9 @@
 #else
 #include <heltec.h>
 #define BOARD_HELTEC
+#if defined(WIFI_LoRa_32_V3)
+#define OFV_SCREEN_V3
+#endif
 #define RADIO_NSS GPIO_NUM_8
 #define RADIO_RST GPIO_NUM_12
 #define RADIO_IRQ GPIO_NUM_14

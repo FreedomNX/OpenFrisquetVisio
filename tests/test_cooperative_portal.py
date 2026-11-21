@@ -15,6 +15,7 @@ for name in ("handleSendRadio", "handleMemoryRead", "handleMemoryScan"):
     developer_handlers.append(handler[:handler.index("  if (_srv.method()")] + handler[-1:])
 
 signatures = (
+    "static bool parseDecimalArg(",
     "static bool isValidIPv4(",
     "static bool fitsBytes(",
     "static bool isValidHostname(",
@@ -42,6 +43,7 @@ with tempfile.TemporaryDirectory(prefix="ofv-cooperative-portal-") as directory:
         [
             "c++",
             "-std=c++17",
+            "-DOFV_SCREEN_V3",
             "-Wall",
             "-Wextra",
             "-Werror",

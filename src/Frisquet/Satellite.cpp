@@ -41,16 +41,24 @@ void Satellite::begin(bool modeVirtuel) {
     _mqttEntities.ecrasementConsigne.set("icon", "mdi:tune-variant");
     mqtt().registerEntity(*device, _mqttEntities.ecrasementConsigne, true);
     mqtt().onCommand(_mqttEntities.ecrasementConsigne, [&](const String& payload){
-        if(payload.equalsIgnoreCase("ON")) { 
-            info("[SATELLITE %d] Activation de l'écrasement", getNumeroZone());
-            setEcrasement(true);
-        } else {
-            info("[SATELLITE %d] Désactivation de l'écrasement", getNumeroZone());
-            setEcrasement(false);
-        }
-        mqtt().publishState(_mqttEntities.ecrasementConsigne, payload);
+        commandeEcrasement(payload);
     });
 
+}
+
+void Satellite::commandeEcrasement(const String& payload) {
+    // Seuls ON et OFF sont reconnus, comme le switch de Home Assistant.
+    if(payload.equalsIgnoreCase("ON")) {
+        info("[SATELLITE %d] Activation de l'écrasement", getNumeroZone());
+        setEcrasement(true);
+    } else if(payload.equalsIgnoreCase("OFF")) {
+        info("[SATELLITE %d] Désactivation de l'écrasement", getNumeroZone());
+        setEcrasement(false);
+    } else {
+        error("[SATELLITE %d] Commande d'écrasement ignorée : '%s' (ON ou OFF attendu).", getNumeroZone(), payload.c_str());
+    }
+    // Publier l'état réel, et non la commande reçue.
+    mqtt().publishState(_mqttEntities.ecrasementConsigne, getEcrasement() ? "ON" : "OFF");
 }
 
 void Satellite::loop() {

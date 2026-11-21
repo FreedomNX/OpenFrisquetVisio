@@ -68,6 +68,7 @@ class Satellite : public FrisquetDevice {
             if(_zone.getSource() == Zone::SOURCE::SATELLITE_PHYSIQUE) _zone.setPilotageActif(ecrasement);
         }
         bool getEcrasement() { return _ecrasement; }
+        void commandeEcrasement(const String& payload);
 
         void setEtatChaudiere(byte etatChaudiere) { _chaudiere.setEtatChaudiere(etatChaudiere); }
         Chaudiere::ETAT_CHAUDIERE getEtatChaudiere() { return _chaudiere.getEtatChaudiere(); }

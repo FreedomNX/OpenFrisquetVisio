@@ -106,6 +106,40 @@ static bool isValidIPv4(const String& s) {
   return parts == 4;
 }
 
+// Limites du core Wi-Fi et de MQTT, vérifiées avant l'enregistrement.
+static bool fitsBytes(const String& s, size_t maximum) {
+  return s.length() <= maximum && strlen(s.c_str()) == s.length();
+}
+
+static bool isValidHostname(const String& s) {
+  // Le core copie le hostname dans 32 octets, NUL compris (RFC 1123 : lettres, chiffres, tirets).
+  if (s.isEmpty() || !fitsBytes(s, 31) || s[0] == '-' || s[s.length() - 1] == '-') return false;
+  for (size_t i = 0; i < s.length(); i++) {
+    const char c = s[i];
+    if (!((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') || c == '-')) return false;
+  }
+  return true;
+}
+
+static bool isValidWifiPassword(const String& s) {
+  // WPA : phrase de 8 à 63 caractères, ou clé de 64 chiffres hexadécimaux.
+  if (!fitsBytes(s, 64)) return false;
+  if (s.length() < 64) return s.length() >= 8;
+  for (size_t i = 0; i < s.length(); i++) {
+    const char c = s[i];
+    if (!((c >= '0' && c <= '9') || (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F'))) return false;
+  }
+  return true;
+}
+
+static bool isValidMqttBaseTopic(const String& s) {
+  // Les jokers + et # sont interdits dans un topic de publication. Vide : topics à la racine.
+  for (size_t i = 0; i < s.length(); i++) {
+    if (s[i] == '+' || s[i] == '#' || (uint8_t)s[i] < 0x20) return false;
+  }
+  return true;
+}
+
 static const char* resetReasonToString(esp_reset_reason_t reason) {
   switch (reason) {
     case ESP_RST_UNKNOWN: return "UNKNOWN";
@@ -707,7 +741,8 @@ void Portal::handleGetConfig() {
   }
   json += "\"wifiHostname\":\"" + jsonEscape(String(w.hostname)) + "\",";
   json += "\"wifiSsid\":\"" + jsonEscape(String(w.ssid)) + "\",";
-  json += "\"wifiPass\":\"" + jsonEscape(String(w.password)) + "\",";
+  // Les mots de passe ne sont jamais relus : seulement s'ils sont enregistrés.
+  json += "\"wifiPassConfigured\":" + String(w.password.length() ? "true" : "false") + ",";
   json += "\"wifiStatic\":" + String(w.useStaticIp ? "true" : "false") + ",";
   json += "\"wifiIp\":\"" + jsonEscape(w.localIp.toString()) + "\",";
   json += "\"wifiGw\":\"" + jsonEscape(w.gateway.toString()) + "\",";
@@ -717,7 +752,7 @@ void Portal::handleGetConfig() {
   json += "\"mqttHost\":\"" + jsonEscape(String(m.host)) + "\",";
   json += "\"mqttPort\":" + jsonEscape(String(m.port)) + ",";
   json += "\"mqttUser\":\"" + jsonEscape(String(m.username)) + "\",";
-  json += "\"mqttPass\":\"" + jsonEscape(String(m.password)) + "\",";
+  json += "\"mqttPassConfigured\":" + String(m.password.length() ? "true" : "false") + ",";
   json += "\"mqttClientId\":\"" + jsonEscape(String(m.clientId)) + "\",";
   json += "\"mqttBaseTopic\":\"" + jsonEscape(String(m.baseTopic)) + "\",";
 
@@ -813,6 +848,21 @@ void Portal::handlePostConfig() {
       lnaBypass = value == "true" || value == "1";
     }
   }
+  // Refuser ce que le core Wi-Fi ou le broker n'accepteraient pas, avant toute modification.
+  // Un mot de passe Wi-Fi vide n'est pas contrôlé : réseau ouvert.
+  const char* invalidNetwork = nullptr;
+  if (_srv.hasArg("wifiHostname") && !isValidHostname(_srv.arg("wifiHostname")))
+    invalidNetwork = "Hostname invalide (1 à 31 caractères : lettres, chiffres et tirets, sans tiret au début ni à la fin)";
+  else if (_srv.hasArg("wifiSsid") && !fitsBytes(_srv.arg("wifiSsid"), 32))
+    invalidNetwork = "SSID trop long (32 octets au plus)";
+  else if (!_srv.arg("wifiPass").isEmpty() && !isValidWifiPassword(_srv.arg("wifiPass")))
+    invalidNetwork = "Mot de passe Wi-Fi invalide (8 à 63 caractères, ou 64 chiffres hexadécimaux)";
+  else if (_srv.hasArg("mqttBaseTopic") && !isValidMqttBaseTopic(_srv.arg("mqttBaseTopic")))
+    invalidNetwork = "Préfixe MQTT invalide (sans + ni #)";
+  if (invalidNetwork) {
+    _srv.send(400, "application/json; charset=utf-8", String("{\"ok\":false,\"err\":\"") + invalidNetwork + "\"}");
+    return;
+  }
 
   auto& w = _frisquetManager.config().getWiFiOptions();
   auto& m = _frisquetManager.config().getMQTTOptions();
@@ -820,7 +870,10 @@ void Portal::handlePostConfig() {
   // Champs WiFi
   if (_srv.hasArg("wifiHostname")) w.hostname = _srv.arg("wifiHostname");
   if (_srv.hasArg("wifiSsid"))     w.ssid     = _srv.arg("wifiSsid");
-  if (_srv.hasArg("wifiPass"))     w.password = _srv.arg("wifiPass");
+  // Mot de passe vide ou absent : conserver celui enregistré. L'effacement
+  // (réseau ouvert, broker sans mot de passe) est demandé explicitement.
+  if (_srv.hasArg("wifiPass") && !_srv.arg("wifiPass").isEmpty()) w.password = _srv.arg("wifiPass");
+  else if (parseBoolArg(_srv.arg("wifiPassClear"), false)) w.password = "";
 
   // IP statique / DHCP
   if (_srv.hasArg("wifiStatic")) {
@@ -874,7 +927,8 @@ void Portal::handlePostConfig() {
   if (_srv.hasArg("mqttHost"))     m.host     = _srv.arg("mqttHost");
   if (_srv.hasArg("mqttPort"))     m.port     = (uint16_t)_srv.arg("mqttPort").toInt();
   if (_srv.hasArg("mqttUser"))     m.username = _srv.arg("mqttUser");
-  if (_srv.hasArg("mqttPass"))     m.password = _srv.arg("mqttPass");
+  if (_srv.hasArg("mqttPass") && !_srv.arg("mqttPass").isEmpty()) m.password = _srv.arg("mqttPass");
+  else if (parseBoolArg(_srv.arg("mqttPassClear"), false)) m.password = "";
   if (_srv.hasArg("mqttClientId")) m.clientId = _srv.arg("mqttClientId");
   if (_srv.hasArg("mqttBaseTopic"))m.baseTopic= _srv.arg("mqttBaseTopic");
 
@@ -1105,7 +1159,7 @@ void Portal::handleStatus() {
   String json = "{";
   json += "\"apRunning\":"     + String(ap  ? "true" : "false") + ",";
   json += "\"staConnected\":"  + String(sta ? "true" : "false") + ",";
-  json += "\"ssid\":\""        + ssid + "\",";
+  json += "\"ssid\":\""        + jsonEscape(ssid) + "\",";
   json += "\"ip\":\""          + ip.toString() + "\",";
   json += "\"rssi\":"          + String(rssi) + ",";
   json += "\"uptimeMs\":"      + String(upMs) + ",";

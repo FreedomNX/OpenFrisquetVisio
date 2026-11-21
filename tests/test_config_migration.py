@@ -86,11 +86,15 @@ public:
     void putBool(const char* key, bool value) { putBytes(key, &value, sizeof(value)); }
     String getString(const char*, const char* fallback) const { return fallback; }
     float getFloat(const char*, float fallback) const { return fallback; }
-    uint16_t getUShort(const char*, uint16_t fallback) const { return fallback; }
+    uint16_t getUShort(const char* key, uint16_t fallback) const {
+        uint16_t value = fallback;
+        if (isKey(key)) getBytes(key, &value, sizeof(value));
+        return value;
+    }
     unsigned long getULong(const char*, unsigned long fallback) const { return fallback; }
     void putString(const char*, const String&) {}
     void putFloat(const char*, float) {}
-    void putUShort(const char*, uint16_t) {}
+    void putUShort(const char* key, uint16_t value) { putBytes(key, &value, sizeof(value)); }
     void putULong(const char*, unsigned long) {}
 };
 std::map<std::string, Preferences::Namespace> Preferences::nvs;
@@ -148,6 +152,14 @@ int main() {
     reset(); Config fresh; fresh.load(); expect(fresh, NetworkID());
     reset(); Preferences::nvs["net-conf"];
     Config noLegacyId; noLegacyId.load(); expect(noLegacyId, NetworkID());
+    assert(noLegacyId.displayEnabled() && noLegacyId.displayBrightness() == 96 && noLegacyId.displayTimeout() == 60);
+    assert(!noLegacyId.displayFlip() && !noLegacyId.displayAutoCycle());
+    noLegacyId.displayEnabled(false); noLegacyId.displayBrightness(22); noLegacyId.displayTimeout(0);
+    noLegacyId.displayFlip(true); noLegacyId.displayAutoCycle(true); noLegacyId.save();
+    Config screenReboot; screenReboot.load();
+    assert(!screenReboot.displayEnabled() && screenReboot.displayBrightness() == 22 && screenReboot.displayTimeout() == 0);
+    assert(screenReboot.displayFlip() && screenReboot.displayAutoCycle());
+    screenReboot.displayTimeout(3601); assert(screenReboot.displayTimeout() == 60);
     puts("OK: current pairing preserved across reboot/settings saves, legacy migration, fresh NVS");
 }
 '''

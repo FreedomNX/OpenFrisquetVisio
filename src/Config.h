@@ -20,6 +20,12 @@ class Config {
         // en mémoire ne doivent alors pas écraser celles enregistrées.
         bool _loaded = false;
 
+        bool _displayEnabled = true;
+        uint8_t _displayBrightness = 96;
+        uint16_t _displayTimeout = 60;
+        bool _displayFlip = false;
+        bool _displayAutoCycle = false;
+
         bool _useConnect = false;
         bool _developerMode = false;
         String _portalPassword = "admin";
@@ -41,6 +47,17 @@ class Config {
         Config();
         void load();
         void save();
+
+        bool displayEnabled() const { return _displayEnabled; }
+        void displayEnabled(bool value) { _displayEnabled = value; }
+        uint8_t displayBrightness() const { return _displayBrightness; }
+        void displayBrightness(uint8_t value) { _displayBrightness = value ? value : 1; }
+        uint16_t displayTimeout() const { return _displayTimeout; }
+        void displayTimeout(uint16_t value) { _displayTimeout = value <= 3600 ? value : 60; }
+        bool displayFlip() const { return _displayFlip; }
+        void displayFlip(bool value) { _displayFlip = value; }
+        bool displayAutoCycle() const { return _displayAutoCycle; }
+        void displayAutoCycle(bool value) { _displayAutoCycle = value; }
 
         bool developerMode() const { return _developerMode; }
         void developerMode(bool enabled) { _developerMode = enabled; }

@@ -12,6 +12,9 @@ void App::begin() {
 #endif
 
   initConfig();
+#if defined(OFV_SCREEN_V3)
+  _screen.begin(_frisquetManager, _networkManager);
+#endif
   initNetwork();
   initMqtt();
   initPortal();
@@ -23,6 +26,9 @@ void App::begin() {
 }
 
 void App::loop() {
+#if defined(OFV_SCREEN_V3)
+  _screen.loop();
+#endif
   // boucle des services
   _ota.loop();
   _portal->loop();

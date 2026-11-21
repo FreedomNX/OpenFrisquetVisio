@@ -50,6 +50,19 @@ struct Config {
         uint16_t port = 1883;
     } mqtt;
     unsigned saves = 0;
+    bool screenOn = true, screenFlip = false, screenCycle = false;
+    uint8_t screenBrightness = 96;
+    uint16_t screenTimeout = 60;
+    bool displayEnabled() { return screenOn; }
+    void displayEnabled(bool v) { screenOn = v; }
+    bool displayFlip() { return screenFlip; }
+    void displayFlip(bool v) { screenFlip = v; }
+    bool displayAutoCycle() { return screenCycle; }
+    void displayAutoCycle(bool v) { screenCycle = v; }
+    uint8_t displayBrightness() { return screenBrightness; }
+    void displayBrightness(uint8_t v) { screenBrightness = v; }
+    uint16_t displayTimeout() { return screenTimeout; }
+    void displayTimeout(uint16_t v) { screenTimeout = v; }
     NetworkID network{{1, 2, 3, 4}};
     Wifi &getWiFiOptions() { return wifi; }
     Mqtt &getMQTTOptions() { return mqtt; }
@@ -205,7 +218,9 @@ int main(int argc, char **argv) {
             {"wifiIp", "invalide"}, {"wifiGw", "invalide"}, {"wifiMask", "invalide"},
             {"wifiDns1", "invalide"}, {"wifiDns2", "invalide"}, {"networkID", "invalide"},
             {"wifiHostname", "mon_heltec"}, {"wifiSsid", "0123456789abcdef0123456789abcdefX"},
-            {"wifiPass", "court"}, {"mqttBaseTopic", "frisquet/#"}};
+            {"wifiPass", "court"}, {"mqttBaseTopic", "frisquet/#"},
+            {"displayEnabled", "invalide"}, {"displayFlip", "invalide"}, {"displayAutoCycle", "invalide"},
+            {"displayBrightness", "invalide"}, {"displayTimeout", "invalide"}};
         for (const auto &[field, value] : invalid) {
             Portal p;
             reserve(p);
@@ -216,17 +231,30 @@ int main(int argc, char **argv) {
             const auto &cfg = p._frisquetManager.cfg;
             assert(cfg.wifi.hostname.empty() && cfg.wifi.ssid.empty() && cfg.wifi.password.empty() &&
                    cfg.mqtt.baseTopic.empty());
+            assert(cfg.screenOn && cfg.screenBrightness == 96);
+        }
+        for (const auto& invalid : {std::make_pair("displayBrightness", "0"), {"displayBrightness", "256"},
+                                   {"displayTimeout", "3601"}, {"displayTimeout", "-1"}}) {
+            Portal p;
+            p._srv.args = {{invalid.first, invalid.second}, {"wifiSsid", "ne-pas-modifier"}};
+            p.handlePostConfig();
+            assert(p._srv.status == 400 && p.reboots == 0 && p._frisquetManager.cfg.saves == 0);
+            assert(p._frisquetManager.cfg.wifi.ssid.empty());
         }
         Portal accepted;
         reserve(accepted);
-        // Un mot de passe vide reste accepté (réseau ouvert).
-        accepted._srv.args = {{"wifiHostname", "open-frisquet-visio"}, {"wifiSsid", "MaBox"},
+        accepted._srv.args = {{"displayEnabled", "false"}, {"displayBrightness", "255"},
+                              {"displayTimeout", "0"}, {"displayFlip", "true"}, {"displayAutoCycle", "true"},
+                              {"wifiHostname", "open-frisquet-visio"}, {"wifiSsid", "MaBox"},
                               {"wifiPass", ""}, {"mqttBaseTopic", "maison/frisquet"}};
         accepted.handlePostConfig();
         assert(accepted._frisquetManager.cfg.wifi.hostname == "open-frisquet-visio" &&
                accepted._frisquetManager.cfg.mqtt.baseTopic == "maison/frisquet");
         assert(accepted._srv.status == 200 && accepted.reboots == 1 &&
                accepted._frisquetManager.cfg.saves == 1);
+        assert(!accepted._frisquetManager.cfg.screenOn && accepted._frisquetManager.cfg.screenFlip
+            && accepted._frisquetManager.cfg.screenCycle && accepted._frisquetManager.cfg.screenBrightness == 255
+            && accepted._frisquetManager.cfg.screenTimeout == 0);
         assert(!accepted._frisquetManager.r.ownsObservation(8) && accepted._frisquetManager.r.busy());
     } else {
         using Handler = void (Portal::*)();

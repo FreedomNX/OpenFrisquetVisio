@@ -100,7 +100,9 @@
         <button id="dailyPrev" class="btn" type="button" aria-label="Mois précédent">‹</button>
         <select id="dailyMonth" class="btn" aria-label="Mois de consommation"></select>
         <button id="dailyNext" class="btn" type="button" aria-label="Mois suivant">›</button>
+        <button id="dailyExport" class="btn" type="button">Télécharger tout l’historique (CSV)</button>
       </div>
+      <span class="updated" id="dailyExportStatus" role="status"></span>
       <p class="updated" id="dailyStatus" role="status"></p>
       <table id="dailyTable" hidden>
         <caption>Estimations de la chaudière en kWh · — indique un relevé manquant</caption>
@@ -239,6 +241,48 @@
       throw new Error(message);
     }
 
+    async function downloadDailyCsv() {
+      const button = $("#dailyExport");
+      if (button.disabled) return;
+      button.disabled = true;
+      const status = message => setText("#dailyExportStatus", message);
+      status("Préparation du fichier CSV…");
+      try {
+        const latest = await fetchDailyMonth("");
+        if (!latest.month) { status("Aucun relevé à exporter."); return; }
+        if (!latest.version) throw new Error("Actualisez la page avant de télécharger l’historique.");
+        const chunks = ["\uFEFFDate;Chauffage (kWh);Eau chaude (kWh)\r\n"];
+        const cursor = new Date(latest.firstMonth + "-01T00:00:00Z");
+        const end = new Date(latest.lastMonth + "-01T00:00:00Z");
+        for (; cursor <= end; cursor.setUTCMonth(cursor.getUTCMonth() + 1)) {
+          const month = cursor.toISOString().slice(0, 7);
+          status("Export en cours · " + month);
+          const page = month === latest.month ? latest : await fetchDailyMonth(month);
+          if (page.version !== latest.version || page.month !== month) {
+            throw new Error("L’historique a changé. Relancez le téléchargement.");
+          }
+          for (let i = page.days.length - 1; i >= 0; --i) {
+            const date = new Date((page.lastDay - i) * 86400000).toISOString().slice(0, 10);
+            const [heating, hotWater] = page.days[i] ?? [];
+            chunks.push(date + ";" + (heating ?? "") + ";" + (hotWater ?? "") + "\r\n");
+          }
+        }
+        const link = document.createElement("a");
+        const url = URL.createObjectURL(new Blob(chunks, {type:"text/csv;charset=utf-8"}));
+        link.href = url;
+        link.download = "consommation-quotidienne_" + latest.firstMonth + "_" + latest.lastMonth + ".csv";
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+        setTimeout(() => URL.revokeObjectURL(url), 1000);
+        status("Fichier CSV prêt.");
+      } catch (error) {
+        status(error.message);
+      } finally {
+        button.disabled = false;
+      }
+    }
+
     async function loadDailyConsumption(mois=dailyMonth){
       if(!$("#dailyConsumption").open)return;
       dailyController?.abort();
@@ -272,6 +316,7 @@
       finally{clearTimeout(deadline);dashboardInFlight=false;if(button)button.disabled=false;scheduleDashboard()}
     }
     $("#dailyConsumption").addEventListener("toggle",()=>loadDailyConsumption(""));
+    $("#dailyExport").addEventListener("click",downloadDailyCsv);
     const picker=$("#dailyMonth");
     picker.addEventListener("change",()=>loadDailyConsumption(picker.value));
     $("#dailyPrev").addEventListener("click",()=>loadDailyConsumption(picker.options[picker.selectedIndex+1].value));

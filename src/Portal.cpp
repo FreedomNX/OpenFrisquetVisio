@@ -687,8 +687,9 @@ void Portal::handleHistoriqueVeille() {
     }
     selection = annee * 12 + mois - 1;
   }
+  auto& config = _frisquetManager.config();
   HistoriqueVeille archive;
-  if (!archive.lire(_frisquetManager.config(), selection)) {
+  if (!archive.lire(config, selection)) {
     const char* erreur = erreurStockageHistorique();
     _srv.send(503, "text/plain; charset=utf-8", erreur ? erreur : "Lecture des fichiers de l’historique impossible.");
     return;
@@ -700,7 +701,8 @@ void Portal::handleHistoriqueVeille() {
   const uint32_t fin = archive.dernierJour();
   String json;
   json.reserve(640);
-  json = "{\"firstMonth\":" + moisIso(archive.premierMois) + ",\"lastMonth\":" + moisIso(archive.dernierMois)
+  const String version = networkIdToStr(config.getNetworkID()) + "-" + String(config.boilerId()) + "-" + String(archive.revision);
+  json = "{\"version\":\"" + version + "\",\"firstMonth\":" + moisIso(archive.premierMois) + ",\"lastMonth\":" + moisIso(archive.dernierMois)
        + ",\"month\":" + moisIso(archive.mois) + ",\"lastDay\":" + String(fin) + ",\"days\":[";
   for (unsigned j = archive.nbJours; j > 0; --j) {
     if (j < archive.nbJours) json += ',';

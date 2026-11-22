@@ -13,6 +13,7 @@ function dashboard(){
   }}});
   vm.runInContext(script.slice(0,script.indexOf('    async function loadDashboard')),context);
   return {render:(data,previous)=>context.render({boiler:{monthlyConsumption:data,previousYearConsumption:previous}}),
+    releve:boiler=>{context.render({boiler});return elements.get('#gasPeriod').textContent;},
     previousTable:()=>elements.get('#previousYearConsumptionTable'),
     previousRows:()=>elements.get('#previousYearConsumptionRows').innerHTML,
     previousStatus:()=>elements.get('#previousYearConsumptionStatus').textContent,
@@ -114,4 +115,11 @@ test('le navigateur ne redéfinit pas l’année archivée et ne date pas une ar
   page.render(null,{...previous,year:null,month:null,receivedAt:null});
   assert.equal(page.previousStatus(),'Date de réception indisponible · période non confirmée');
   assert.equal((page.previousRows().match(/class="partial"/g)||[]).length,12);
+});
+
+
+test('le jour de consommation vient de la lecture chaudière, y compris au nouvel an',()=>{
+  const page=dashboard();
+  assert.match(page.releve({estimatedConsumptionDay:20818}),/31\/12\/2026/);
+  assert.match(page.releve({estimatedConsumptionDay:null}),/date indéterminée/);
 });

@@ -89,7 +89,7 @@
       <article class="metric"><div class="metric-icon">💧</div><div class="metric-label">Pression</div><div class="metric-value skeleton" id="pressure">—</div><div class="metric-note">Circuit de chauffage</div></article>
       <article class="metric"><div class="metric-icon">⚡</div><div class="metric-label">Puissance chauffage</div><div class="metric-value skeleton" id="heatingPower">—</div><div class="metric-note">Valeur instantanée</div></article>
       <article class="metric"><div class="metric-icon">🚿</div><div class="metric-label">Puissance ECS</div><div class="metric-value skeleton" id="hotWaterPower">—</div><div class="metric-note">Valeur instantanée</div></article>
-      <article class="metric"><div class="metric-icon">📊</div><div class="metric-label">Consommation gaz</div><div class="metric-value skeleton" id="gasConsumption">—</div><div class="metric-note">Chauffage / ECS</div></article>
+      <article class="metric"><div class="metric-icon">📊</div><div class="metric-label">Consommation gaz de la veille</div><div class="metric-value skeleton" id="gasConsumption">—</div><div class="metric-note" id="gasPeriod">Chauffage / ECS</div></article>
     </section>
 
     <div class="section-head"><h2>🛋️ Zones de chauffage</h2><a class="btn" href="/programming">Programmation</a></div><section class="zones" id="zones"><div class="empty">Chargement des zones…</div></section>
@@ -176,6 +176,9 @@
       const outdoor=probe.enabled&&probe.temperature!=null?probe.temperature:boiler.outdoorTemperature;setText("#outdoorTemp",value(outdoor,"°C"));setText("#outdoorSource",probe.enabled&&probe.temperature!=null?"Sonde extérieure":"Chaudière");
       setText("#hotWaterTempNote",boiler.hotWaterTemperature==null?"Température ECS indisponible":"Température ECS");
       setText("#hotWaterTemp",value(boiler.hotWaterTemperature,"°C"));setText("#heatingBodyTemp",value(boiler.heatingBodyTemperature,"°C"));setText("#flueTemp",value(boiler.flueTemperature,"°C"));setText("#pressure",value(boiler.pressure,"bar",2));setText("#heatingPower",value(boiler.heatingPower,"kW"));setText("#hotWaterPower",value(boiler.hotWaterPower,"kW"));
+      const jourGaz=boiler.estimatedConsumptionDay;
+      const dateGaz=jourGaz ? new Date(jourGaz*86400000).toLocaleDateString("fr-FR",{timeZone:"UTC"}) : "date indéterminée";
+      setText("#gasPeriod","Chauffage / ECS · "+dateGaz);
       const heatingGas=integer(boiler.heatingConsumption,"kWh"),hotWaterGas=integer(boiler.hotWaterConsumption,"kWh");setText("#gasConsumption",heatingGas==="—"&&hotWaterGas==="—"?"—":heatingGas+" / "+hotWaterGas);renderZones(data.zones);$("#lastUpdate").textContent="Mis à jour à "+new Date().toLocaleTimeString("fr-FR",{hour:"2-digit",minute:"2-digit",second:"2-digit"})
     }
     let dashboardInFlight=false,dashboardTimer=null;

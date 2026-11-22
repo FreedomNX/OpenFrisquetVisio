@@ -94,6 +94,21 @@
 
     <div class="section-head"><h2>🛋️ Zones de chauffage</h2><a class="btn" href="/programming">Programmation</a></div><section class="zones" id="zones"><div class="empty">Chargement des zones…</div></section>
 
+    <details class="panel consumption" id="dailyConsumption">
+      <summary>Consommation quotidienne</summary>
+      <div id="dailyNav" hidden>
+        <button id="dailyPrev" class="btn" type="button" aria-label="Mois précédent">‹</button>
+        <select id="dailyMonth" class="btn" aria-label="Mois de consommation"></select>
+        <button id="dailyNext" class="btn" type="button" aria-label="Mois suivant">›</button>
+      </div>
+      <p class="updated" id="dailyStatus" role="status"></p>
+      <table id="dailyTable" hidden>
+        <caption>Estimations de la chaudière en kWh · — indique un relevé manquant</caption>
+        <thead><tr><th scope="col">Jour</th><th scope="col">Chauffage</th><th scope="col">Eau chaude</th></tr></thead>
+        <tbody id="dailyRows"></tbody>
+      </table>
+    </details>
+
     <details class="panel consumption">
       <summary>📊 Consommation mensuelle</summary>
       <div class="consumption-years">
@@ -178,6 +193,73 @@
       setText("#hotWaterTemp",value(boiler.hotWaterTemperature,"°C"));setText("#heatingBodyTemp",value(boiler.heatingBodyTemperature,"°C"));setText("#flueTemp",value(boiler.flueTemperature,"°C"));setText("#pressure",value(boiler.pressure,"bar",2));setText("#heatingPower",value(boiler.heatingPower,"kW"));setText("#hotWaterPower",value(boiler.hotWaterPower,"kW"));
       const heatingGas=integer(boiler.heatingConsumption,"kWh"),hotWaterGas=integer(boiler.hotWaterConsumption,"kWh");setText("#gasConsumption",heatingGas==="—"&&hotWaterGas==="—"?"—":heatingGas+" / "+hotWaterGas);renderZones(data.zones);$("#lastUpdate").textContent="Mis à jour à "+new Date().toLocaleTimeString("fr-FR",{hour:"2-digit",minute:"2-digit",second:"2-digit"})
     }
+    let dailyMonth="",dailyController=null;
+    function renderDailyConsumption(data){
+      const picker=$("#dailyMonth");
+      const format=new Intl.DateTimeFormat("fr-FR",{month:"long",year:"numeric",timeZone:"UTC"});
+      picker.innerHTML="";
+      if(data.month){
+        const date=new Date(data.lastMonth+"-01T00:00:00Z");
+        const first=new Date(data.firstMonth+"-01T00:00:00Z");
+        for(;date>=first;date.setUTCMonth(date.getUTCMonth()-1)){
+          const option=document.createElement("option");
+          option.value=date.toISOString().slice(0,7);
+          option.textContent=format.format(date);
+          picker.appendChild(option);
+        }
+        picker.value=data.month;
+      }
+      $("#dailyNav").hidden=!data.month;
+      $("#dailyPrev").disabled=!data.month || data.month===data.firstMonth;
+      $("#dailyNext").disabled=!data.month || data.month===data.lastMonth;
+      const available=data.days.some(releve=>releve!==null);
+      $("#dailyTable").hidden=!available;
+      setText("#dailyStatus",available?"":(data.month?"Aucun relevé pour ce mois.":"Aucun relevé quotidien enregistré."));
+      $("#dailyRows").innerHTML=available ? data.days.map((releve,i)=>{
+        const date=new Date((data.lastDay-i)*86400000).toLocaleDateString("fr-FR",{timeZone:"UTC"});
+        return `<tr><th scope="row">${date}</th><td>${integer(releve?.[0])}</td><td>${integer(releve?.[1])}</td></tr>`;
+      }).join("") : "";
+    }
+    async function fetchDailyMonth(month, controller = new AbortController()) {
+      const url = "/api/consommation/quotidienne" + (month ? "?mois=" + encodeURIComponent(month) : "");
+      const timeout = setTimeout(() => controller.abort(), 10000);
+      let message = "Lecture de l’historique impossible.";
+      try {
+        const response = await fetch(url, {cache:"no-store", signal:controller.signal});
+        if (response.ok && !response.redirected) return await response.json();
+        if (response.status === 503) {
+          message = await response.text() || "Historique indisponible.";
+        }
+        if (response.redirected || response.status === 401) message = "Reconnectez-vous au portail.";
+      } catch {
+        throw new Error(message);
+      } finally {
+        clearTimeout(timeout);
+      }
+      throw new Error(message);
+    }
+
+    async function loadDailyConsumption(mois=dailyMonth){
+      if(!$("#dailyConsumption").open)return;
+      dailyController?.abort();
+      dailyMonth=mois;
+      const picker=$("#dailyMonth");
+      picker.disabled=$("#dailyPrev").disabled=$("#dailyNext").disabled=true;
+      setText("#dailyStatus","Chargement des relevés…");
+      const controller=new AbortController();
+      dailyController=controller;
+      try{
+        const data=await fetchDailyMonth(mois,controller);
+        if(dailyController===controller)renderDailyConsumption(data);
+      }catch(error){
+        if(dailyController!==controller)return;
+        $("#dailyNav").hidden=$("#dailyTable").hidden=true;
+        dailyMonth="";
+        setText("#dailyStatus",error.message);
+      }finally{
+        if(dailyController===controller){picker.disabled=false;dailyController=null;}
+      }
+    }
     let dashboardInFlight=false,dashboardTimer=null;
     function scheduleDashboard(){clearTimeout(dashboardTimer);dashboardTimer=null;if(!document.hidden)dashboardTimer=setTimeout(loadDashboard,5000)}
     async function loadDashboard(){
@@ -189,7 +271,12 @@
       catch(error){setStatus("#wifiStatus","Données indisponibles","bad");$("#lastUpdate").textContent="Impossible d’actualiser le tableau de bord"}
       finally{clearTimeout(deadline);dashboardInFlight=false;if(button)button.disabled=false;scheduleDashboard()}
     }
-    $("#refreshBtn").addEventListener("click",loadDashboard);
+    $("#dailyConsumption").addEventListener("toggle",()=>loadDailyConsumption(""));
+    const picker=$("#dailyMonth");
+    picker.addEventListener("change",()=>loadDailyConsumption(picker.value));
+    $("#dailyPrev").addEventListener("click",()=>loadDailyConsumption(picker.options[picker.selectedIndex+1].value));
+    $("#dailyNext").addEventListener("click",()=>loadDailyConsumption(picker.options[picker.selectedIndex-1].value));
+    $("#refreshBtn").addEventListener("click",()=>{loadDashboard();loadDailyConsumption()});
     document.addEventListener("visibilitychange",()=>{clearTimeout(dashboardTimer);dashboardTimer=null;if(!document.hidden)loadDashboard()});
     if(!document.hidden)loadDashboard();
   </script>

@@ -1,4 +1,6 @@
 #include "Portal.h"
+#include "Frisquet/HistoriqueVeille.h"
+#include "Frisquet/StockageHistorique.h"
 #include "ProgrammationPortail.h"
 #include <WiFi.h>
 #include <ESPmDNS.h>
@@ -378,6 +380,7 @@ void Portal::begin(bool startApFallbackIfNoWifi) {
   onAuthenticated("/logo.png", HTTP_GET, &Portal::handleLogo);
   onAuthenticated("/api/ping", HTTP_GET, &Portal::handlePing);
   onAuthenticated("/api/dashboard", HTTP_GET, &Portal::handleDashboard);
+  onAuthenticated("/api/consommation/quotidienne", HTTP_GET, &Portal::handleHistoriqueVeille);
   onAuthenticated("/programming", HTTP_GET, &Portal::handleProgrammationPage);
   onAuthenticated("/api/programming", HTTP_GET, &Portal::handleGetProgrammation);
   onAuthenticated("/api/commande/reessayer", HTTP_POST, &Portal::handleReessaiZone);
@@ -659,6 +662,53 @@ static String jsonConsommationsMensuelles(const Connect::ConsommationsMensuelles
     json += String(donnees.ecs[mois]);
   }
   return json + "]}";
+}
+
+// Mois civil ISO dans l’API, numéro consécutif dans l’archive.
+static String moisIso(int numero) {
+  if (!numero) return "null";
+  char texte[24];
+  snprintf(texte, sizeof(texte), "\"%04d-%02d\"", numero / 12, numero % 12 + 1);
+  return String(texte);
+}
+
+void Portal::handleHistoriqueVeille() {
+  int selection = 0;
+  if (_srv.hasArg("mois")) {
+    const String iso = _srv.arg("mois");
+    unsigned annee, mois;
+    char fin;
+    if (iso.length() != 7 || iso[4] != '-' || strspn(iso.c_str(), "0123456789") != 4 ||
+        strspn(iso.c_str() + 5, "0123456789") != 2 ||
+        sscanf(iso.c_str(), "%u-%u%c", &annee, &mois, &fin) != 2 ||
+        annee < 1970 || annee > 2099 || mois < 1 || mois > 12) {
+      _srv.send(400, "text/plain; charset=utf-8", "Mois invalide (AAAA-MM).");
+      return;
+    }
+    selection = annee * 12 + mois - 1;
+  }
+  HistoriqueVeille archive;
+  if (!archive.lire(_frisquetManager.config(), selection)) {
+    const char* erreur = erreurStockageHistorique();
+    _srv.send(503, "text/plain; charset=utf-8", erreur ? erreur : "Lecture des fichiers de l’historique impossible.");
+    return;
+  }
+  if (selection && !archive.mois) {
+    _srv.send(404, "text/plain; charset=utf-8", "Mois hors de la période conservée.");
+    return;
+  }
+  const uint32_t fin = archive.dernierJour();
+  String json;
+  json.reserve(640);
+  json = "{\"firstMonth\":" + moisIso(archive.premierMois) + ",\"lastMonth\":" + moisIso(archive.dernierMois)
+       + ",\"month\":" + moisIso(archive.mois) + ",\"lastDay\":" + String(fin) + ",\"days\":[";
+  for (unsigned j = archive.nbJours; j > 0; --j) {
+    if (j < archive.nbJours) json += ',';
+    const auto& valeurs = archive.jours[j - 1];
+    if (valeurs.disponible()) json += "[" + jsonIntOrNull(valeurs.chauffage) + "," + jsonIntOrNull(valeurs.ecs) + "]";
+    else json += "null";
+  }
+  _srv.send(200, "application/json", json + "]}");
 }
 
 void Portal::handleDashboard() {

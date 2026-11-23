@@ -14,7 +14,7 @@ de récupérer les informations en temps réel et de les exposer à **Home Assis
   - Température **corps de chauffe (CDC)**
   - Température **extérieure**
   - **Pression** du circuit (bar)
-  - **Consommation gaz** ECS et chauffage (veille, et cumul de l'année en cours utilisable dans le tableau de bord Énergie de Home Assistant)
+  - **Consommation gaz** ECS et chauffage, avec le relevé de la veille et le cumul annuel. Dans le tableau de bord Énergie de Home Assistant, choisissez uniquement les cumuls annuels pour éviter de compter deux fois les mêmes kWh.
   - **Affichage et séléction du mode ECS** (Max, Eco, Eco Horaires Eco+, Eco+ Horaires, Stop)
 - **Mode Connect passif** : écoute des échanges chaudière sans émettre de trame (utile si une box Connect est déjà installée).
 - Gestion des **zones 1, 2 et 3** :

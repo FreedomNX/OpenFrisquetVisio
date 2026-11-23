@@ -1,6 +1,7 @@
 #include "Chaudiere.h"
 #include "../Logs.h"
 #include <math.h>
+#include <TimeLib.h>
 
 void Chaudiere::begin(std::function<void(const String&)> modeEcsCommandCb) {
     info("[CHAUDIERE][MQTT] Initialisation des entités.");
@@ -89,23 +90,29 @@ void Chaudiere::begin(std::function<void(const String&)> modeEcsCommandCb) {
     _mqttEntities.puissanceInstantaneeChauffage.set("unit_of_measurement", "kW");
     _mqtt.registerEntity(*device, _mqttEntities.puissanceInstantaneeChauffage, true);
 
-    _mqttEntities.consommationChauffage.id = "consommationChauffage";
-    _mqttEntities.consommationChauffage.name = "Consommation chauffage (veille)";
-    _mqttEntities.consommationChauffage.component = "sensor";
-    _mqttEntities.consommationChauffage.stateTopic = MqttTopic(MqttManager::compose({device->baseTopic, "chaudiere", "consommationChauffage"}), 0, true);
-    // Valeur de la veille, pas un compteur : sans state_class pour ne pas
-    // fausser les statistiques (voir consommationAnnuelleChauffage).
-    _mqttEntities.consommationChauffage.set("device_class", "energy");
-    _mqttEntities.consommationChauffage.set("unit_of_measurement", "kWh");
-    _mqtt.registerEntity(*device, _mqttEntities.consommationChauffage, true);
-
-    _mqttEntities.consommationECS.id = "consommationECS";
-    _mqttEntities.consommationECS.name = "Consommation ECS (veille)";
-    _mqttEntities.consommationECS.component = "sensor";
-    _mqttEntities.consommationECS.stateTopic = MqttTopic(MqttManager::compose({device->baseTopic, "chaudiere", "consommationECS"}), 0, true);
-    _mqttEntities.consommationECS.set("device_class", "energy");
-    _mqttEntities.consommationECS.set("unit_of_measurement", "kWh");
-    _mqtt.registerEntity(*device, _mqttEntities.consommationECS, true);
+    auto declarerConsommationVeille = [&](MqttEntity& entite, PublicationVeille& publication,
+                                          const char* id, const char* nom) {
+        entite.id = id;
+        entite.name = nom;
+        entite.component = "sensor";
+        publication.sujetNumerique = MqttTopic(MqttManager::compose({device->baseTopic, "chaudiere", id}));
+        entite.stateTopic = MqttTopic(publication.sujetNumerique.full + "/releve");
+        entite.attributesTopic = entite.stateTopic;
+        entite.set("device_class", "energy");
+        entite.set("unit_of_measurement", "kWh");
+        entite.set("state_class", "total");
+        entite.set("value_template", "{{ value_json.kwh }}");
+        // Minuit civil dans le fuseau HA, avec le décalage du jour du relevé.
+        entite.set("last_reset_value_template",
+            "{{ as_datetime(value_json.date_consommation_estimee).replace(tzinfo=now().tzinfo).isoformat() }}");
+        entite.set("json_attributes_template",
+            "{{ {'date_consommation_estimee': value_json.date_consommation_estimee} | tojson }}");
+        _mqtt.registerEntity(*device, entite, true);
+    };
+    declarerConsommationVeille(_mqttEntities.consommationChauffage, _publicationChauffage,
+                              "consommationChauffage", "Consommation chauffage (veille)");
+    declarerConsommationVeille(_mqttEntities.consommationECS, _publicationEcs,
+                              "consommationECS", "Consommation ECS (veille)");
 
     // Cumul de l'année en cours : ne fait qu'augmenter et revient à zéro au
     // 1er janvier, utilisable dans le tableau de bord Énergie.
@@ -180,20 +187,8 @@ void Chaudiere::publishMqtt() {
         _mqtt.publishState(_mqttEntities.puissanceInstantaneeChauffage, getPuissanceInstantaneeChauffage());
     }
 
-    // Ne mémoriser une consommation qu'une fois publiée : une valeur lue pendant
-    // une coupure MQTT serait sinon perdue jusqu'à son prochain changement.
-    if (getConsommationChauffage() >= 0) {
-        if (_lastPubConsommationChauffage != getConsommationChauffage()
-            && _mqtt.publishState(_mqttEntities.consommationChauffage, getConsommationChauffage())) {
-            _lastPubConsommationChauffage = getConsommationChauffage();
-        }
-    }
-    if (getConsommationECS() >= 0) {
-        if (_lastPubConsommationECS != getConsommationECS()
-            && _mqtt.publishState(_mqttEntities.consommationECS, getConsommationECS())) {
-            _lastPubConsommationECS = getConsommationECS();
-        }
-    }
+    publierConsommationVeille(_mqttEntities.consommationChauffage, getConsommationChauffage(), _publicationChauffage);
+    publierConsommationVeille(_mqttEntities.consommationECS, getConsommationECS(), _publicationEcs);
 
     if (getConsommationAnnuelleChauffage() >= 0
         && _lastPubConsommationAnnuelleChauffage != getConsommationAnnuelleChauffage()
@@ -277,7 +272,24 @@ void Chaudiere::setTemperatureCDC(float temperature) {
     _temperatureCDC = temperature;
 }
 
+void Chaudiere::publierConsommationVeille(const MqttEntity& entite, int16_t valeur, PublicationVeille& publication) {
+    if (valeur >= 0 && valeur != publication.derniereValeurBrute && _mqtt.publishState(publication.sujetNumerique, valeur))
+        publication.derniereValeurBrute = valeur;
+    if (!publication.enAttente) return;
+    const time_t date = time_t(publication.jour) * 86400;
+    char iso[16];
+    snprintf(iso, sizeof(iso), "%04d-%02d-%02d", year(date), month(date), day(date));
+    JsonDocument releve;
+    releve["kwh"] = publication.valeurDatee;
+    releve["date_consommation_estimee"] = iso;
+    if (_mqtt.publishJson(entite.stateTopic, releve)) publication.enAttente = false;
+}
+
 void Chaudiere::setConsommationVeille(int16_t chauffage, int16_t ecs, uint32_t jour) {
+    // Garder le dernier relevé daté jusqu’à publication, même si une lecture
+    // sans date arrive pendant une coupure MQTT.
+    _publicationChauffage.recevoir(chauffage, jour);
+    _publicationEcs.recevoir(ecs, jour);
     _consommationGazChauffage = chauffage;
     _consommationGazECS = ecs;
     _jourConsommation = jour;

@@ -25,3 +25,11 @@ with tempfile.TemporaryDirectory() as directory:
         "-o", binary,
     ], check=True)
     subprocess.run([binary, FIXTURE / "echanges-20261118.txt"], check=True)
+
+    montage = Path(directory) / "montage"
+    subprocess.run([
+        "c++", "-std=c++11", "-Wall", "-Wextra", "-Werror", "-I", FIXTURE, "-I", ROOT / "src",
+        FIXTURE / "montage.cpp", ROOT / "src/Frisquet/StockageHistorique.cpp", "-o", montage,
+    ], check=True)
+    for cas in ("vierge", "occupee", "panne"):
+        subprocess.run([montage, cas], check=True)

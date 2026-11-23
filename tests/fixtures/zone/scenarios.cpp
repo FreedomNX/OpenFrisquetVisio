@@ -1,10 +1,16 @@
 #include "materiel.h"
+#include "Frisquet/HistoriqueVeille.h"
+#include <sys/stat.h>
+#include <unistd.h>
+#include "Frisquet/StockageHistorique.h"
 #include "ProgrammationPortail.h"
 #include "Frisquet/ZoneProgram.h"
 #include "Frisquet/Satellite.h"
 #include <cassert>
 #include <fstream>
 #include <sstream>
+
+const char* monterStockageHistorique() { return "."; }
 
 namespace {
 const char* const decouverte = "homeassistant/climate/openFrisquetVisio/thermostatZ1/config";
@@ -48,6 +54,16 @@ struct Banc {
         mqtt.registerDevice(appareil);
     }
 };
+
+void verifierLectureArchiveVide() {
+    Banc banc;
+    banc.config.setNetworkID(NetworkID(8, 3, 0, 1));
+    HistoriqueVeille archive;
+    assert(archive.lire(banc.config) && !archive.mois && !archive.revision);
+    const char* fichier = "veille-0803000180-0";
+    std::ofstream(fichier) << "bloc incomplet";
+    assert(!archive.lire(banc.config));
+}
 
 void initialiser(Zone& zone, Zone::SOURCE source) {
     zone.setSource(source);
@@ -746,6 +762,7 @@ int main(int argc, char** argv) {
     verifierStatutChaudiereConnect();
     assert(argc == 2);
     verifierCaptures(argv[1]);
+    verifierLectureArchiveVide();
     verifierRelectures();
     verifierConsignePendantObservation();
     verifierAttenteProgramme();

@@ -20,11 +20,11 @@ with tempfile.TemporaryDirectory() as directory:
         "-I", libs / "ArduinoJson/src", "-I", libs / "RadioLib/src",
         FIXTURE / "scenarios.cpp", FIXTURE / "materiel.cpp",
         ROOT / "src/Config.cpp", ROOT / "src/Frisquet/Zone.cpp", ROOT / "src/Frisquet/Connect.cpp",
-        ROOT / "src/Frisquet/Satellite.cpp", ROOT / "src/Frisquet/Chaudiere.cpp", ROOT / "src/Frisquet/FrisquetRadio.cpp",
+        ROOT / "src/Frisquet/HistoriqueVeille.cpp", ROOT / "src/Frisquet/Satellite.cpp", ROOT / "src/Frisquet/Chaudiere.cpp", ROOT / "src/Frisquet/FrisquetRadio.cpp",
         ROOT / "src/Frisquet/FrisquetDevice.cpp", ROOT / "src/Frisquet/Utils.cpp",
         "-o", binary,
     ], check=True)
-    subprocess.run([binary, FIXTURE / "echanges-20261118.txt"], check=True)
+    subprocess.run([binary, FIXTURE / "echanges-20261118.txt"], cwd=directory, check=True)
 
     montage = Path(directory) / "montage"
     subprocess.run([

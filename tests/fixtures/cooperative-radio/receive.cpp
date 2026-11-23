@@ -182,6 +182,20 @@ int main() {
     wrap.packets.push_back(packet());
     poll(wrap, start + 350);
     assert(take(wrap) == 0);
+    {
+        // Réception bloquante : un refus 0x83 arrête l'attente sans rien copier
+        // ni consommer la trame suivante.
+        R refused;
+        auto refusal = expected();
+        refusal.type = 0x83;
+        refused.packets.push_back(packet(refusal));
+        refused.packets.push_back(packet());
+        byte reply[255];
+        size_t length = 0;
+        assert(refused.receiveExpected(0x80, 8, 55, 42, 0x81, 0x17, reply, length, 5, false, true) ==
+               RADIOLIB_ERR_ADDRESS_NOT_FOUND);
+        assert(length == 0 && refused.packets.size() == 1 && !refused.hasBufferedPacket());
+    }
     puts("OK : réception coopérative, garde, tentatives, sélection, CRC, tampon, réservation, "
          "annulation, suspension, échec de réarmement et débordement du compteur");
 }

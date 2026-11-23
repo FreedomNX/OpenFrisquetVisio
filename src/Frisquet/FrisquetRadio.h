@@ -219,5 +219,7 @@ class FrisquetRadio : public Radio {
 
     void purgeBufferedPackets();
     bool bufferUnexpectedPacket(const byte* donnees, size_t length);
+    // NONE : trame attendue ; ADDRESS_NOT_FOUND : refus 0x83 ; RX_TIMEOUT : autre trame.
+    int16_t selectPacket(const byte* data, size_t length, const RadioTrameHeader& expected);
     BufferedPacket _rxBuffer[RX_BUFFER_SIZE];
 };

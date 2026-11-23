@@ -28,6 +28,7 @@ code = r'''
 #include <stddef.h>
 #include <string.h>
 #include <assert.h>
+#include <math.h>
 #include <stdio.h>
 #include "RadioCrc.h"
 using RadioLibTime_t=uint32_t;
@@ -41,6 +42,10 @@ using byte=uint8_t;
 #define RADIOLIB_IRQ_RX_DEFAULT_FLAGS 1
 #define RADIOLIB_IRQ_RX_DEFAULT_MASK 1
 ''' + constants + r'''
+static uint32_t clockMs=0;
+uint32_t millis(){return clockMs;}
+struct { void addLogf(const char*,const char*,...){} } logs;
+void logRadioCrcData(const byte*,size_t,const char*){}
 struct Hal {
     uint32_t ticks=0;bool reply=true;
     uint32_t millis(){return ticks++;}
@@ -75,6 +80,7 @@ class SX1276 {public:
     int16_t startReceive(int timeout,int,int,int length){assert(!timeout&&!length);armed=true;return 0;}
     virtual int16_t receive(uint8_t*,size_t,RadioLibTime_t=0){return 0;}
     virtual int16_t readData(uint8_t*,size_t){return 0;}
+    float getRSSI(){return -50;}
     uint16_t getIrqFlags(){return irq;}
     int16_t clearIrqFlags(uint32_t flags){assert(flags==0xFFFF);irq=0;return 0;}
     size_t getPacketLength(bool=true){assert(false && "must not consume the FIFO length twice");return 0;}
@@ -89,10 +95,14 @@ class Radio {public:
         int16_t readData(uint8_t*,size_t) override;
     };
     PacketRadio _radio;
+    uint32_t _lastActivityMs=0, _lastValidReceptionMs=0;
+    bool _hasValidReception=false;
+    float _lastPacketRSSI=0;
+    int16_t finishReceive(int16_t,const char*,const uint8_t*,size_t);
     bool hasReceivedPacket();
     int16_t transmit(byte*,size_t);
 };
-''' + backend + '\n' + extract('bool Radio::hasReceivedPacket(') + '\n' + extract('int16_t Radio::transmit(') + r'''
+''' + backend + '\n' + extract('bool Radio::hasReceivedPacket(') + '\n' + extract('int16_t Radio::transmit(') + '\n' + extract('int16_t Radio::finishReceive(') + r'''
 void packet(Radio::PacketRadio& radio,uint8_t length,bool valid=true){
     radio.module.pos=0;radio.module.size=length<=63?length+1:1;
     radio.module.fifo[0]=length;
@@ -106,7 +116,18 @@ int main(){
     wrapper._radio.irq=0;assert(!wrapper.hasReceivedPacket());
     wrapper._radio.armed=true;
     assert(wrapper.transmit(tx,64)==RADIOLIB_ERR_PACKET_TOO_LONG && wrapper._radio.armed);
+    clockMs=100;
     assert(wrapper.transmit(tx,63)==0 && wrapper._radio.sentLength==63 && wrapper._radio.ccitt);
+    assert(wrapper._lastActivityMs==100);
+    clockMs=200;
+    wrapper.finishReceive(0,"receive",tx,0);
+    assert(wrapper._lastValidReceptionMs==200 && wrapper._lastActivityMs==200);
+    clockMs=300;
+    wrapper.finishReceive(RADIOLIB_ERR_CRC_MISMATCH,"readData",tx,0);
+    assert(wrapper._lastValidReceptionMs==200 && wrapper._lastActivityMs==300);
+    clockMs=400;
+    wrapper.finishReceive(RADIOLIB_ERR_RX_TIMEOUT,"receive",tx,0);
+    assert(wrapper._lastActivityMs==300);
     Radio::PacketRadio radio;
     assert(radio.startReceive()==0 && radio.armed && radio.crc && radio.ccitt);
     assert(radio.module.keepInvalid && radio.maximum==63);

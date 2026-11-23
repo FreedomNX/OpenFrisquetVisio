@@ -31,6 +31,7 @@ struct Radio {
         int16_t result = 0;
     };
     std::deque<Packet> packets;
+    uint32_t lastActivityMs() const { return 0; }
     size_t lastLength = 0;
     unsigned reads = 0, rearms = 0, syncChanges = 0;
     std::vector<std::vector<byte>> sent;

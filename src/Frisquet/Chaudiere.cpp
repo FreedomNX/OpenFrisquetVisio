@@ -281,6 +281,13 @@ void Chaudiere::setConsommationVeille(int16_t chauffage, int16_t ecs, uint32_t j
     _consommationGazChauffage = chauffage;
     _consommationGazECS = ecs;
     _jourConsommation = jour;
+    _collecteVeille.recevoir(_cfg, {jour, chauffage, ecs}, millis());
+}
+
+void Chaudiere::traiterHistorique() {
+    if (!_collecteVeille.traiter(_cfg, millis())) {
+        warning("[CHAUDIERE] Échec de la sauvegarde du relevé quotidien.");
+    }
 }
 
 void Chaudiere::setConsommationAnnuelle(int32_t chauffage, int32_t ecs) {

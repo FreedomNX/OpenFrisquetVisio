@@ -168,7 +168,9 @@ int16_t Radio::transmit(byte data[], size_t len) {
     if (result != RADIOLIB_ERR_NONE) return result;
     result = _radio.variablePacketLengthMode(MAX_RX_PACKET_LENGTH);
     if (result != RADIOLIB_ERR_NONE) return result;
-    return _radio.transmit(data, len);
+    result = _radio.transmit(data, len);
+    _lastActivityMs = millis();
+    return result;
 }
 
 int16_t Radio::receive(uint8_t data[], size_t len) {
@@ -202,12 +204,13 @@ bool Radio::hasReceivedPacket() {
 }
 
 int16_t Radio::finishReceive(int16_t result, const char* operation, const uint8_t* data, size_t requestedLength) {
+    const bool packetRead = result == RADIOLIB_ERR_NONE || result == RADIOLIB_ERR_CRC_MISMATCH;
+    if (packetRead) _lastActivityMs = millis();
     if (result == RADIOLIB_ERR_NONE) {
         _hasValidReception = true;
-        _lastValidReceptionMs = millis();
+        _lastValidReceptionMs = _lastActivityMs;
     }
     // Relever le RSSI avant le prochain réarmement.
-    const bool packetRead = result == RADIOLIB_ERR_NONE || result == RADIOLIB_ERR_CRC_MISMATCH;
     _lastPacketRSSI = packetRead ? _radio.getRSSI() : NAN;
 #if defined(RADIO_SX1276)
     if(result == RADIOLIB_ERR_CRC_MISMATCH) {

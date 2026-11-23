@@ -105,6 +105,17 @@ void verifierHistoriqueQuotidien() {
     assert(rmdir(temporaire) == 0 && relever(2024, 2, 29, -1, 2));
     assert(archive.lire(banc.config) && archive.jours[28].chauffage == 17 && archive.jours[28].ecs == 2);
 
+    // Le chemin utilisé par Connect ne touche pas au fichier pendant la réception.
+    tempsMs = receptionMs;
+    banc.chaudiere.setConsommationVeille(19, 4, jour(2024, 2, 29));
+    banc.chaudiere.setConsommationVeille(50, 50, 0);
+    assert(banc.chaudiere.historiqueEnAttente());
+    assert(archive.lire(banc.config) && archive.jours[28].chauffage == 17);
+    banc.chaudiere.traiterHistorique();
+    assert(!banc.chaudiere.historiqueEnAttente());
+    assert(archive.lire(banc.config) && archive.jours[28].chauffage == 19 && archive.jours[28].ecs == 4);
+    assert(relever(2024, 2, 29, 17, 2));
+
     // Un saut isolé ne change ni le mois par défaut, ni les dix ans visibles.
     for (int an : {2025, 2034}) {
         assert(relever(an, 2, 1, 99, 99));

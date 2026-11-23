@@ -4,6 +4,7 @@
 #include <functional>
 #include "../MQTT/MqttManager.h"
 #include "../Config.h"
+#include "HistoriqueVeille.h"
 
 class Chaudiere {
 public:
@@ -80,6 +81,8 @@ public:
     float getPuissanceInstantaneeECS() const { return _puissanceInstantaneeECS; }
     float getPuissanceInstantaneeChauffage() const { return _puissanceInstantaneeChauffage; }
 
+    bool historiqueEnAttente() const { return _collecteVeille.enAttente(); }
+    void traiterHistorique();
     void setConsommationVeille(int16_t chauffage, int16_t ecs, uint32_t jour);
     // Nombre de jours depuis le 01/01/1970 dans le calendrier de la chaudière, ou 0.
     uint32_t getJourConsommation() const { return _jourConsommation; }
@@ -121,6 +124,7 @@ private:
     float _puissanceInstantaneeChauffage = NAN;
     float _pression = NAN;
 
+    CollecteVeille _collecteVeille;
     uint32_t _jourConsommation = 0;
     int16_t _consommationGazECS = -1;
     int16_t _consommationGazChauffage = -1;

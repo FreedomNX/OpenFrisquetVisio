@@ -65,6 +65,8 @@ struct Zone {
     void loop() { ++calls; }
 };
 struct Chaudiere {
+    bool historiqueEnAttente() const { return false; }
+    void traiterHistorique() { assert(false); }
     enum class MODE_ECS : byte { INCONNU = 255, ECO = 8, MAX = 0 };
     MODE_ECS mode = MODE_ECS::INCONNU, lastSent = MODE_ECS::INCONNU;
     std::vector<MODE_ECS> publishedModes;

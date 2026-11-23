@@ -14,6 +14,8 @@ struct Service {
     void pollObservation() { ++polls; }
     void pollReads() {}
     void envoiZones() {}
+    bool historiqueEnAttente() const { return true; }
+    void traiterHistorique() { ++calls; }
 };
 struct Config {
     bool useZone1() { return true; }
@@ -28,6 +30,8 @@ struct Config {
 struct FrisquetRadio {
     static inline bool receivedFlag = false;
     bool occupied = false, packet = true;
+    uint32_t lastActivity = 0;
+    uint32_t lastActivityMs() const { return lastActivity; }
     unsigned polls = 0;
     void pollObservation() { ++polls; }
     void pollReads() {}
@@ -38,7 +42,7 @@ struct FrisquetRadio {
 struct FrisquetManager {
     FrisquetRadio _radio;
     Config _cfg;
-    Service _zone1, _zone2, _zone3, _connect, _sondeExterieure, _satelliteZ1, _satelliteZ2,
+    Service _chaudiere, _zone1, _zone2, _zone3, _connect, _sondeExterieure, _satelliteZ1, _satelliteZ2,
         _satelliteZ3;
     unsigned dispatches = 0;
     void onRadioReceive() {
@@ -64,6 +68,7 @@ int main() {
         app.loop();
     assert(clockMs == 500 && app._ota.calls == 50 && app.portal.calls == 50 &&
            app._mqtt.calls == 50);
+    assert(m._chaudiere.calls == 0);
     assert(m._radio.polls == 50 && m.dispatches == 1 && !m._connect.calls && !m._zone1.calls);
     assert(m._satelliteZ1.polls == 50 && m._satelliteZ2.polls == 50 && m._satelliteZ3.polls == 50);
     // Un paquet arrivé pendant l'observation appartient encore à son propriétaire.
@@ -76,6 +81,19 @@ int main() {
     app.loop();
     assert(m._connect.calls == 1 && m._zone1.calls == 1 && m._satelliteZ1.calls == 1 &&
            clockMs == 520);
+    assert(m._chaudiere.calls == 0);
+    // Une deuxième trame relance les deux secondes, même autour du débordement de millis().
+    m._radio.lastActivity = UINT32_MAX - 1500;
+    clockMs = m._radio.lastActivity + 1900;
+    m.loop();
+    assert(m._chaudiere.calls == 0);
+    m._radio.lastActivity = clockMs;
+    clockMs += 1999;
+    m.loop();
+    assert(m._chaudiere.calls == 0);
+    ++clockMs;
+    m.loop();
+    assert(m._chaudiere.calls == 1);
     puts("OK : les boucles App et du gestionnaire exécutent OTA, HTTP et MQTT pendant les attentes "
          "radio");
 }

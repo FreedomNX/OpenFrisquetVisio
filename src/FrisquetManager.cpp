@@ -1,5 +1,6 @@
 #include "FrisquetManager.h"
 #include "Version.h"
+#include "Frisquet/StockageHistorique.h"
 #include "Buffer.h"
 
 namespace {
@@ -15,6 +16,7 @@ FrisquetManager::FrisquetManager(FrisquetRadio &radio, Config &cfg, MqttManager 
 
 void FrisquetManager::begin()
 {
+    if (!monterStockageHistorique()) warning(String("[HISTORIQUE] ") + erreurStockageHistorique());
     // Init radio
     _radio.init(_cfg.radioRxBandwidth(), _cfg.radioLnaBypass());
     _radio.setNetworkID(_cfg.getNetworkID());
@@ -146,6 +148,13 @@ void FrisquetManager::loop()
     }
     // Les écritures de zone passent après les lectures, la sonde et les satellites.
     if (_cfg.useConnect()) _connect.envoiZones();
+    // Laisser finir la salve du Connect avant de parcourir les fichiers en flash.
+    constexpr uint32_t silenceAvantHistoriqueMs = 2000;
+    if (_chaudiere.historiqueEnAttente() && !_radio.busy()
+        && uint32_t(millis() - _radio.lastActivityMs()) >= silenceAvantHistoriqueMs
+        && !FrisquetRadio::receivedFlag && !_radio.hasReceivedPacket() && !_radio.hasBufferedPacket()) {
+        _chaudiere.traiterHistorique();
+    }
 }
 
 void FrisquetManager::initDS18B20()

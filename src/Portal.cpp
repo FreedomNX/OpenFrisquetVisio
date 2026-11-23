@@ -1171,8 +1171,10 @@ void Portal::handleStatus() {
   _srv.send(200, "application/json; charset=utf-8", json);
 }
 
-// En Connect passif, l'identité et l'association du Connect sont celles de la
-// box observée : n'émettre en son nom ni lecture mémoire ni trame brute.
+// Les outils de diagnostic n'émettent qu'au nom d'un module émulé par la
+// passerelle. En Connect passif, l'identité et l'association du Connect sont
+// celles de la box observée, et celles d'un satellite physique sont apprises en
+// l'observant : n'émettre en leur nom ni lecture mémoire, ni trame brute du Connect.
 static bool passiveConnect(Config& cfg) {
   return cfg.useConnect() && cfg.useConnectPassive();
 }
@@ -1183,7 +1185,8 @@ static void selectDiagnosticSender(FrisquetManager& manager, uint8_t& idExpedite
   if(manager.config().useConnect() && !passiveConnect(manager.config()) && manager.connect().estAssocie()) {
     idExpediteur = ID_CONNECT;
     idAssociation = manager.connect().getIdAssociation();
-  } else if(manager.config().useSatelliteZ1() && manager.satelliteZ1().estAssocie()) {
+  } else if(manager.config().useSatelliteZ1() && manager.config().useSatelliteVirtualZ1()
+            && manager.satelliteZ1().estAssocie()) {
     idExpediteur = ID_ZONE_1;
     idAssociation = manager.satelliteZ1().getIdAssociation();
   }
@@ -1376,7 +1379,7 @@ void Portal::handleMemoryRead() {
     selectDiagnosticSender(_frisquetManager, idExpediteur, idAssociation);
     if(idExpediteur == 0x00) {
       _srv.send(400, "application/json; charset=utf-8",
-                "{\"ok\":false,\"err\":\"Aucun module émetteur associé (Connect actif ou Satellite Z1)\"}");
+                "{\"ok\":false,\"err\":\"Aucun module émetteur associé (Connect actif ou satellite Z1 virtuel)\"}");
       return;
     }
 
@@ -1493,7 +1496,7 @@ void Portal::handleMemoryScan() {
     selectDiagnosticSender(_frisquetManager, idExpediteur, idAssociation);
     if(idExpediteur == 0x00) {
       _srv.send(400, "application/json; charset=utf-8",
-                "{\"ok\":false,\"err\":\"Aucun module émetteur associé (Connect actif ou Satellite Z1)\"}");
+                "{\"ok\":false,\"err\":\"Aucun module émetteur associé (Connect actif ou satellite Z1 virtuel)\"}");
       return;
     }
 

@@ -88,9 +88,10 @@ créneau ; avant synchronisation, le cycle utilise le temps depuis le démarrage
 - Informations système et réseau
 - Envoi de trame radio personnalisée (debug)
 - Lecture de zones mémoire (debug)
-  En Connect passif, ces outils n’émettent jamais au nom du Connect, dont l’identité est celle de la box :
-  la lecture mémoire passe par le satellite Z1 s’il est associé, et une trame brute dont l’expéditeur
-  est le Connect (`7E`) est refusée.
+  Ces outils n’émettent qu’au nom d’un module émulé par la passerelle : la lecture mémoire passe par le
+  Connect actif ou, à défaut, par le satellite Z1 virtuel associé ; elle est refusée sinon, en particulier
+  avec un satellite Z1 physique. En Connect passif, une trame brute dont l’expéditeur est le Connect (`7E`),
+  dont l’identité est celle de la box, est refusée.
 
 Les pages du portail se trouvent dans le dossier **`web/`**. Lors d'une compilation
 PlatformIO, le script `tools/generate_web_assets.py` les transforme en ressources

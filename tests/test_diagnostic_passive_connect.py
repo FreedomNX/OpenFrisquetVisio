@@ -1,8 +1,9 @@
 """Developer radio tools never transmit as the Connect while it is passive.
 
-In passive mode the Connect learns the association of the real box: memory
-reads must use the virtual satellite Z1 instead, and a raw frame sent from
-the Connect address is refused. Run: python3 tests/test_diagnostic_passive_connect.py
+In passive mode the Connect learns the association of the real box, and the
+gateway also learns that of a physical satellite: memory reads only use the
+active Connect or a virtual satellite Z1, and a raw frame sent from the
+Connect address is refused. Run: python3 tests/test_diagnostic_passive_connect.py
 """
 from pathlib import Path
 import subprocess
@@ -41,10 +42,11 @@ program = r'''
 #define ID_CONNECT 0x7E
 #define ID_ZONE_1 0x08
 struct Config {
-    bool connect = false, passive = false, z1 = false;
+    bool connect = false, passive = false, z1 = false, z1Virtuel = false;
     bool useConnect() { return connect; }
     bool useConnectPassive() { return passive; }
     bool useSatelliteZ1() { return z1; }
+    bool useSatelliteVirtualZ1() { return z1Virtuel; }
 };
 struct Device {
     uint8_t association = 0xFF;
@@ -70,12 +72,18 @@ int main() {
     m.cfg.passive = true;
     sender(m, 0x00, 0x00);                           // passive, no Z1: refused
     m.cfg.z1 = true;
-    sender(m, 0x00, 0x00);                           // Z1 not associated yet
+    m.z1.association = 0x31;                         // physical Z1, association learnt by observation
+    sender(m, 0x00, 0x00);                           // never the identity of a real thermostat
+    m.cfg.z1Virtuel = true;
+    m.z1.association = 0xFF;
+    sender(m, 0x00, 0x00);                           // virtual Z1 not associated yet
     m.z1.association = 0x31;
-    sender(m, ID_ZONE_1, 0x31);                      // passive: Z1, never the Connect
+    sender(m, ID_ZONE_1, 0x31);                      // passive: virtual Z1, never the Connect
     m.cfg.connect = false;
     assert(!passiveConnect(m.cfg));                  // passive flag alone, Connect disabled
     sender(m, ID_ZONE_1, 0x31);
+    m.cfg.z1Virtuel = false;
+    sender(m, 0x00, 0x00);                           // no Connect, physical Z1: refused
     puts("ok");
 }
 '''
@@ -87,4 +95,4 @@ with tempfile.TemporaryDirectory(prefix="ofv-diagnostic-passive-") as directory:
                     "-fno-sanitize-recover=all", str(temp / "test.cpp"), "-o", str(temp / "test")], check=True)
     subprocess.run([str(temp / "test")], check=True, stdout=subprocess.DEVNULL)
 
-print("OK: passive Connect: memory reads use satellite Z1, raw frames from the Connect are refused")
+print("OK: memory reads only as an active Connect or a virtual Z1; raw frames from a passive Connect refused")

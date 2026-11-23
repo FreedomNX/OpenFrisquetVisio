@@ -31,7 +31,6 @@ tests/*
 !tests/test_satellite_schedule.py
 !tests/test_boiler_state.py
 !tests/test_monthly_consumption.py
-!tests/test_consumption_mqtt_outage.py
 !tests/monthly-consumption.test.mjs
 !tests/boiler-state.test.mjs
 

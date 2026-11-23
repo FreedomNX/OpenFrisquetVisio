@@ -23,6 +23,8 @@ WifiSimule WiFi;
 ReceptionMqtt receptionMqtt;
 std::map<String, String> publications;
 std::map<String, unsigned> nombrePublications;
+bool courtierDisponible = true;
+String sujetRefuse;
 std::map<String, Preferences::Espace> Preferences::memoire;
 unsigned Preferences::ecritures = 0;
 std::vector<std::vector<byte>> emissions;

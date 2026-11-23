@@ -37,6 +37,8 @@ struct Banc {
         Preferences::effacer();
         publications.clear();
         nombrePublications.clear();
+        courtierDisponible = true;
+        sujetRefuse.clear();
         emissions.clear();
         reception.clear();
         journal.clear();
@@ -708,6 +710,38 @@ void verifierSynchronisation() {
     assert(emissions.size() == 1 && emissions.back()[4] == ID_ZONE_3);
 }
 
+void verifierRepriseConsommation() {
+    Banc banc;
+    auto& chaudiere = banc.chaudiere;
+    chaudiere.begin();
+    const String chauffage = "frisquet/chaudiere/consommationChauffage";
+    const String ecs = "frisquet/chaudiere/consommationECS";
+    // Conserver les nombres bruts et les cumuls annuels, même sans date.
+    const String annuelChauffage = "frisquet/chaudiere/consommationAnnuelleChauffage";
+    const String annuelEcs = "frisquet/chaudiere/consommationAnnuelleECS";
+    courtierDisponible = false;
+    chaudiere.setConsommationAnnuelle(40000, 7);
+    chaudiere.setConsommationVeille(17, 0, 0);
+    chaudiere.publishMqtt();
+    assert(!publications.count(chauffage) && !publications.count(annuelChauffage));
+    courtierDisponible = true;
+    chaudiere.publishMqtt();
+    chaudiere.publishMqtt();
+    assert(publications.at(chauffage) == "17.00" && publications.at(ecs) == "0.00");
+    assert(publications.at(annuelChauffage) == "40000" && publications.at(annuelEcs) == "7");
+    for (const auto& sujet : {chauffage, ecs, annuelChauffage, annuelEcs})
+        assert(nombrePublications.at(sujet) == 1);
+
+    courtierDisponible = false;
+    chaudiere.setConsommationVeille(18, 0, 0);
+    chaudiere.publishMqtt();
+    courtierDisponible = true;
+    chaudiere.publishMqtt();
+    chaudiere.publishMqtt();
+    assert(publications.at(chauffage) == "18.00" && nombrePublications.at(chauffage) == 2);
+    assert(nombrePublications.at(ecs) == 1);
+}
+
 void verifierPilotagePhysiqueEtPortail() {
     Banc banc;
     Zone& physique = banc.z1;
@@ -762,5 +796,6 @@ int main(int argc, char** argv) {
     verifierStatutManquantAuChangementDeCycle();
     verifierFenetresSimultanees();
     verifierSynchronisation();
+    verifierRepriseConsommation();
     verifierPilotagePhysiqueEtPortail();
 }

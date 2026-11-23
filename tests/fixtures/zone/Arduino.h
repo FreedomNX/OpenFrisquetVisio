@@ -30,6 +30,7 @@ public:
 
 inline String operator+(const std::string& texte, byte nombre) { return texte + std::to_string(nombre); }
 
+uint32_t micros();
 uint32_t millis();
 void delay(unsigned long duree);
 inline char* dtostrf(double valeur, int largeur, int decimales, char* tampon) {

@@ -65,6 +65,133 @@ void verifierLectureArchiveVide() {
     assert(!archive.lire(banc.config));
 }
 
+void verifierHistoriqueQuotidien() {
+    Banc banc;
+    CollecteVeille collecte;
+    uint32_t receptionMs = 0;
+    banc.config.setNetworkID(NetworkID(1, 2, 3, 4));
+    banc.config.boilerId(0x80);
+    HistoriqueVeille archive;
+    auto jour = [](int an, int mois, int j) {
+        std::tm t{};
+        t.tm_year = an - 1900; t.tm_mon = mois - 1; t.tm_mday = j;
+        return uint32_t(timegm(&t) / 86400);
+    };
+    auto recevoir = [&](uint32_t date, int16_t ch, int16_t ecs, uint32_t intervalle) {
+        receptionMs += intervalle;
+        collecte.recevoir(banc.config, {date, ch, ecs}, receptionMs);
+        return collecte.traiter(banc.config, receptionMs);
+    };
+    auto relever = [&](int an, int mois, int j, int16_t ch, int16_t ecs) {
+        return recevoir(jour(an, mois, j), ch, ecs, 3600000);
+    };
+    assert(archive.lire(banc.config) && !archive.mois);
+    assert(relever(2024, 2, 29, -1, -1) && archive.lire(banc.config) && !archive.mois);
+    assert(relever(2034, 2, 28, 99, 99));
+    assert(archive.lire(banc.config) && !archive.mois);
+    assert(relever(2024, 2, 29, 17, 0));
+    assert(recevoir(jour(2024, 2, 29), 17, 0, 50));
+    assert(archive.lire(banc.config) && !archive.mois);
+    assert(relever(2024, 2, 29, 17, 0));
+    assert(archive.lire(banc.config) && archive.mois == 2024*12+1 && archive.nbJours == 29);
+    assert(archive.jours[28].ecs == 0 && !archive.jours[27].disponible());
+
+    // En cas d'interruption, le temporaire ne remplace pas le fichier engagé.
+    const char* temporaire = "veille-0102030480-4.tmp";
+    assert(mkdir(temporaire, 0700) == 0);
+    assert(relever(2024, 2, 29, 17, 0)); // Identique : aucune écriture.
+    assert(!relever(2024, 2, 29, -1, 2));
+    assert(archive.lire(banc.config) && archive.jours[28].ecs == 0);
+    assert(rmdir(temporaire) == 0 && relever(2024, 2, 29, -1, 2));
+    assert(archive.lire(banc.config) && archive.jours[28].chauffage == 17 && archive.jours[28].ecs == 2);
+
+    // Un saut isolé ne change ni le mois par défaut, ni les dix ans visibles.
+    for (int an : {2025, 2034}) {
+        assert(relever(an, 2, 1, 99, 99));
+        assert(archive.lire(banc.config) && archive.mois == 2024*12+1);
+        assert(archive.jours[28].chauffage == 17 && archive.jours[28].ecs == 2);
+        assert(archive.lire(banc.config, an*12+1) && !archive.mois);
+        assert(relever(2024, 2, 29, 17, 2));
+    }
+    assert(relever(2024, 3, 1, 8, 0));
+    // Après redémarrage, retrouver le dernier jour sur disque. Deux vraies
+    // lectures du même jour confirment une longue interruption de collecte.
+    collecte = CollecteVeille{};
+    assert(relever(2034, 2, 1, 23, 0));
+    assert(archive.lire(banc.config) && archive.mois == 2024*12+2);
+    assert(relever(2034, 2, 1, 23, 0));
+    assert(relever(2024, 2, 29, 99, 99));
+    assert(archive.lire(banc.config) && archive.jours[0].chauffage == 23);
+    assert(archive.dernierMois - archive.premierMois == 119);
+    assert(archive.lire(banc.config, 2024*12+1) && !archive.mois);
+    assert(archive.lire(banc.config, 2024*12+2) && archive.jours[0].chauffage == 8);
+    assert(archive.lire(banc.config, 2025*12+1) && archive.nbJours == 28 && !archive.jours[0].disponible());
+    banc.config.setNetworkID(NetworkID(5, 6, 7, 8));
+    assert(archive.lire(banc.config) && !archive.mois);
+    banc.config.setNetworkID(NetworkID(1, 2, 3, 4));
+    // Remplir dix années complètes, relire les 120 pages après réouverture.
+    banc.config.setNetworkID(NetworkID(8, 7, 6, 5));
+    const uint32_t debut = jour(2016, 3, 1), fin = jour(2026, 3, 1);
+    for (uint32_t j = debut; j < fin; ++j)
+        assert(recevoir(j, int16_t(j % 77), 0, 86400000));
+    uint32_t relus = 0;
+    for (int mois = 2016*12+2; mois <= 2026*12+1; ++mois) {
+        HistoriqueVeille page;
+        assert(page.lire(banc.config, mois) && page.mois == mois);
+        assert(page.dernierMois - page.premierMois + 1 == 120);
+        for (unsigned j = 0; j < page.nbJours; ++j, ++relus)
+            assert(page.jours[j].chauffage == int((debut + relus) % 77) && page.jours[j].ecs == 0);
+    }
+    assert(relus == fin - debut);
+    // Quand les dix emplacements de mars sont occupés, le plus ancien
+    // est remplacé. Une correction isolée ne déloge aucun autre mois.
+    assert(recevoir(fin, 51, 0, 3600000));
+    assert(archive.lire(banc.config) && archive.mois == 2026*12+2);
+    assert(archive.lire(banc.config, 2016*12+2) && !archive.mois);
+    assert(archive.lire(banc.config, 2016*12+3) && archive.jours[0].disponible());
+
+    for (int saut : {1, 10}) {
+        banc.config.setNetworkID(NetworkID(9, 9, 9, saut));
+        assert(relever(2026, 11, 21, 41, 0) && relever(2026, 11, 21, 41, 0));
+        for (int h = 0; h < 3; ++h) assert(relever(2026+saut, 11, 21, 99, 3));
+        assert(archive.lire(banc.config) && archive.mois == (2026+saut)*12+10);
+        const auto revisionAvant = archive.revision;
+        assert(relever(2026, 11, 21, 41, 0));
+        assert(recevoir(jour(2026,11,21), 41, 0, 1799999));
+        assert(archive.lire(banc.config) && archive.revision == revisionAvant);
+        assert(recevoir(jour(2026,11,21), 41, 0, 1)); // Même valeur, nouvel ancrage durable.
+        assert(archive.lire(banc.config) && archive.mois == 2026*12+10 && archive.revision > revisionAvant);
+        for (int j = 22; j <= 24; ++j) assert(relever(2026, 11, j, 20+j, 3));
+        collecte = CollecteVeille{};
+        assert(relever(2026, 11, 25, 45, 0));
+        assert(archive.lire(banc.config) && archive.nbJours == 25);
+        for (int j = 21; j <= 25; ++j) assert(archive.jours[j-1].chauffage == 20+j);
+        // Une correction dans le même mois peut aussi reculer la dernière journée.
+        assert(relever(2026, 11, 23, 10, 4) && relever(2026, 11, 23, 10, 4));
+        collecte = CollecteVeille{};
+        assert(archive.lire(banc.config) && archive.nbJours == 23 && archive.jours[22].chauffage == 10);
+    }
+    // Une nouvelle association entre réception et sauvegarde ne déplace aucun relevé.
+    collecte.recevoir(banc.config, {fin, 91, 92}, receptionMs);
+    banc.config.setNetworkID(NetworkID(1, 2, 3, 4));
+    assert(collecte.traiter(banc.config, receptionMs) && !collecte.enAttente());
+    assert(archive.lire(banc.config) && archive.mois == 2034*12+1);
+    std::ofstream("veille-0102030480-4", std::ios::trunc) << "format inconnu";
+    assert(!archive.lire(banc.config) && !relever(2034, 2, 1, 14, 0));
+
+    // Un fichier tronqué avant son marqueur reste intact en cas d’erreur.
+    banc.config.setNetworkID(NetworkID(7, 0, 0, 7));
+    assert(relever(2026, 11, 20, 7, 3) && relever(2026, 11, 20, 7, 3));
+    const char* fichier = "veille-0700000780-6";
+    struct stat etat{};
+    assert(stat(fichier, &etat) == 0);
+    const off_t tronque = etat.st_size - 2 * sizeof(uint32_t);
+    assert(truncate(fichier, tronque) == 0);
+    assert(!archive.lire(banc.config) && !relever(2026, 11, 21, 8, 0));
+    assert(stat(fichier, &etat) == 0 && etat.st_size == tronque);
+}
+
+
 void initialiser(Zone& zone, Zone::SOURCE source) {
     zone.setSource(source);
     zone.setPilotageActif(true);
@@ -763,6 +890,7 @@ int main(int argc, char** argv) {
     assert(argc == 2);
     verifierCaptures(argv[1]);
     verifierLectureArchiveVide();
+    verifierHistoriqueQuotidien();
     verifierRelectures();
     verifierConsignePendantObservation();
     verifierAttenteProgramme();

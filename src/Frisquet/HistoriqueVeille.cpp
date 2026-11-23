@@ -11,6 +11,7 @@
 #include <unistd.h>
 
 namespace {
+using Releve = HistoriqueVeille::Releve;
 using Valeurs = HistoriqueVeille::Valeurs;
 
 // Chaque fichier offre une case par mois du calendrier. Le marqueur final
@@ -113,6 +114,51 @@ struct Index {
     }
 };
 
+bool sauverFichier(const char* chemin, const Bloc& bloc) {
+    char temporaire[104];
+    snprintf(temporaire, sizeof(temporaire), "%s.tmp", chemin);
+    FILE* fichier = fopen(temporaire, "wb");
+    if (!fichier) return false;
+    const bool complet = fwrite(&bloc, 1, sizeof(bloc), fichier) == sizeof(bloc)
+                      && fflush(fichier) == 0 && fsync(fileno(fichier)) == 0;
+    const bool ferme = fclose(fichier) == 0;
+    if (complet && ferme && rename(temporaire, chemin) == 0) return true;
+    remove(temporaire);
+    return false;
+}
+
+bool ajouter(const Stockage& stockage, Index& index, const Releve& releve) {
+    int numero, jour;
+    if (!calendrier(releve.jour, numero, jour)) return false;
+    const int position = index.emplacement(numero);
+    char chemin[96];
+    stockage.chemin(chemin, position);
+    Bloc bloc;
+    if (!lireFichier(chemin, bloc)) return false;
+    Mois& mois = bloc.mois[numero % 12];
+    if (mois.numero != numero) {
+        mois = Mois{};
+        mois.numero = numero;
+    }
+    Valeurs& valeurs = mois.jours[jour - 1];
+    const Valeurs avant = valeurs;
+    if (releve.chauffage >= 0) valeurs.chauffage = releve.chauffage;
+    if (releve.ecs >= 0) valeurs.ecs = releve.ecs;
+    if (index.jourActif == releve.jour && valeurs.chauffage == avant.chauffage && valeurs.ecs == avant.ecs) return true;
+    bloc.revision = index.revision + 1;
+    bloc.jourEcrit = releve.jour;
+    const uint32_t debut = micros();
+    const bool sauve = sauverFichier(chemin, bloc);
+    debug("[HISTORIQUE] Écriture de %u octets en %lu µs (%s).",
+          unsigned(sizeof(bloc)), (unsigned long)(uint32_t(micros()) - debut), sauve ? "OK" : "échec");
+    if (sauve) {
+        index.revision = bloc.revision;
+        index.jourActif = releve.jour;
+        index.numeros[position][numero % 12] = numero;
+    }
+    return sauve;
+}
+
 unsigned longueurMois(int numero) {
     const unsigned longueurs[] = {31,28,31,30,31,30,31,31,30,31,30,31};
     const int annee = numero / 12;
@@ -147,3 +193,58 @@ bool HistoriqueVeille::lire(Config& config, int selection) {
 }
 
 uint32_t HistoriqueVeille::dernierJour() const { return jourCivil(mois, nbJours); }
+
+void CollecteVeille::recevoir(Config& config, Releve releve, uint32_t reception) {
+    if (!releve.jour || (releve.chauffage < 0 && releve.ecs < 0)) return;
+    char cle[11];
+    cleInstallation(config, cle);
+    if (strcmp(cle, _installation) != 0) {
+        *this = CollecteVeille{};
+        memcpy(_installation, cle, sizeof(cle));
+    }
+    if (_attente.jour == releve.jour) {
+        if (releve.chauffage < 0) releve.chauffage = _attente.chauffage;
+        if (releve.ecs < 0) releve.ecs = _attente.ecs;
+    }
+    _attente = releve;
+    _reception = reception;
+}
+
+bool CollecteVeille::traiter(Config& config, uint32_t maintenant) {
+    if (!enAttente() || (_enEchec && maintenant - _derniereTentative < 60000)) return true;
+    Stockage stockage(config);
+    if (!stockage.racine || strcmp(stockage.cle, _installation) != 0) {
+        *this = CollecteVeille{};
+        return true;
+    }
+    _derniereTentative = maintenant;
+    _enEchec = !enregistrer(config);
+    if (!_enEchec) _attente = {};
+    return !_enEchec;
+}
+
+bool CollecteVeille::enregistrer(Config& config) {
+    Stockage stockage(config);
+    Index index;
+    if (!index.lire(stockage)) return false;
+    if (!index.jourActif || _attente.jour < index.jourActif || _attente.jour > index.jourActif + 1) {
+        // Première date ou saut dans un sens ou l’autre. Seule une nouvelle
+        // observation radio peut confirmer la date, jamais une relance disque.
+        const bool memeJour = _aConfirmer.jour == _attente.jour;
+        if (!_aConfirmer.jour || (!memeJour && _attente.jour != _aConfirmer.jour + 1)) {
+            _aConfirmer = _attente;
+            _premiereReception = _reception;
+            return true;
+        }
+        if (memeJour) {
+            if (_attente.chauffage >= 0) _aConfirmer.chauffage = _attente.chauffage;
+            if (_attente.ecs >= 0) _aConfirmer.ecs = _attente.ecs;
+        }
+        if (_reception - _premiereReception < 1800000) return true;
+        if (!ajouter(stockage, index, _aConfirmer)) return false;
+        _aConfirmer = {};
+        if (memeJour) return true;
+    }
+    _aConfirmer = {};
+    return ajouter(stockage, index, _attente);
+}

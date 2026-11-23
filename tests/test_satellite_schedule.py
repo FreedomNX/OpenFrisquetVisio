@@ -143,6 +143,30 @@ int main(){
     assert(!readings.dueAt(181,2000,600,180));
     assert(readings.dueAt(780,601000,600,180));
 
+    // Outdoor probe: a dedicated slot inside the readings' quiet window.
+    for(uint32_t sec=0;sec<1200;++sec){
+        RadioSchedule probe;
+        assert(probe.dueOutdoorTemperatureAt(sec,0)==
+            (sec%600>=589 && sec%600<599));
+    }
+    RadioSchedule probe,blockedRead;
+    assert(!blockedRead.dueAt(589,589000,600,589));
+    assert(probe.dueOutdoorTemperatureAt(589,589000));
+    assert(!probe.dueOutdoorTemperatureAt(590,590000));
+    assert(!probe.dueOutdoorTemperatureAt(599,599000));
+    assert(probe.dueOutdoorTemperatureAt(1189,1189000));
+    assert(!probe.dueOutdoorTemperatureAt(1789,1190000)); // clock jump
+    RadioSchedule missed;
+    assert(!missed.dueOutdoorTemperatureAt(600,600000));
+    assert(missed.dueOutdoorTemperatureAt(1189,1189000));
+    RadioSchedule probeWrap;
+    assert(probeWrap.dueOutdoorTemperatureAt(589,UINT32_MAX-1000));
+    assert(probeWrap.dueOutdoorTemperatureAt(1189,598999));
+    synced=false;tick=589000;wallOffset=123;
+    RadioSchedule unsyncedProbe;
+    assert(unsyncedProbe.dueOutdoorTemperature());
+    synced=true;tick=0;wallOffset=0;
+
     // Actual radio retries stop at the deadline, including ACK waits.
     for(bool write: {false,true})for(uint32_t start: {0U,UINT32_MAX-100U}){
         tick=start;FrisquetRadio radio;radio.success=false;

@@ -131,7 +131,7 @@ void SondeExterieure::begin() {
 void SondeExterieure::loop() {
 
     if(estAssocie()) {
-        if (_temperatureSchedule.due(600, 240)) { // :04, :14, :24, :34, :44, :54
+        if (_temperatureSchedule.dueOutdoorTemperature()) { // HH:x9:49, toutes les 10 minutes
             info("[SONDE EXTERIEURE] Envoi de la température extérieure.");
             // Récupération de la température si DS18B20 activé.
             if(_ds18b20 != nullptr && _ds18b20->isReady()) {

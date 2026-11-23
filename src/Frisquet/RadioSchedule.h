@@ -25,6 +25,16 @@ public:
         return dueWindowAt(seconds, uptime, period, offset, 10);
     }
 
+    // La sonde a son propre créneau dans la fenêtre de silence des lectures.
+    // HH:x9:49 à HH:x9:58, sans déplacer les autres émissions périodiques.
+    bool dueOutdoorTemperature() {
+        return dueOutdoorTemperatureAt(clockSeconds(), millis());
+    }
+
+    bool dueOutdoorTemperatureAt(uint32_t seconds, uint32_t uptime) {
+        return dueWindowAt(seconds, uptime, 600, 589, 10);
+    }
+
     static bool satelliteWindow(uint32_t seconds, uint8_t zone) {
         if (zone < 1 || zone > 3) return false;
         const uint32_t offset = 30 + (zone - 1) * 24;

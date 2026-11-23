@@ -42,6 +42,12 @@ Deux modes possibles :
 - Lecture **réelle** via une sonde **DS18B20**
 - Lecture **virtuelle** via **MQTT**, permettant d’utiliser la température issue de la météo via un capteur HA.
 
+La sonde émulée envoie sa température toutes les 10 minutes, au premier passage
+dans le créneau `HH:09:49` à `HH:09:58`, puis `HH:19:49` à `HH:19:58`, etc.
+Ce calendrier suit l'heure chaudière synchronisée, ou le temps depuis le démarrage
+avant synchronisation. Un créneau manqué n'est pas rattrapé. La sonde dispose
+d'une exception dédiée à la fenêtre de silence des lectures périodiques.
+
 ### Gestion des satellites (utile si chaudière non-compatible Connect)
 - Gestion des **zones 1, 2 et 3** :
   - Température **ambiance**

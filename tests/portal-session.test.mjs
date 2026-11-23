@@ -84,7 +84,7 @@ function page(name) {
   let created=0,nextTimer=0,now=0;
   function element(selector) {
     if(!elements.has(selector))elements.set(selector,{
-      textContent:'',value:selector==='#refresh'?'2000':'',className:'',disabled:false,hidden:false,checked:false,
+      textContent:'',value:selector==='#refresh'?'2000':'',className:'',disabled:false,hidden:selector==='#sessionNotice',checked:false,
       style:{},dataset:{},files:[],options:[],handlers:new Map(),classList:{add(){},remove(){},toggle(){}},
       setAttribute(){},getAttribute:()=>null,remove(){},
       append(...items){this.options.push(...items);},appendChild(item){this.append(item);},
@@ -161,9 +161,14 @@ for(const action of ['enregistrement','lecture automatique','rechargement manuel
     assert.equal(p.evaluate('encodeProgram(draft)'),draft);
     assert.equal(p.evaluate('revision'),'initiale');
     assert.deepEqual(p.visits,[],'l’éditeur reste ouvert');
+    assert.equal(p.element('#sessionNotice').hidden,false,'la reconnexion est proposée');
     await p.advance(5000);
     assert.equal(p.requests.length,3,'le rafraîchissement reprend');
     p.requests[2].resolve(ok(programmingData));await flush();
+    // Reconnecté dans un autre onglet : la lecture suivante réussit.
+    assert.equal(p.element('#sessionNotice').hidden,true);
+    assert.match(p.element('#message').textContent,/Connexion rétablie/);
+    assert.equal(p.evaluate('dirty'),true);
     p.element('#save').handlers.get('click')();
     assert.equal(p.requests[3].options.method,'POST');
     assert.equal(p.requests[3].options.body.get('program'),draft);
@@ -188,6 +193,28 @@ test('session : les réponses concurrentes ne changent plus la page après le d�
   }
 });
 
+for(const name of ['programming','settings'])test(name+' : la reconnexion est proposée dans un nouvel onglet, pour ne pas quitter les modifications',()=>{
+  const notice=web(name+'.html').match(/<div id="sessionNotice"[^>]*>.*?<\/div>/)[0];
+  assert.match(notice,/^<div id="sessionNotice"[^>]* hidden>/);
+  assert.match(notice,/<a href="\/login" target="_blank">/);
+});
+
+test('programmation : un enregistrement réussi avant la lecture suivante retire aussi la proposition',async()=>{
+  const p=page('programming');p.requests[0].resolve(ok(programmingData));await flush();
+  p.element('#allReduced').handlers.get('click')();
+  p.element('#save').handlers.get('click')();p.requests[1].resolve(unauthorized());await flush();
+  assert.equal(p.element('#sessionNotice').hidden,false);
+  assert.equal(p.element('#message').textContent,'Authentification requise');
+  p.element('#save').handlers.get('click')();
+  p.requests[2].resolve(ok({ok:true,revision:'enregistrée'}));await flush();
+  assert.equal(p.element('#sessionNotice').hidden,true);
+  assert.match(p.element('#message').textContent,/Programmation enregistrée/);
+  // Sans modification à garder, une nouvelle expiration renvoie à la connexion.
+  await p.advance(5000);p.requests[3].resolve(unauthorized());await flush();
+  assert.deepEqual(p.visits,['/login']);
+  assert.equal(p.element('#sessionNotice').hidden,true);
+});
+
 for(const action of ['save','status'])test('paramètres : un 401 pendant '+action+' conserve les champs modifiés et permet de réessayer',async()=>{
   const p=page('settings');p.requests[0].resolve(ok({wifiSsid:'Ancien réseau'}));await flush();
   p.element('#wifiSsid').value='Nouveau réseau';p.element('#wifiPass').value='nouveau secret';
@@ -197,6 +224,7 @@ for(const action of ['save','status'])test('paramètres : un 401 pendant '+actio
   else p.evaluate('loadStatus()');
   p.requests[1].resolve(unauthorized());await flush();
   assert.deepEqual(p.visits,[],'ne pas perdre les champs en quittant la page');
+  assert.equal(p.element('#sessionNotice').hidden,false);
   assert.equal(p.element('#wifiSsid').value,'Nouveau réseau');
   assert.equal(p.element('#wifiPass').value,'nouveau secret');
   assert.equal(p.element('#portalPassword').value,'nouveau mot de passe');
@@ -209,6 +237,7 @@ for(const action of ['save','status'])test('paramètres : un 401 pendant '+actio
   assert.equal(saved.options.body.get('wifiPass'),'nouveau secret');
   assert.equal(saved.options.body.get('portalPassword'),'nouveau mot de passe');
   saved.resolve(ok({ok:true}));await flush();
+  assert.equal(p.element('#sessionNotice').hidden,true);
   assert.match(p.element('#message').textContent,/Configuration enregistrée/);
   p.evaluate('loadStatus()');p.requests[3].resolve(unauthorized());await flush();
   assert.deepEqual(p.visits,['/login'],'après sauvegarde, la page peut revenir à la connexion');
@@ -223,14 +252,17 @@ test('paramètres : un chargement refusé ne remplace pas des valeurs déjà sai
   assert.equal(p.element('#useConnectMode').value,'1');
 });
 
-test('paramètres : une lecture réussie conserve la protection des modifications',async()=>{
+test('paramètres : une lecture réussie retire la proposition sans oublier les modifications',async()=>{
   const p=page('settings');p.requests[0].resolve(ok({}));await flush();
   p.element('#mqttHost').value='nouveau courtier';p.element('#configForm').handlers.get('change')();
   p.evaluate('loadStatus()');p.requests[1].resolve(unauthorized());await flush();
   p.evaluate('loadStatus()');p.requests[2].resolve(ok({uptimeSec:10}));await flush();
+  assert.equal(p.element('#sessionNotice').hidden,true);
+  assert.match(p.element('#message').textContent,/Connexion rétablie/);
   assert.equal(p.element('#mqttHost').value,'nouveau courtier');
   p.evaluate('loadStatus()');p.requests[3].resolve(unauthorized());await flush();
   assert.deepEqual(p.visits,[],'les modifications restent protégées lors d’une nouvelle expiration');
+  assert.equal(p.element('#sessionNotice').hidden,false);
 });
 
 test('paramètres : une sauvegarde refusée conserve aussi les valeurs sans événement de saisie',async()=>{
@@ -240,6 +272,7 @@ test('paramètres : une sauvegarde refusée conserve aussi les valeurs sans év�
   p.requests[1].resolve(unauthorized());await flush();
   assert.deepEqual(p.visits,[]);
   assert.equal(p.element('#wifiPass').value,'secret rempli automatiquement');
+  assert.equal(p.element('#sessionNotice').hidden,false);
 });
 
 test('paramètres : le NetworkID récupéré est une modification à conserver',async()=>{

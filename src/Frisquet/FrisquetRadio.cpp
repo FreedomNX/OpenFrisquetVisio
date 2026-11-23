@@ -256,8 +256,9 @@ int16_t FrisquetRadio::sendAnswer(
 }
 
 // Sélection commune aux réceptions bloquantes et coopératives. L'association
-// figure dans la trame, mais n'est pas un critère de sélection. Une trame
-// d'un autre échange est conservée dans le tampon logiciel.
+// figure dans la trame, mais n'est pas un critère de sélection. Un refus 0x83
+// reprend les identifiants de la demande, comme une réponse. Une trame d'un
+// autre échange, refus compris, est conservée dans le tampon logiciel.
 int16_t FrisquetRadio::selectPacket(const byte* data, size_t length, const RadioTrameHeader& expected) {
     if (length < sizeof(RadioTrameHeader)) return RADIOLIB_ERR_RX_TIMEOUT;
     logRadio(true, data, length, getLastPacketRSSI());
@@ -266,9 +267,10 @@ int16_t FrisquetRadio::selectPacket(const byte* data, size_t length, const Radio
     if (header.idExpediteur == expected.idExpediteur &&
         header.idDestinataire == expected.idDestinataire &&
         header.idMessage == expected.idMessage &&
-        header.idReception == expected.idReception &&
-        header.type == expected.type) return RADIOLIB_ERR_NONE;
-    if (header.type != expected.type && header.type == 0x83) return RADIOLIB_ERR_ADDRESS_NOT_FOUND;
+        header.idReception == expected.idReception) {
+        if (header.type == expected.type) return RADIOLIB_ERR_NONE;
+        if (header.type == 0x83) return RADIOLIB_ERR_ADDRESS_NOT_FOUND;
+    }
     bufferUnexpectedPacket(data, length);
     return RADIOLIB_ERR_RX_TIMEOUT;
 }

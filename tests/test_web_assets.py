@@ -21,7 +21,7 @@ HEADER = "src/generated/WebAssets.h"
 # Compressed assets the portal serves, by symbol in the generated header.
 STATIC_FILENAMES = {
     "COMMANDE_ZONE_JS": "commande-zone.js",
-    "THEME_CSS": "theme.css", "THEME_JS": "theme.js", "INDEX_HTML": "index.html",
+    "THEME_CSS": "theme.css", "THEME_JS": "theme.js", "SESSION_JS": "session.js", "INDEX_HTML": "index.html",
     "SETTINGS_HTML": "settings.html", "PROGRAMMING_HTML": "programming.html",
     "LOGS_HTML": "logs.html", "MEMORY_HTML": "memory.html",
     "RADIO_LOGS_HTML": "radio-logs.html", "LOGO_PNG": "logo.png",

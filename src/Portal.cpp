@@ -369,6 +369,8 @@ void Portal::begin(bool startApFallbackIfNoWifi) {
   _srv.on("/theme.js", HTTP_GET, [this] {
     sendStaticAsset(WebAssets::THEME_JS);
   });
+  // Renvoie les pages vers /login quand l’API répond 401. Sans donnée privée.
+  _srv.on("/session.js", HTTP_GET, [this] { sendStaticAsset(WebAssets::SESSION_JS); });
   _srv.on("/login", HTTP_GET, [this] { handleLoginPage(); });
   _srv.on("/login", HTTP_POST, [this] { handleLogin(); });
   onAuthenticated("/logout", HTTP_POST, &Portal::handleLogout);

@@ -13,6 +13,7 @@
   </style>
   <link rel="stylesheet" href="/theme.css">
   <script src="/theme.js"></script>
+  <script src="/session.js"></script>
 </head>
 <body>
   <header class="topbar"><div class="shell topbar-inner"><a href="/"><img class="logo" src="/logo.png" alt="OpenFrisquetVisio"></a><a class="btn" href="/">← <span class="back-label">Tableau de bord</span></a></div></header>
@@ -67,6 +68,10 @@
     const LOAD_TIMEOUT_MESSAGE='Délai de chargement de la programmation dépassé.';
     let messageVersion=0;
     function message(text,error=false) { messageVersion++; $('#message').textContent=text; $('#message').className='message'+(error?' error':''); }
+    window.addEventListener('ofv-session-expired',event=>{
+      if(!dirty) return;
+      event.preventDefault();
+    });
     function selectBrush(value) {
       brush=value; for(const [id,active] of [['comfort',value],['reduced',!value]]) {
         $('#'+id).classList.toggle('selected',active); $('#'+id).setAttribute('aria-pressed',String(active));

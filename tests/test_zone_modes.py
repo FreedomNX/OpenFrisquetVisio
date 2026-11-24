@@ -20,8 +20,16 @@ with tempfile.TemporaryDirectory() as directory:
         "-I", libs / "ArduinoJson/src", "-I", libs / "RadioLib/src",
         FIXTURE / "scenarios.cpp", FIXTURE / "materiel.cpp",
         ROOT / "src/Config.cpp", ROOT / "src/Frisquet/Zone.cpp", ROOT / "src/Frisquet/Connect.cpp",
-        ROOT / "src/Frisquet/Satellite.cpp", ROOT / "src/Frisquet/Chaudiere.cpp", ROOT / "src/Frisquet/FrisquetRadio.cpp",
+        ROOT / "src/Frisquet/HistoriqueVeille.cpp", ROOT / "src/Frisquet/Satellite.cpp", ROOT / "src/Frisquet/Chaudiere.cpp", ROOT / "src/Frisquet/FrisquetRadio.cpp",
         ROOT / "src/Frisquet/FrisquetDevice.cpp", ROOT / "src/Frisquet/Utils.cpp",
         "-o", binary,
     ], check=True)
-    subprocess.run([binary, FIXTURE / "echanges-20261118.txt"], check=True)
+    subprocess.run([binary, FIXTURE / "echanges-20261118.txt"], cwd=directory, check=True)
+
+    montage = Path(directory) / "montage"
+    subprocess.run([
+        "c++", "-std=c++11", "-Wall", "-Wextra", "-Werror", "-I", FIXTURE, "-I", ROOT / "src",
+        FIXTURE / "montage.cpp", ROOT / "src/Frisquet/StockageHistorique.cpp", "-o", montage,
+    ], check=True)
+    for cas in ("vierge", "occupee", "panne"):
+        subprocess.run([montage, cas], check=True)

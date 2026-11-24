@@ -123,6 +123,8 @@ en compte. Un écran débranché ou défaillant est désactivé jusqu’au redé
 
 ### 🌐 Portail Web intégré
 
+Le volet « Consommation quotidienne » conserve jusqu’à dix ans de relevés, consultables mois par mois même si Home Assistant est hors ligne. Le téléchargement CSV couvre la même période. Les dates sont déduites de l’heure chaudière et les jours sans relevé restent vides.
+
 Le choix **Sonde Frisquet existante** est mémorisé séparément de **Désactivée**.
 Il ne lance aucune émulation radio : la sonde reste gérée par la chaudière
 ou son module H. Après une mise à jour depuis une version qui perdait ce choix,

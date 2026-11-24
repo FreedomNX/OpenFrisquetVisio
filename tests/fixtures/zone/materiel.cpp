@@ -5,6 +5,7 @@
 uint32_t tempsMs = 0;
 time_t heureChaudiere = 0;
 bool heureConnue = false;
+uint32_t micros() { return tempsMs * 1000; }
 uint32_t millis() { return tempsMs; }
 void delay(unsigned long duree) { tempsMs += duree; }
 void setTime(int h, int m, int s, int j, int mois, int an) {

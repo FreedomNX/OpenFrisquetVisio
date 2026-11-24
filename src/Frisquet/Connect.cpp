@@ -233,8 +233,14 @@ bool Connect::applyConsumption(const byte* data, size_t length) {
     if (!data || length < sizeof(buff)) return false;
     memcpy(&buff, data, sizeof(buff));
     if (buff.longueurDonnees != 56 || length < 7U + buff.longueurDonnees) return false;
-    setConsommationChauffage(buff.consommationChauffage.toInt16());
-    setConsommationECS(buff.consommationECS.toInt16());
+    // 0x7A18 ne fournit pas de date identifiée pour ces deux valeurs.
+    // TimeLib suit l'heure civile chaudière. Écarter la première heure :
+    // le basculement des compteurs n'est pas garanti à minuit.
+    const uint32_t reception = timeStatus() == timeNotSet ? 0 : ::now();
+    const uint32_t jour = reception / 86400;
+    const uint32_t veille = jour > 1 && reception % 86400 >= 3600 ? jour - 1 : 0;
+    _chaudiere.setConsommationVeille(buff.consommationChauffage.toInt16(),
+                                    buff.consommationECS.toInt16(), veille);
     return true;
 }
 
@@ -288,12 +294,6 @@ float Connect::getTemperatureCDC() {
     return _chaudiere.getTemperatureCDC();
 }
 
-void Connect::setConsommationECS(int16_t consommation) {
-    _chaudiere.setConsommationECS(consommation);
-}
-void Connect::setConsommationChauffage(int16_t consommation) {
-    _chaudiere.setConsommationChauffage(consommation);
-}
 int16_t Connect::getConsommationChauffage() {
     return _chaudiere.getConsommationChauffage();
 }
@@ -556,22 +556,7 @@ bool Connect::handlePassiveReadResponse(uint16_t adresseMemoire, const byte* buf
 
     if (addrIsConsommation) {
         debug("[CONNECT] Réception des consommations passives du Connect.");
-        struct {
-            FrisquetRadio::RadioTrameHeader header;
-            uint8_t longueurDonnees;
-            byte i1[18] = {0};
-            fword consommationECS;
-            fword consommationChauffage;
-            byte i2[34] = {0};
-        } resp;
-
-        if (length < sizeof(resp)) {
-            return false;
-        }
-        memcpy(&resp, buff, sizeof(resp));
-
-        setConsommationChauffage(resp.consommationChauffage.toInt16());
-        setConsommationECS(resp.consommationECS.toInt16());
+        if (!applyConsumption(buff, length)) return false;
         _lastRecuperationConsommation = millis();
         publishMqtt();
         return true;

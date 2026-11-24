@@ -34,6 +34,7 @@ struct FrisquetManager {
     Config _cfg;
     MqttManager mqtt;
     Chaudiere boiler;
+    Chaudiere& _chaudiere = boiler;
     Zone _zone1, _zone2, _zone3;
     Connect _connect{_radio, _cfg, mqtt, _zone1, _zone2, _zone3, boiler};
     Service _sondeExterieure, _satelliteZ1, _satelliteZ2, _satelliteZ3;

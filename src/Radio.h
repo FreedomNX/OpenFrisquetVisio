@@ -21,6 +21,7 @@ class Radio {
         float getLastPacketRSSI() const { return _lastPacketRSSI; }
         bool hasValidReception() const { return _hasValidReception; }
         uint32_t lastValidReceptionMs() const { return _lastValidReceptionMs; }
+        uint32_t lastActivityMs() const { return _lastActivityMs; }
         int16_t transmit(byte data[], size_t len);
         size_t getPacketLength() const { return _radio.lastRxLength; }
         void onReceive(void (*func)()) { _radio.setPacketReceivedAction(func);}
@@ -54,4 +55,5 @@ class Radio {
         float _lastPacketRSSI = NAN;
         bool _hasValidReception = false;
         uint32_t _lastValidReceptionMs = 0;
+        uint32_t _lastActivityMs = 0;
 };

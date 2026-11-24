@@ -33,6 +33,7 @@ tests/*
 !tests/test_monthly_consumption.py
 !tests/test_consumption_mqtt_outage.py
 !tests/monthly-consumption.test.mjs
+!tests/daily-consumption.test.mjs
 !tests/boiler-state.test.mjs
 
 !tests/test_sx1276_radio.py

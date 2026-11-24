@@ -2,6 +2,12 @@
 
 ## À venir
 
+### Corrections
+
+- Les outils mémoire n'utilisent plus l'identité de la box Connect passive ni celle
+  d'un satellite Z1 physique ; l'émission brute au nom du Connect passif est refusée
+  ([#77](https://github.com/FreedomNX/OpenFrisquetVisio/pull/77)).
+
 ### Changements
 
 - Historique des versions consultable directement dans le changelog du dépôt,

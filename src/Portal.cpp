@@ -1290,6 +1290,27 @@ void Portal::handleStatus() {
   _srv.send(200, "application/json; charset=utf-8", json);
 }
 
+// Les outils de diagnostic n'émettent qu'au nom d'un module émulé par la
+// passerelle. En Connect passif, l'identité et l'association du Connect sont
+// celles de la box observée, et celles d'un satellite physique sont apprises en
+// l'observant : n'émettre en leur nom ni lecture mémoire, ni trame brute du Connect.
+static bool passiveConnect(Config& cfg) {
+  return cfg.useConnect() && cfg.useConnectPassive();
+}
+
+static void selectDiagnosticSender(FrisquetManager& manager, uint8_t& idExpediteur, uint8_t& idAssociation) {
+  idExpediteur = 0x00;
+  idAssociation = 0x00;
+  if(manager.config().useConnect() && !passiveConnect(manager.config()) && manager.connect().estAssocie()) {
+    idExpediteur = ID_CONNECT;
+    idAssociation = manager.connect().getIdAssociation();
+  } else if(manager.config().useSatelliteZ1() && manager.config().useSatelliteVirtualZ1()
+            && manager.satelliteZ1().estAssocie()) {
+    idExpediteur = ID_ZONE_1;
+    idAssociation = manager.satelliteZ1().getIdAssociation();
+  }
+}
+
 void Portal::handleSendRadio() {
   if (!requireDeveloperMode()) return;
   if (!requireRadioAvailable()) return;
@@ -1332,6 +1353,13 @@ void Portal::handleSendRadio() {
   if (!hexStringToBufferRaw(hex, payload, sizeof(payload), payloadLength) || payloadLength == 0) {
     _srv.send(400, "application/json; charset=utf-8",
               "{\"ok\":false,\"err\":\"Trame hexadécimale invalide ou trop longue (100 octets maximum)\"}");
+    return;
+  }
+
+  // Octet 1 de l'en-tête : expéditeur.
+  if (passiveConnect(_frisquetManager.config()) && payloadLength > 1 && payload[1] == ID_CONNECT) {
+    _srv.send(403, "application/json; charset=utf-8",
+              "{\"ok\":false,\"err\":\"Connect passif : émission au nom du Connect refusée\"}");
     return;
   }
 
@@ -1422,6 +1450,15 @@ void Portal::handleMemoryRead() {
     len = static_cast<uint16_t>(0xFFFF - start + 1);
   }
 
+  uint8_t idExpediteur = 0x00;
+  uint8_t idAssociation = 0x00;
+  selectDiagnosticSender(_frisquetManager, idExpediteur, idAssociation);
+  if (idExpediteur == 0x00) {
+    _srv.send(400, "application/json; charset=utf-8",
+              "{\"ok\":false,\"err\":\"Aucun module émetteur associé (Connect actif ou satellite Z1 virtuel)\"}");
+    return;
+  }
+
   uint16_t errorAddrs[256];
   int16_t errorCodes[256];
   size_t errorCount = 0;
@@ -1465,20 +1502,6 @@ void Portal::handleMemoryRead() {
     byte resp[32];
     size_t respLen = sizeof(resp);
 
-   uint8_t idExpediteur = 0x00;
-   uint8_t idAssociation = 0x00;
-    if(_frisquetManager.config().useConnect() && _frisquetManager.connect().estAssocie()) {
-      idExpediteur = ID_CONNECT;
-      idAssociation = _frisquetManager.connect().getIdAssociation();
-    } else if(_frisquetManager.config().useSatelliteZ1() && _frisquetManager.satelliteZ1().estAssocie()) {
-      idExpediteur = ID_ZONE_1;
-      idAssociation = _frisquetManager.satelliteZ1().getIdAssociation();
-    }
-    if(idExpediteur == 0x00) {
-      _srv.send(400, "application/json; charset=utf-8",
-                "{\"ok\":false,\"err\":\"Aucun module émetteur associé (Connect ou Satellite Z1)\"}");
-      return;
-    }
 
     int16_t err = _frisquetManager.radio().sendAsk(
         idExpediteur,
@@ -1590,16 +1613,10 @@ void Portal::handleMemoryScan() {
 
    uint8_t idExpediteur = 0x00;
    uint8_t idAssociation = 0x00;
-    if(_frisquetManager.config().useConnect() && _frisquetManager.connect().estAssocie()) {
-      idExpediteur = ID_CONNECT;
-      idAssociation = _frisquetManager.connect().getIdAssociation();
-    } else if(_frisquetManager.config().useSatelliteZ1() && _frisquetManager.satelliteZ1().estAssocie()) {
-      idExpediteur = ID_ZONE_1;
-      idAssociation = _frisquetManager.satelliteZ1().getIdAssociation();
-    }
+    selectDiagnosticSender(_frisquetManager, idExpediteur, idAssociation);
     if(idExpediteur == 0x00) {
       _srv.send(400, "application/json; charset=utf-8",
-                "{\"ok\":false,\"err\":\"Aucun module émetteur associé (Connect ou Satellite Z1)\"}");
+                "{\"ok\":false,\"err\":\"Aucun module émetteur associé (Connect actif ou satellite Z1 virtuel)\"}");
       return;
     }
 

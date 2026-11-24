@@ -180,6 +180,10 @@ lecture `A02E` observée peut fournir le même statut.
 - Informations système et réseau
 - Envoi de trame radio personnalisée (debug)
 - Lecture de zones mémoire (debug)
+  Les lectures et scans mémoire utilisent uniquement le Connect actif ou, à défaut,
+  le satellite Z1 virtuel associé ; ils sont refusés avec un satellite Z1 physique
+  ou sans module émulé associé. En Connect passif, l'envoi d'une trame brute dont
+  l'expéditeur est le Connect (`7E`) est refusé pour préserver l'identité de la box.
 
 Les pages du portail se trouvent dans le dossier **`web/`**. Lors d'une compilation
 PlatformIO, le script `tools/generate_web_assets.py` les transforme en ressources
@@ -613,8 +617,9 @@ d'association.
 
 Les journaux sont accessibles dans **Paramètres → Système → Diagnostic**.
 Activer et enregistrer le **Mode développeur** pour accéder aux trames radio et à
-la mémoire chaudière. La lecture mémoire est un outil actif : elle peut émettre
-des requêtes, même si le Connect est configuré en écoute passive.
+la mémoire chaudière. Les outils mémoire peuvent émettre en Connect passif
+uniquement si un satellite Z1 virtuel est activé et associé ; ils utilisent alors
+son identité. Sans Connect actif ni Z1 virtuel associé, les lectures sont refusées.
 
 ---
 

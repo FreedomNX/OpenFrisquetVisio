@@ -749,6 +749,7 @@ void Portal::handleDashboard() {
   json += "\"pressure\":" + jsonFloat(chaudiere.getPression(), 2) + ",";
   json += "\"hotWaterPower\":" + jsonFloat(chaudiere.getPuissanceInstantaneeECS()) + ",";
   json += "\"heatingPower\":" + jsonFloat(chaudiere.getPuissanceInstantaneeChauffage()) + ",";
+  json += "\"estimatedConsumptionDay\":" + (chaudiere.getJourConsommation() ? String(chaudiere.getJourConsommation()) : String("null")) + ",";
   json += "\"hotWaterConsumption\":" + jsonIntOrNull(chaudiere.getConsommationECS()) + ",";
   json += "\"heatingConsumption\":" + jsonIntOrNull(chaudiere.getConsommationChauffage()) + ",";
   json += "\"monthlyConsumption\":" + jsonConsommationsMensuelles(_frisquetManager.connect().getConsommationsMensuelles());

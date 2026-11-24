@@ -21,6 +21,9 @@ public:
     String(const std::string& texte) : std::string(texte) {}
     explicit String(unsigned nombre) : std::string(std::to_string(nombre)) {}
     bool isEmpty() const { return empty(); }
+    bool endsWith(const String& suffixe) const {
+        return size() >= suffixe.size() && compare(size() - suffixe.size(), suffixe.size(), suffixe) == 0;
+    }
     bool equalsIgnoreCase(const char* texte) const { return strcasecmp(c_str(), texte) == 0; }
     float toFloat() const { return std::strtof(c_str(), nullptr); }
     // Interface de sortie std::string reconnue par ArduinoJson.

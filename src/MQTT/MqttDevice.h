@@ -93,7 +93,9 @@ inline void MqttEntity::buildDiscoveryJson(JsonDocument& doc) const {
   for (auto& kv : extraFields) {
     const String& key = kv.first;
     const String& val = kv.second;
-    if (val == "true" || val == "false") {
+    if (key.endsWith("_template")) {
+      doc[key] = val;
+    } else if (val == "true" || val == "false") {
       doc[key] = (val == "true");
     } else if (val.length() && (val[0] == '[' || val[0] == '{')) {
       // tableau/objet JSON bruts

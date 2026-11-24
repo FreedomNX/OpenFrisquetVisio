@@ -129,8 +129,12 @@ public:
   }
 
   bool publishState(const MqttEntity& e, float value, uint8_t decimals = 2) {
+    return publishState(e.stateTopic, value, decimals);
+  }
+
+  bool publishState(const MqttTopic& topic, float value, uint8_t decimals = 2) {
     char buf[32]; dtostrf(value, 0, decimals, buf);
-    return publishState(e, String(buf));
+    return publishRaw(topic.full, buf, topic.qos, topic.retain);
   }
 
   bool publishJson(const MqttTopic& topic, const JsonDocument& doc) {

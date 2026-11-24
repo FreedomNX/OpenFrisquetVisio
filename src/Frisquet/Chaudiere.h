@@ -133,8 +133,23 @@ private:
     MODE_FONCTIONNEMENT _modeFonctionnement = MODE_FONCTIONNEMENT::FONCTIONNEMENT_INCONNU;
     uint16_t _modeFonctionnementRaw = 0xFFFF;
 
-    int16_t _lastPubConsommationECS = -1;
-    int16_t _lastPubConsommationChauffage = -1;
+    struct PublicationVeille {
+        MqttTopic sujetNumerique;
+        int16_t derniereValeurBrute = -1;
+        int16_t valeurDatee = -1;
+        uint32_t jour = 0;
+        bool enAttente = false;
+
+        void recevoir(int16_t valeur, uint32_t nouveauJour) {
+            if (valeur < 0 || !nouveauJour || nouveauJour < jour) return;
+            if (valeur == valeurDatee && nouveauJour == jour) return;
+            valeurDatee = valeur;
+            jour = nouveauJour;
+            enAttente = true;
+        }
+    };
+    PublicationVeille _publicationChauffage, _publicationEcs;
+    void publierConsommationVeille(const MqttEntity& entite, int16_t valeur, PublicationVeille& publication);
 
     int32_t _consommationAnnuelleChauffage = -1;
     int32_t _consommationAnnuelleECS = -1;

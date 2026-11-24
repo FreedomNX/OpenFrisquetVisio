@@ -43,6 +43,8 @@ struct Banc {
         Preferences::effacer();
         publications.clear();
         nombrePublications.clear();
+        courtierDisponible = true;
+        sujetRefuse.clear();
         emissions.clear();
         reception.clear();
         journal.clear();
@@ -862,6 +864,105 @@ void verifierSynchronisation() {
     assert(emissions.size() == 1 && emissions.back()[4] == ID_ZONE_3);
 }
 
+void verifierRepriseConsommation() {
+    Banc banc;
+    auto& chaudiere = banc.chaudiere;
+    chaudiere.begin();
+    const String chauffage = "frisquet/chaudiere/consommationChauffage";
+    const String ecs = "frisquet/chaudiere/consommationECS";
+    // Conserver les nombres bruts et les cumuls annuels, même sans date.
+    const String annuelChauffage = "frisquet/chaudiere/consommationAnnuelleChauffage";
+    const String annuelEcs = "frisquet/chaudiere/consommationAnnuelleECS";
+    courtierDisponible = false;
+    chaudiere.setConsommationAnnuelle(40000, 7);
+    chaudiere.setConsommationVeille(17, 0, 0);
+    chaudiere.publishMqtt();
+    assert(!publications.count(chauffage) && !publications.count(annuelChauffage));
+    courtierDisponible = true;
+    chaudiere.publishMqtt();
+    chaudiere.publishMqtt();
+    assert(publications.at(chauffage) == "17.00" && publications.at(ecs) == "0.00");
+    assert(publications.at(annuelChauffage) == "40000" && publications.at(annuelEcs) == "7");
+    for (const auto& sujet : {chauffage, ecs, annuelChauffage, annuelEcs})
+        assert(nombrePublications.at(sujet) == 1);
+
+    courtierDisponible = false;
+    chaudiere.setConsommationVeille(18, 0, 0);
+    chaudiere.publishMqtt();
+    courtierDisponible = true;
+    chaudiere.publishMqtt();
+    chaudiere.publishMqtt();
+    assert(publications.at(chauffage) == "18.00" && nombrePublications.at(chauffage) == 2);
+    assert(nombrePublications.at(ecs) == 1);
+}
+
+void verifierStatistiquesConsommation() {
+    Banc banc;
+    auto& chaudiere = banc.chaudiere;
+    chaudiere.begin();
+    const String chauffage = "frisquet/chaudiere/consommationChauffage";
+    const String ecs = "frisquet/chaudiere/consommationECS";
+    const String releve = chauffage + "/releve", releveEcs = ecs + "/releve";
+    for (const char* id : {"consommationChauffage", "consommationECS"}) {
+        const auto config = lireJson(publications.at(String("homeassistant/sensor/openFrisquetVisio/") + id + "/config"));
+        const String sujet = String("frisquet/chaudiere/") + id + "/releve";
+        assert(config["state_topic"] == sujet.c_str() && config["json_attributes_topic"] == sujet.c_str());
+        assert(config["state_class"] == "total" && config["unit_of_measurement"] == "kWh");
+        assert(config["value_template"] == "{{ value_json.kwh }}");
+        assert(config["last_reset_value_template"] ==
+            "{{ as_datetime(value_json.date_consommation_estimee).replace(tzinfo=now().tzinfo).isoformat() }}");
+        assert(config["json_attributes_template"] ==
+            "{{ {'date_consommation_estimee': value_json.date_consommation_estimee} | tojson }}");
+    }
+    auto lire = [&](int16_t ch, int16_t eau, uint32_t jour) {
+        chaudiere.setConsommationVeille(ch, eau, jour);
+        chaudiere.publishMqtt();
+    };
+    auto verifier = [&](const String& sujet, const char* date, int valeur, unsigned nombre) {
+        const auto doc = lireJson(publications.at(sujet));
+        assert(doc["date_consommation_estimee"] == date && doc["kwh"].is<int>() && doc["kwh"] == valeur);
+        assert(nombrePublications.at(sujet) == nombre);
+    };
+    lire(17, 0, 0);
+    assert(!publications.count(releve) && !publications.count(releveEcs));
+
+    lire(17, 0, 20818);
+    verifier(releve, "2026-12-31", 17, 1);
+    sujetRefuse = releve;
+    lire(17, 0, 20819);
+    verifier(releve, "2026-12-31", 17, 1);
+    verifier(releveEcs, "2027-01-01", 0, 2);
+    sujetRefuse.clear();
+    chaudiere.publishMqtt();
+    verifier(releve, "2027-01-01", 17, 2);
+    assert(nombrePublications.at(chauffage) == 1);
+    assert(nombrePublications.at(ecs) == 1);
+
+    // Une correction dans le même cycle et deux publications indépendantes.
+    sujetRefuse = chauffage;
+    lire(18, 0, 20819);
+    verifier(releve, "2027-01-01", 18, 3);
+    assert(publications.at(chauffage) == "17.00");
+    sujetRefuse.clear();
+    chaudiere.publishMqtt();
+    assert(publications.at(chauffage) == "18.00");
+    lire(19, -1, 0);
+    lire(20, 0, 20818);
+    lire(-1, 0, 20820);
+    verifier(releve, "2027-01-01", 18, 3);
+    verifier(releveEcs, "2027-01-02", 0, 3);
+
+    // Une reconnexion publie le dernier relevé valide encore en attente.
+    courtierDisponible = false;
+    lire(22, 3, 20821);
+    lire(-1, 77, 0);
+    courtierDisponible = true;
+    chaudiere.publishMqtt();
+    chaudiere.publishMqtt();
+    verifier(releve, "2027-01-03", 22, 4);
+    verifier(releveEcs, "2027-01-03", 3, 4);
+}
+
 void verifierPilotagePhysiqueEtPortail() {
     Banc banc;
     Zone& physique = banc.z1;
@@ -958,5 +1059,7 @@ int main(int argc, char** argv) {
     verifierStatutManquantAuChangementDeCycle();
     verifierFenetresSimultanees();
     verifierSynchronisation();
+    verifierRepriseConsommation();
+    verifierStatistiquesConsommation();
     verifierPilotagePhysiqueEtPortail();
 }

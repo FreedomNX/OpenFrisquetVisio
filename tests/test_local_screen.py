@@ -47,6 +47,7 @@ struct Radio {
     bool busy() {return occupied;}
     bool hasReceivedPacket() {return packet;}
     bool hasBufferedPacket() {return buffered;}
+    bool hasPendingPacket() {return FrisquetRadio::receivedFlag || packet || buffered;}
 };
 struct Config {
     bool zones[3] = {true, false, true};

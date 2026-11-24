@@ -94,6 +94,10 @@ bool FrisquetRadio::hasBufferedPacket() {
     return false;
 }
 
+bool FrisquetRadio::hasPendingPacket() {
+    return receivedFlag || hasReceivedPacket() || hasBufferedPacket();
+}
+
 int16_t FrisquetRadio::sendAsk(
     uint8_t idExpediteur, 
     uint8_t idDestinataire, 

@@ -170,6 +170,9 @@ class FrisquetRadio : public Radio {
 
     bool popBufferedPacket(byte* donnees, size_t& length, float* rssi = nullptr, uint32_t* reception = nullptr);
     bool hasBufferedPacket();
+    // Un paquet attend son traitement : interruption signalée, IRQ encore
+    // présente dans la radio ou trame conservée dans le tampon logiciel.
+    bool hasPendingPacket();
 
     static volatile bool receivedFlag;
     static volatile bool interruptReceive;

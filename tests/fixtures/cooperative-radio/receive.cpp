@@ -85,8 +85,18 @@ int main() {
     assert(take(mixed) == 0);
     n = sizeof(out);
     float rssi = 0;
+    // Chacune des trois sources signale à elle seule un paquet en attente.
+    assert(mixed.hasBufferedPacket() && mixed.hasPendingPacket());
     assert(mixed.popBufferedPacket(out, n, &rssi));
     assert(n == 49 && out[3] == 9 && rssi == -55 && !mixed.hasBufferedPacket());
+    assert(!R::receivedFlag && mixed.packets.empty() && !mixed.hasPendingPacket());
+    R::receivedFlag = true;
+    assert(mixed.hasPendingPacket());
+    R::receivedFlag = false;
+    mixed.packets.push_back(packet());
+    assert(mixed.hasPendingPacket());
+    mixed.packets.clear();
+    assert(!mixed.hasPendingPacket());
 
     R exhausted;
     clockMs = 0;

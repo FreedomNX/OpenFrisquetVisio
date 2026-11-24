@@ -4,7 +4,9 @@
 Ce projet permet à un ESP32 de dialoguer directement avec votre chaudière Frisquet,  
 de récupérer les informations en temps réel et de les exposer à **Home Assistant via MQTT**.
 
-Les nouveautés et corrections sont décrites dans le [changelog](CHANGELOG.md).
+Les notes intégrées au code sont décrites dans [CHANGELOG.md](CHANGELOG.md).
+L'[historique des versions publiées](https://github.com/FreedomNX/OpenFrisquetVisio/releases/latest/download/CHANGELOG.md)
+est généré automatiquement et joint aux releases.
 
 Les échanges avec la chaudière utilisent le mode **FSK à 868,96 MHz** des puces
 radio, et non la modulation LoRa ni un réseau LoRaWAN. Les fonctions disponibles
@@ -332,49 +334,54 @@ La CI compile les quatre variantes sur les PR et les pushes vers `main` et
 leur propre contrôle GitHub, dans une même matrice. Les tests Python et Node
 utilisent un contrôle séparé.
 
-Après un push sur `main` ajoutant une version préparée dans le changelog, la CI
-publie automatiquement une Release si les tests et les quatre compilations
-réussissent. Les autres pushes sur `main`, les PR et les pushes sur `develop`
-lancent les vérifications mais ne publient pas de Release. Le titre et le tag
-reprennent la version préparée, par exemple `26.11.24.0955`, et le tag pointe vers
-le commit exact compilé. Les quatre cartes et le portail embarquent cette même
-version. Sans préparation de release, la CI utilise la date et l'heure de Paris
-pour identifier ses compilations de validation. Une Release existante portant
-le même tag n'est pas écrasée.
+Après un push sur `main`, la CI publie automatiquement une Release si les tests
+et les quatre compilations réussissent. Les PR et les pushes sur `develop` ne
+publient pas de Release. Le titre, le tag et les quatre firmwares utilisent une
+version commune au format `AA.MM.JJ.HHmm`, calculée depuis la date de création du
+workflow à l'heure de Paris. Une relance réutilise la même version ; en cas de
+collision avec un tag existant, la minute est avancée pour ne rien écraser.
+Le tag pointe vers le commit exact compilé.
 
-**Changelog et préparation d'une release**
+**Changelog automatique**
 
-Chaque PR complète la section **À venir** de [CHANGELOG.md](CHANGELOG.md) avec
-des puces courtes décrivant l'effet pour l'utilisateur et un lien vers la PR ou
-l'issue. Les catégories sont **Ajouts**, **Corrections**, **Changements** et
-**Actions nécessaires après mise à jour**. Les catégories vides sont omises des
-notes de release.
+Chaque PR ajoute des puces dans **Notes intégrées à main** de
+[CHANGELOG.md](CHANGELOG.md), avec un lien vers la PR ou l'issue. Les catégories
+sont **Ajouts**, **Corrections**, **Changements** et **Actions nécessaires après
+mise à jour**. Aucune commande de préparation de release n'est nécessaire.
 
-Quand les changements sont prêts à être publiés, depuis la racine du dépôt :
+Après validation, la CI sélectionne les nouvelles notes par rapport à la dernière
+release de cette branche. Elle les place dans les notes de release et ajoute
+l'entrée versionnée à l'historique précédent. Le `CHANGELOG.md` généré est joint
+aux binaires : [télécharger l'historique publié](https://github.com/FreedomNX/OpenFrisquetVisio/releases/latest/download/CHANGELOG.md).
+Le fichier `changelog-source.md`, également joint, conserve la source utilisée pour
+éviter de republier les mêmes notes. Une version sans nouvelle note est tout de
+même publiée avec une indication explicite.
+
+La source sur `main` reste intacte : le robot n'a pas besoin d'écrire sur cette
+branche protégée. Les notes y restent donc visibles après leur publication ;
+leur présence ne signifie pas « pas encore publié ». Modifier une ancienne puce
+ou la déplacer dans une autre catégorie la fait apparaître comme une nouvelle
+note dans la prochaine release. Les catégories vides sont omises de l'historique.
+Les anciennes releases ne sont pas reconstruites rétrospectivement.
+
+Les publications sur `main` sont sérialisées pour reprendre le dernier historique
+publié. Si plusieurs pushes arrivent pendant une compilation, GitHub peut
+regrouper les exécutions en attente ; la prochaine release inclut les notes des
+changements accumulés. Les sept fichiers (quatre firmwares, `SHA256SUMS`,
+`CHANGELOG.md` et `changelog-source.md`) sont joints à un brouillon avant de le
+rendre public. En cas d'échec, le brouillon peut être repris par une relance sur
+le même commit. Une release déjà publiée n'est pas écrasée.
+
+Pour vérifier les notes ou prévisualiser un historique sans publication :
 
 ```sh
-python3 tools/changelog.py prepare
 python3 tools/changelog.py check
-git diff -- CHANGELOG.md
+python3 tools/changelog.py archive 26.11.24.0955 --output /tmp/CHANGELOG-preview.md
 ```
 
-La première commande choisit la date et l'heure de Paris au format
-`AA.MM.JJ.HHmm`, archive **À venir** sous cette version et recrée une section
-**À venir** vide. Pour choisir explicitement la version, utiliser par exemple
-`python3 tools/changelog.py prepare 26.11.24.0955`. La version doit être une date
-valide et être postérieure à la dernière entrée. Une préparation vide est refusée.
-
-Relire et committer `CHANGELOG.md`, puis fusionner la préparation sur `main`.
-Une seule nouvelle version est acceptée par push ; les notes des versions déjà
-présentes sur `main` doivent être conservées. Ne pas ajouter de nouvelles notes
-dans **À venir** entre la préparation et sa publication : elles doivent être
-intégrées à la version préparée avant la fusion, ou ajoutées après celle-ci.
-
-La CI extrait les notes de cette version et les place avant les instructions de
-téléchargement dans GitHub Releases. Elle ne modifie et ne committe aucun fichier
-du dépôt. Si une vérification échoue, aucune release n'est publiée ; une relance
-du workflow sur le même commit conserve la version préparée. Les anciennes
-releases ne sont pas reconstruites automatiquement à partir des commits.
+La prévisualisation locale ne modifie pas la source et n'écrit rien sur GitHub.
+Les firmwares de release et leur historique ne sont publiés que par la CI, après
+validation des tests et des quatre cartes.
 
 Les fichiers sont accessibles dans [Releases](https://github.com/FreedomNX/OpenFrisquetVisio/releases) :
 

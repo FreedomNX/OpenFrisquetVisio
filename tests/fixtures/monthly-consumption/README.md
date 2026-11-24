@@ -1,6 +1,14 @@
 # Consommations mensuelles
 
-`test_monthly_consumption.py` compile le décodeur et les déclarations du cache
+Depuis la racine du dépôt, avec Python 3, Node.js et un compilateur C++17
+disponible sous le nom `c++` (voir [Développement et tests](../../../README.md)) :
+
+```sh
+python3 tests/test_monthly_consumption.py
+node --test tests/monthly-consumption.test.mjs
+```
+
+`tests/test_monthly_consumption.py` compile le décodeur et les déclarations du cache
 extraits de la production avec le scénario C++ `decoding.cpp`, ASan/UBSan et
 `-Werror`. Aucun scénario C++ n'est incorporé au lanceur Python.
 

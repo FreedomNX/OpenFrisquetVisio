@@ -1,5 +1,8 @@
 # Tests des observations satellite
 
+Depuis la racine du dépôt, avec Python 3 et un compilateur C++17 disponible sous
+le nom `c++` (voir [Développement et tests](../../../README.md)) :
+
 `python3 tests/test_satellite_observation.py` compile les méthodes Satellite et
 Zone du firmware avec des simulations radio/MQTT et les outils ASan/UBSan.
 Les paquets sont construits à partir de données synthétiques.

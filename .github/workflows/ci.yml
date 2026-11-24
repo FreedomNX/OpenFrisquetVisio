@@ -18,19 +18,22 @@ jobs:
     runs-on: ubuntu-24.04
     outputs:
       version: ${{ steps.version.outputs.version }}
+      publish: ${{ steps.version.outputs.publish }}
     steps:
+      - name: Checkout du changelog et de son historique
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
       - name: Définir une version commune aux quatre cartes
         id: version
+        env:
+          BEFORE_SHA: ${{ github.event.before }}
         run: |
-          python3 - <<'PY'
-          import os
-          from datetime import datetime
-          from zoneinfo import ZoneInfo
-
-          version = datetime.now(ZoneInfo('Europe/Paris')).strftime('%y.%m.%d.%H%M')
-          with open(os.environ['GITHUB_OUTPUT'], 'a', encoding='utf-8') as output:
-              print(f'version={version}', file=output)
-          PY
+          if [ "$GITHUB_EVENT_NAME" = push ] && [ "$GITHUB_REF" = refs/heads/main ]; then
+            python3 tools/changelog.py ci --before "$BEFORE_SHA" >> "$GITHUB_OUTPUT"
+          else
+            python3 tools/changelog.py ci >> "$GITHUB_OUTPUT"
+          fi
 
   tests:
     name: Tests Python et Node
@@ -59,7 +62,7 @@ jobs:
       - name: Tests Node
         run: node --test tests/*.test.mjs
       - name: Tests Python
-        run: for test in tests/test_*.py; do python3 "$test"; done
+        run: for test in tests/test_*.py; do python3 "$test" || exit 1; done
 
   firmware:
     name: Compilation ${{ matrix.board }}
@@ -67,6 +70,7 @@ jobs:
     runs-on: ubuntu-24.04
     env:
       OPENFRISQUETVISIO_VERSION: ${{ needs.version.outputs.version }}
+      PUBLISH_RELEASE: ${{ needs.version.outputs.publish }}
     strategy:
       fail-fast: false
       matrix:
@@ -96,7 +100,7 @@ jobs:
       - name: Compilation ${{ matrix.board }}
         run: pio run -e ${{ matrix.environment }}
       - name: Préparer le binaire pour la Release
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        if: env.PUBLISH_RELEASE == 'true'
         env:
           PIO_ENVIRONMENT: ${{ matrix.environment }}
         run: |
@@ -104,7 +108,7 @@ jobs:
           cp ".pio/build/$PIO_ENVIRONMENT/firmware.bin" "release/firmware-$PIO_ENVIRONMENT.bin"
       # Stockage intermédiaire pour le job release, limité aux builds main.
       - name: Transférer le binaire au job de publication
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        if: env.PUBLISH_RELEASE == 'true'
         uses: actions/upload-artifact@v7
         with:
           name: firmware-${{ matrix.environment }}
@@ -115,11 +119,13 @@ jobs:
   release:
     name: Publication des firmwares
     needs: [tests, firmware, version]
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main' && needs.version.outputs.publish == 'true'
     runs-on: ubuntu-24.04
     permissions:
       contents: write
     steps:
+      - name: Checkout des notes de la version compilée
+        uses: actions/checkout@v7
       - name: Récupérer les quatre binaires validés
         uses: actions/download-artifact@v8
         with:
@@ -157,7 +163,11 @@ jobs:
           if [ "$current_main" = "$GITHUB_SHA" ]; then
             latest=true
           fi
-          cat > "$RUNNER_TEMP/release-notes.md" <<EOF
+          python3 tools/changelog.py notes "$FIRMWARE_VERSION" > "$RUNNER_TEMP/release-notes.md"
+          cat >> "$RUNNER_TEMP/release-notes.md" <<EOF
+
+          ---
+
           Version $FIRMWARE_VERSION, compilée depuis main, commit $GITHUB_SHA.
           Tests Python et Node et compilations des quatre cartes réussis.
 
@@ -165,8 +175,10 @@ jobs:
 
           Télécharger le fichier firmware-<environnement>.bin correspondant à la carte.
           Ces fichiers sont destinés aux mises à jour applicatives (OTA).
-          Un premier flash USB nécessite aussi le bootloader et la table de partitions ;
-          les fichiers firmware.bin seuls ne les contiennent pas.
+          Pour un premier flash USB, utiliser Upload avec PlatformIO en mode esptool :
+          il écrit automatiquement bootloader, partitions, boot_app0 et application.
+          Ces fichiers firmware.bin seuls ne contiennent pas les autres éléments.
+          Procédure : $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/blob/$GITHUB_SHA/README.md
           SHA256SUMS permet de vérifier l'intégrité des quatre binaires.
           EOF
           gh release create "$release_tag" firmware/*.bin firmware/SHA256SUMS \

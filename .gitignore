@@ -11,6 +11,7 @@ tools/*
 !tools/generate_web_assets.py
 !tools/web_assets.py
 !tools/version.py
+!tools/changelog.py
 tests/*
 !tests/test_radio_crc.py
 !tests/radio_crc_test.cpp
@@ -51,6 +52,7 @@ tests/*
 !tests/test_boiler_firmware.py
 !tests/test_portal_status_ssid.py
 !tests/test_firmware_version.py
+!tests/test_changelog.py
 !tests/test_boiler_identity.py
 !tests/test_date_recue.py
 !tests/test_mqtt_reconnect_throttle.py

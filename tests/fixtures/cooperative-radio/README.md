@@ -18,6 +18,7 @@ Depuis la racine du dépôt, avec Python 3 et un compilateur C++17 :
 
 ```sh
 python3 tests/test_connect_decoding.py
+python3 tests/test_boiler_firmware.py
 python3 tests/test_cooperative_receive.py
 python3 tests/test_cooperative_read.py
 python3 tests/test_cooperative_connect.py
@@ -27,6 +28,11 @@ python3 tests/test_satellite_observation.py
 ```
 
 Les trames sont synthétiques ; aucun appareil ni service réseau n'est sollicité.
+
+Pour l'ensemble des tests, y compris les scénarios de zone qui ont besoin des
+dépendances PlatformIO, suivre la section **Développement et tests** du
+[README principal](../../../README.md). La CI utilise GCC sous Linux ; les
+diagnostics et en-têtes de Clang sous macOS peuvent nécessiter une adaptation locale.
 
 Les callbacks OTA HTTP/Arduino et leurs pauses sont couverts par
 `../ota-auth/test.cpp`, lancé par `python3 tests/test_ota_auth.py`.

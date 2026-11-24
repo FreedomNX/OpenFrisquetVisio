@@ -742,6 +742,45 @@ void verifierPilotagePhysiqueEtPortail() {
 }
 } // namespace
 
+// Écriture A154 d'un satellite physique relayée au Connect actif, captée le
+// 20 novembre (17:50:39) avec un mode 0x04 inconnu. Semaine remplacée par des zéros.
+Trame ecritureRelayee(byte association, byte mode) {
+    Trame trame = {0x7e,0x80,association,0x6c,ID_ZONE_1,0x17,
+                   0xA1,0x54,0x00,0x15,0xA1,0x54,0x00,0x18,0x30,
+                   0x8C,0x87,0x14,mode,0x21,0x00};
+    trame.resize(63, 0x00);
+    return trame;
+}
+
+void verifierModeInconnuAccuse() {
+    for (bool passif : {false, true}) {
+        Banc banc;
+        preparerConnect(banc);
+        banc.config.useConnectPassive(passif);
+        Zone& z = banc.z1;
+        emissions.clear();
+        auto inconnu = ecritureRelayee(banc.connect.getIdAssociation(), 0x04);
+        const bool traite = banc.connect.onReceive(inconnu.data(), inconnu.size());
+        // Le mode inconnu n'est jamais appliqué à la zone.
+        assert(z.getMode() == Zone::CONFORT && z.getTemperatureConfort() == 20);
+        if (passif) {
+            assert(!traite && emissions.empty());
+        } else {
+            // Accusé de 55 octets vers la chaudière, avec le bloc reçu.
+            assert(traite && emissions.size() == 1);
+            const Trame& accuse = emissions.back();
+            const Trame entete = {0x80, 0x7e, banc.connect.getIdAssociation(), 0x6c, 0x88, 0x17, 48};
+            assert(accuse.size() == 55 && std::equal(entete.begin(), entete.end(), accuse.begin()));
+            assert(std::equal(accuse.begin() + 7, accuse.end(), inconnu.begin() + 15));
+        }
+        // Un mode connu reste appliqué, et accusé en Connect actif.
+        auto automatique = ecritureRelayee(banc.connect.getIdAssociation(), Zone::AUTO);
+        assert(banc.connect.onReceive(automatique.data(), automatique.size()));
+        assert(z.getMode() == Zone::AUTO);
+        assert(emissions.size() == (passif ? 0u : 2u));
+    }
+}
+
 int main(int argc, char** argv) {
     verifierStatutChaudiereConnect();
     assert(argc == 2);
@@ -756,6 +795,7 @@ int main(int argc, char** argv) {
     verifierModesLocaux();
     verifierDerogationApresRedemarrage();
     verifierAccuses();
+    verifierModeInconnuAccuse();
     verifierPartageRadio();
     verifierCinqFenetres();
     verifierAccuseIntermediaire();

@@ -705,25 +705,30 @@ bool Connect::onReceive(byte* donnees, size_t length) {
             }
             if(!passive && (header.idExpediteur != getConfig().boilerId() || header.idDestinataire != getId()
                 || header.idAssociation != getIdAssociation())) return false;
-            if(donneesZone.mode < Zone::AUTO || donneesZone.mode > Zone::HORS_GEL) {
-                error("[CONNECT] Zone %d : mode 0x%02X hors plage, trame ignorée.", zoneId, donneesZone.mode);
-                return false;
-            }
-
-            auto& zone = getZone(zoneId);
-            zone.setProgrammation(donneesZone.programme, true);
-            zone.setMode(static_cast<Zone::MODE_ZONE>(donneesZone.mode));
-            zone.setModeOptions(donneesZone.options);
-            zone.setTemperatureReduit(donneesZone.reduit.toFloat());
-            zone.setTemperatureHorsGel(donneesZone.horsGel.toFloat());
-            if(!zone.boostActif()) zone.setTemperatureConfort(donneesZone.confort.toFloat());
-            if(passive || !zone.reconnaitreReglages(reinterpret_cast<const byte*>(&donneesZone), sizeof(donneesZone))) {
-                info("[CONNECT] Mise à jour zone %d (id %d), publication MQTT locale.", zone.getNumeroZone(), zoneId);
-                zone.confirmerMode();
-                zone.saveConfig();
-                zone.publishMqtt();
+            // Un mode inconnu n'est pas appliqué à la zone. Le Connect actif accuse
+            // quand même l'écriture : sans son accusé, la chaudière n'accuse pas le
+            // satellite, qui répète son envoi puis signale une perte de connexion.
+            const bool modeConnu = donneesZone.mode >= Zone::AUTO && donneesZone.mode <= Zone::HORS_GEL;
+            if(!modeConnu) {
+                error("[CONNECT] Zone %d : mode 0x%02X inconnu (options 0x%02X), réglages non appliqués.",
+                      zoneId, donneesZone.mode, donneesZone.options);
+                if(passive) return false;
             } else {
-                info("[CONNECT] Zone %d : commande confirmée par la relecture A154 de la chaudière.", zone.getNumeroZone());
+                auto& zone = getZone(zoneId);
+                zone.setProgrammation(donneesZone.programme, true);
+                zone.setMode(static_cast<Zone::MODE_ZONE>(donneesZone.mode));
+                zone.setModeOptions(donneesZone.options);
+                zone.setTemperatureReduit(donneesZone.reduit.toFloat());
+                zone.setTemperatureHorsGel(donneesZone.horsGel.toFloat());
+                if(!zone.boostActif()) zone.setTemperatureConfort(donneesZone.confort.toFloat());
+                if(passive || !zone.reconnaitreReglages(reinterpret_cast<const byte*>(&donneesZone), sizeof(donneesZone))) {
+                    info("[CONNECT] Mise à jour zone %d (id %d), publication MQTT locale.", zone.getNumeroZone(), zoneId);
+                    zone.confirmerMode();
+                    zone.saveConfig();
+                    zone.publishMqtt();
+                } else {
+                    info("[CONNECT] Zone %d : commande confirmée par la relecture A154 de la chaudière.", zone.getNumeroZone());
+                }
             }
 
             if (passive) {

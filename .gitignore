@@ -47,6 +47,7 @@ tests/*
 !tests/portal_logs_test.cpp
 !tests/test_logs_levels.py
 !tests/portal-polling.test.mjs
+!tests/portal-session.test.mjs
 !tests/test_boiler_firmware.py
 !tests/test_portal_status_ssid.py
 !tests/test_firmware_version.py

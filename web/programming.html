@@ -7,12 +7,13 @@
   <style>
     :root{--bg:#f3f6fa;--surface:#fff;--text:#172033;--muted:#687386;--border:#dce3ec;--navy:#07305f;--comfort:#e9a33b;--reduced:#e8eef6;--shadow:0 12px 32px rgba(31,48,75,.08)}
     *{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text);font:15px/1.5 system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif}a{color:inherit;text-decoration:none}button,select{font:inherit}button{cursor:pointer}button:disabled,select:disabled{cursor:default;opacity:.55}button:focus-visible,select:focus-visible,a:focus-visible{outline:3px solid #0798df;outline-offset:3px}
-    .shell{width:min(1180px,calc(100% - 32px));margin:auto}.topbar{background:#fff;border-bottom:1px solid var(--border)}.topbar-inner{min-height:76px;display:flex;align-items:center;justify-content:space-between;gap:18px}.logo{display:block;width:250px;max-width:55vw}main{padding:30px 0 44px}h1,h2,p{margin-top:0}h1{color:var(--navy);font-size:clamp(27px,4vw,36px);margin-bottom:8px}h2{color:var(--navy);font-size:18px}.intro{color:var(--muted);max-width:780px}.panel{background:var(--surface);border:1px solid var(--border);border-radius:20px;padding:22px;box-shadow:var(--shadow);margin-top:18px}.row{display:flex;align-items:center;flex-wrap:wrap;gap:12px}.between{justify-content:space-between}.btn{display:inline-flex;align-items:center;justify-content:center;min-height:42px;padding:9px 15px;border:1px solid var(--border);border-radius:12px;background:#fff;color:var(--navy);font-weight:700}.btn.primary{background:var(--navy);color:#fff;border-color:var(--navy)}.btn.selected{outline:2px solid var(--navy);outline-offset:2px}.btn.comfort{background:#fff0d7}.btn.reduced{background:var(--reduced)}select{padding:9px 12px;background:#fff;color:var(--text);border:1px solid var(--border);border-radius:10px}label{font-weight:650}.hint{font-size:13px;color:var(--muted);margin:12px 0 0}.message{margin-top:14px;padding:12px 15px;border-radius:12px;background:#edf7fd;color:var(--navy)}.message.error{background:#ffebe8;color:#b42318}.message:empty{display:none}.status{font-size:13px;color:var(--muted)}fieldset{border:0;padding:0;margin:0;min-width:0}
+    .shell{width:min(1180px,calc(100% - 32px));margin:auto}.topbar{background:#fff;border-bottom:1px solid var(--border)}.topbar-inner{min-height:76px;display:flex;align-items:center;justify-content:space-between;gap:18px}.logo{display:block;width:250px;max-width:55vw}main{padding:30px 0 44px}h1,h2,p{margin-top:0}h1{color:var(--navy);font-size:clamp(27px,4vw,36px);margin-bottom:8px}h2{color:var(--navy);font-size:18px}.intro{color:var(--muted);max-width:780px}.panel{background:var(--surface);border:1px solid var(--border);border-radius:20px;padding:22px;box-shadow:var(--shadow);margin-top:18px}.row{display:flex;align-items:center;flex-wrap:wrap;gap:12px}.between{justify-content:space-between}.btn{display:inline-flex;align-items:center;justify-content:center;min-height:42px;padding:9px 15px;border:1px solid var(--border);border-radius:12px;background:#fff;color:var(--navy);font-weight:700}.btn.primary{background:var(--navy);color:#fff;border-color:var(--navy)}.btn.selected{outline:2px solid var(--navy);outline-offset:2px}.btn.comfort{background:#fff0d7}.btn.reduced{background:var(--reduced)}select{padding:9px 12px;background:#fff;color:var(--text);border:1px solid var(--border);border-radius:10px}label{font-weight:650}.hint{font-size:13px;color:var(--muted);margin:12px 0 0}.message{margin-top:14px;padding:12px 15px;border-radius:12px;background:#edf7fd;color:var(--navy)}.message.error{background:#ffebe8;color:#b42318}.message:empty{display:none}.message a{text-decoration:underline;font-weight:700}.status{font-size:13px;color:var(--muted)}fieldset{border:0;padding:0;margin:0;min-width:0}
     .timeline{overflow-x:auto;margin:20px -4px 0;padding:4px 4px 12px}.week{min-width:1040px}.hours{display:grid;grid-template-columns:110px 1fr;position:relative;align-items:center;color:var(--muted);font-size:12px;margin-bottom:8px}.day-row{display:grid;grid-template-columns:110px 1fr;align-items:center;margin:8px 0}.hours>span:last-child{position:absolute;right:0}.day-name{font-weight:750;color:var(--navy);position:sticky;left:0;z-index:2;background:#fff}.slots,.marks{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:6px}.marks>span{justify-self:start}.marks>span+span{transform:translateX(calc(-50% - 3px))}.group{display:grid;grid-template-columns:repeat(8,minmax(0,1fr));gap:2px;position:relative}.group+.group::before{content:'';position:absolute;top:-5px;bottom:-5px;left:-4px;border-left:2px solid var(--navy)}html[data-theme="dark"] .group+.group::before{border-color:#627d9a}.slot{border:1px solid #d4deeb;border-radius:4px;height:34px;padding:0;background:var(--reduced);touch-action:none;position:relative}.slot.comfort{background:var(--comfort);border-color:#d6902b}.now{position:absolute;top:-5px;bottom:-5px;margin-left:-1px;border-left:2px solid #d92d20;pointer-events:none;z-index:1}.slot:focus-visible{z-index:1}.summaries{margin-top:16px;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}.summary{font-size:13px;color:var(--muted)}.summary strong{color:var(--navy)}.swatch{display:inline-block;width:12px;height:12px;border:1px solid #d4deeb;border-radius:3px;margin-right:5px}.swatch.comfort{background:var(--comfort)}.swatch.reduced{background:var(--reduced)}.save-row{margin-top:22px;padding-top:18px;border-top:1px solid var(--border)}footer{text-align:center;color:var(--muted);font-size:12px;padding:0 16px 28px}
     @media(max-width:600px){.shell{width:calc(100% - 20px)}.panel{padding:16px}.logo{width:185px}.back-label{display:none}.summaries{grid-template-columns:1fr}.row{gap:9px}.timeline{margin-right:-10px}.save-row .btn{flex:1}}
   </style>
   <link rel="stylesheet" href="/theme.css">
   <script src="/theme.js"></script>
+  <script src="/session.js"></script>
 </head>
 <body>
   <header class="topbar"><div class="shell topbar-inner"><a href="/"><img class="logo" src="/logo.png" alt="OpenFrisquetVisio"></a><a class="btn" href="/">← <span class="back-label">Tableau de bord</span></a></div></header>
@@ -33,6 +34,7 @@
         <div class="row between save-row"><span id="changes" class="status">Aucune modification</span><div class="row"><button type="button" class="btn" id="discard">Annuler les modifications</button><button type="button" class="btn primary" id="save">Enregistrer la programmation</button></div></div>
       </fieldset>
       <div id="message" class="message" role="status" aria-live="polite"></div>
+      <div id="sessionNotice" class="message error" role="alert" hidden>Session expirée. Vos modifications sont conservées : <a href="/login" target="_blank">reconnectez-vous dans un nouvel onglet</a>, puis revenez les enregistrer.</div>
     </section>
   </main>
   <footer>
@@ -67,6 +69,19 @@
     const LOAD_TIMEOUT_MESSAGE='Délai de chargement de la programmation dépassé.';
     let messageVersion=0;
     function message(text,error=false) { messageVersion++; $('#message').textContent=text; $('#message').className='message'+(error?' error':''); }
+    // La session a disparu (expiration, redémarrage) alors que la page porte des
+    // modifications : les garder et proposer la connexion dans un autre onglet,
+    // au lieu de partir vers /login comme le fait session.js par défaut.
+    let sessionLost=false;
+    window.addEventListener('ofv-session-expired',event=>{
+      if(!dirty) return;
+      event.preventDefault();sessionLost=true;$('#sessionNotice').hidden=false;
+    });
+    function sessionRestored() {
+      if(!sessionLost) return;
+      sessionLost=false;$('#sessionNotice').hidden=true;
+      message('Connexion rétablie. Vous pouvez enregistrer vos modifications.');
+    }
     function selectBrush(value) {
       brush=value; for(const [id,active] of [['comfort',value],['reduced',!value]]) {
         $('#'+id).classList.toggle('selected',active); $('#'+id).setAttribute('aria-pressed',String(active));
@@ -141,6 +156,7 @@
         const response=await fetch('/api/programming',{cache:'no-store',signal:controller.signal});const data=await response.json();
         if(busy) return;
         if(!response.ok || !data.ok) throw new Error(data.err || 'Chargement impossible.');
+        sessionRestored();
         const incoming=(data.zones||[]).filter(zone=>zone.enabled);
         for(const zone of incoming) decodeProgram(zone.program);
         if($('#message').textContent===LOAD_TIMEOUT_MESSAGE) message('');
@@ -170,6 +186,7 @@
       try {
         const response=await fetch('/api/programming',{method:'POST',body});const data=await response.json();
         if(!response.ok || !data.ok) throw new Error(data.err || 'Enregistrement impossible.');
+        sessionRestored();
         original=program;revision=data.revision;dirty=false;
         const zone=zones.find(item=>item.id===selected);zone.program=program;zone.revision=revision;zone.known=true;zone.pending=data.pending===true;zone.failed=false;
         message(zone.pending?'Programmation en attente de confirmation. Le suivi est visible sur la carte de la zone.':'Programmation enregistrée. Elle sera appliquée localement en mode Auto.');

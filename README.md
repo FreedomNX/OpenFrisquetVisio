@@ -301,6 +301,10 @@ Laisser les deux champs vides conserve le mot de passe actuel. Il est sauvegard�
 sur l’appareil et conservé après redémarrage. Les pages et les API du portail
 nécessitent une connexion ; les sessions expirent après 12 heures ou au
 redémarrage, et un changement de mot de passe déconnecte toutes les sessions.
+Une page restée ouverte revient alors d’elle-même à la page de connexion.
+Les pages de programmation et de paramètres restent ouvertes si elles contiennent
+des modifications non enregistrées : elles proposent de se reconnecter dans un
+nouvel onglet, puis de revenir les enregistrer.
 Le bouton **Se déconnecter** se trouve dans la même section.
 
 Les mots de passe WiFi et MQTT ne sont jamais réaffichés : le portail indique

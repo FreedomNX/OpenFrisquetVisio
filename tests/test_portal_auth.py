@@ -34,8 +34,8 @@ methods = [extract(signature) for signature in (
     "void Portal::begin(",
 )]
 begin = methods[-1]
-# Only login and shared visual resources are public registrations.
-assert re.findall(r'_srv\.on\("([^"]+)"', begin) == ["/theme.css", "/commande-zone.js", "/theme.js", "/login", "/login"]
+# Only login and shared styles and scripts, which hold no data, are public registrations.
+assert re.findall(r'_srv\.on\("([^"]+)"', begin) == ["/theme.css", "/commande-zone.js", "/theme.js", "/session.js", "/login", "/login"]
 assert 'if (!requireAuthentication()) return;' in begin
 assert '"Cookie"' in begin
 assert "portalPassword" not in extract("void Portal::handleGetConfig(")
@@ -175,6 +175,7 @@ const uint8_t* bytes(const char* text){return reinterpret_cast<const uint8_t*>(t
 const StaticAsset THEME_CSS={bytes("theme css"),9,"\"css\"","text/css; charset=utf-8"};
 const StaticAsset COMMANDE_ZONE_JS={bytes("suivi"),5,"\"suivi\"","application/javascript; charset=utf-8"};
 const StaticAsset THEME_JS={bytes("theme js"),8,"\"js\"","application/javascript; charset=utf-8"};
+const StaticAsset SESSION_JS={bytes("session js"),10,"\"session\"","application/javascript; charset=utf-8"};
 const StaticAsset LOGO_PNG={bytes("logo png"),8,"\"png\"","image/png"};
 const StaticAsset INDEX_HTML={bytes("index"),5,"\"html\"","text/html; charset=utf-8"};
 const char* LOGIN_HTML="<form><input type=password name=password>{{LOGIN_ERROR}}</form>";
@@ -200,13 +201,15 @@ int main(){
     config._preferences.stored="";config.load();assert(config.portalPassword()=="admin");
     FrisquetManager fm;Portal p(fm);p.begin(false);assert(p._srv.cookiesCollected&&p._srv.etagsCollected);
     for(size_t i=0;i<p._srv.count;++i){
-        auto& r=p._srv.routes[i];if(r.uri=="/login"||r.uri=="/theme.css"||r.uri=="/theme.js"||r.uri=="/commande-zone.js")continue;
+        auto& r=p._srv.routes[i];if(r.uri=="/login"||r.uri=="/theme.css"||r.uri=="/theme.js"||r.uri=="/session.js"||r.uri=="/commande-zone.js")continue;
         p._srv.prepare(r.uri.c_str(),r.method);int before=p.handled;r.handler.run();
         assert(p.handled==before);assert(p._srv.code==(r.uri.startsWith("/api/")?401:303));
     }
     p._srv.prepare("/theme.css",HTTP_GET);p._srv.dispatch();
     assert(p._srv.code==200&&p._srv.body=="theme css"&&p._srv.cache=="no-cache"&&p._srv.etag=="\"css\""&&p._srv.encoding=="gzip");
     p._srv.prepare("/theme.js",HTTP_GET);p._srv.dispatch();assert(p._srv.code==200&&p._srv.body=="theme js"&&p._srv.etag=="\"js\"");
+    // Public like the other shared scripts: it holds no data, only the return to the login page.
+    p._srv.prepare("/session.js",HTTP_GET);p._srv.dispatch();assert(p._srv.code==200&&p._srv.body=="session js"&&p._srv.etag=="\"session\"");
     // A cached copy of the same version is confirmed without a body. Caches copy the 304 headers
     // onto their stored response, so type and length describe the 200 it stands for.
     p._srv.prepare("/theme.css",HTTP_GET);p._srv.ifNoneMatch="\"css\"";p._srv.dispatch();

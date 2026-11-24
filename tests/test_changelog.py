@@ -77,6 +77,34 @@ with tempfile.TemporaryDirectory(prefix='ofv-changelog-') as directory:
         cli('archive', invalid, '--output', str(third), success=False)
         assert source.read_text() == updated
     cli('archive', '26.11.24.1055', '--previous', str(first), '--output', str(third), success=False)
+
+    # La synchronisation reprend l'historique réel, retire seulement les notes
+    # déjà publiées et laisse les changements locaux en tête du fichier.
+    baseline.write_text(original, encoding='utf-8')
+    cli('sync', '--archive', str(first), '--baseline', str(baseline))
+    synchronized = source.read_text()
+    assert synchronized.startswith('# Historique des changements\n\n## À venir\n')
+    assert synchronized.count('Première fonction') == 1
+    assert synchronized.count('Deuxième correction') == 1
+    assert 'Première fonction' not in synchronized.split('## 26.11.24.1055')[0]
+    assert 'sur plusieurs lignes.' in synchronized.split('## 26.11.24.1055')[0]
+    cli('sync', '--archive', str(first), '--baseline', str(baseline))
+    assert source.read_text() == synchronized
+    # Les notes synchronisées ne sont pas republiées dans la version suivante.
+    cli('archive', '26.11.24.1056', '--previous', str(first), '--baseline', str(baseline), '--output', str(third))
+    assert third.read_text().count('Première fonction') == 1
+    baseline.write_text(updated, encoding='utf-8')
+    cli('sync', '--archive', str(second), '--baseline', str(baseline))
+    complete = source.read_text()
+    assert complete.startswith('# Historique des changements\n\n## 26.11.24.1056')
+    assert 'À venir' not in complete and complete.count('Première fonction') == 1
+    assert 'Historique généré' not in complete
+    cli('sync', '--archive', str(second), success=False)
+    assert source.read_text() == complete
+    source.write_text(complete.replace('Première fonction', 'Note locale modifiée'), encoding='utf-8')
+    conflicting = source.read_text()
+    cli('sync', '--archive', str(second), '--baseline', str(baseline), success=False)
+    assert source.read_text() == conflicting
     # Les anciennes sources « À venir » restent lisibles pour une migration.
     source.write_text(original.replace('Notes intégrées à main', 'À venir'), encoding='utf-8')
     cli('check')

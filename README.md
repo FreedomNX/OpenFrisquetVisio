@@ -344,7 +344,7 @@ Le tag pointe vers le commit exact compilé.
 
 **Changelog automatique**
 
-Chaque PR ajoute des puces dans **Notes intégrées à main** de
+Chaque PR ajoute des puces dans **À venir**, avant la première version de
 [CHANGELOG.md](CHANGELOG.md), avec un lien vers la PR ou l'issue. Les catégories
 sont **Ajouts**, **Corrections**, **Changements** et **Actions nécessaires après
 mise à jour**. Aucune commande de préparation de release n'est nécessaire.
@@ -357,11 +357,24 @@ Le fichier `changelog-source.md`, également joint, conserve la source utilisée
 éviter de republier les mêmes notes. Une version sans nouvelle note est tout de
 même publiée avec une indication explicite.
 
-La source sur `main` reste intacte : le robot n'a pas besoin d'écrire sur cette
-branche protégée. Les notes y restent donc visibles après leur publication ;
-leur présence ne signifie pas « pas encore publié ». Modifier une ancienne puce
-ou la déplacer dans une autre catégorie la fait apparaître comme une nouvelle
-note dans la prochaine release. Les catégories vides sont omises de l'historique.
+Le fichier du dépôt présente les versions publiées de la plus récente à la plus
+ancienne. Pour le mettre à jour avec la dernière release, sans perdre les notes
+locales encore inédites :
+
+```sh
+python3 tools/changelog.py sync
+```
+
+Cette commande télécharge l'historique et sa source depuis GitHub, remplace les
+notes déjà publiées par leur entrée versionnée et conserve **À venir** uniquement
+s'il reste des nouveautés. Les explications sont dans ce README ; le changelog
+contient uniquement les changements et leurs versions. Relire puis committer sa
+mise à jour avec les prochains changements du projet. Une version locale modifiée
+différemment de l'archive publiée est signalée et préservée.
+
+La CI continue à joindre l'historique actualisé aux releases sans écrire sur
+`main`, qui reste protégée. Le fichier local ne s'actualise donc pas à distance
+sans cette synchronisation. Les catégories vides sont omises de l'historique.
 Les anciennes releases ne sont pas reconstruites rétrospectivement.
 
 Les publications sur `main` sont sérialisées pour reprendre le dernier historique

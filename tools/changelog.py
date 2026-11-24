@@ -10,6 +10,7 @@ from pathlib import Path
 import re
 import subprocess
 import sys
+from urllib.request import Request, urlopen
 from zoneinfo import ZoneInfo
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -92,7 +93,7 @@ def note_blocks(body):
     return blocks
 
 
-def new_notes(current, baseline=""):
+def unpublished_notes(current, baseline=""):
     previous = Counter(note_blocks(parse(baseline)[0])) if baseline else Counter()
     sections = {}
     for category, block in note_blocks(parse(current)[0]):
@@ -102,8 +103,53 @@ def new_notes(current, baseline=""):
         else:
             sections.setdefault(category, []).append(block)
     return "\n\n".join("### " + category + "\n\n" + "\n".join(blocks)
-                         for category, blocks in sections.items()) or (
+                         for category, blocks in sections.items())
+
+
+def new_notes(current, baseline=""):
+    return unpublished_notes(current, baseline) or (
         "### Changements\n\n- Mise à jour du firmware sans nouvelle note de changement.")
+
+
+def render_history(entries):
+    return "\n\n".join("## " + entry.version + " — " + entry.date + "\n\n" + entry.notes
+                         for entry in entries)
+
+
+def synchronize(current, published, baseline):
+    """Reprendre les versions publiées tout en conservant les notes locales inédites."""
+    _, local = parse(current)
+    _, releases = parse(published)
+    if not releases:
+        raise ValueError("L'historique téléchargé ne contient aucune version publiée.")
+    entries = {entry.version: entry for entry in local}
+    for entry in releases:
+        if entry.version in entries and entries[entry.version] != entry:
+            raise ValueError("La version locale " + entry.version + " diffère de l'archive publiée.")
+        entries[entry.version] = entry
+    pending = unpublished_notes(current, baseline)
+    text = "# Historique des changements\n\n"
+    if pending:
+        text += "## À venir\n\n" + pending + "\n\n"
+    return text + render_history(sorted(entries.values(), key=lambda entry: entry.version, reverse=True)) + "\n"
+
+
+def download_history(repo):
+    def read(url):
+        request = Request(url, headers={"User-Agent": "OpenFrisquetVisio-changelog"})
+        with urlopen(request, timeout=30) as response:
+            return response.read().decode("utf-8")
+
+    release = json.loads(read("https://api.github.com/repos/" + repo + "/releases/latest"))
+    assets = {asset["name"]: asset["browser_download_url"] for asset in release["assets"]}
+    if not {ARCHIVE_NAME, SOURCE_NAME}.issubset(assets):
+        raise ValueError("La dernière release ne contient pas un historique complet.")
+    published = read(assets[ARCHIVE_NAME])
+    source = read(assets[SOURCE_NAME])
+    entries = parse(published)[1]
+    if not entries or entries[0].version != release["tag_name"]:
+        raise ValueError("L'historique téléchargé ne correspond pas à la dernière release.")
+    return published, source
 
 
 def archive(current, version, previous="", baseline=""):
@@ -112,12 +158,7 @@ def archive(current, version, previous="", baseline=""):
     if old and version <= old[0].version:
         raise ValueError("La version doit être postérieure au dernier historique publié.")
     entries = [Entry(version, date, new_notes(current, baseline)), *old]
-    intro = ("# Historique des changements\n\n"
-             "Historique généré après validation des firmwares. Les versions antérieures à ce\n"
-             "fichier restent consultables dans les [releases GitHub]"
-             "(https://github.com/FreedomNX/OpenFrisquetVisio/releases).\n\n")
-    return intro + "\n\n".join("## " + entry.version + " — " + entry.date + "\n\n" + entry.notes
-                                for entry in entries) + "\n"
+    return "# Historique des changements\n\n" + render_history(entries) + "\n"
 
 
 def git(*args):
@@ -246,6 +287,10 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     commands = parser.add_subparsers(dest="command", required=True)
     commands.add_parser("check", help="Vérifier les notes rédigées dans le dépôt")
+    command = commands.add_parser("sync", help="Reprendre l'historique publié dans le fichier du dépôt")
+    command.add_argument("--repo", default="FreedomNX/OpenFrisquetVisio")
+    command.add_argument("--archive", type=Path, help="Historique publié déjà téléchargé (avec --baseline)")
+    command.add_argument("--baseline", type=Path, help="Source publiée déjà téléchargée (avec --archive)")
     command = commands.add_parser("ci", help="Choisir la version commune des quatre firmwares")
     command.add_argument("--timestamp", help="Date ISO de création du workflow, stable lors des relances")
     command = commands.add_parser("archive", help="Générer l'historique sans publier ni modifier la source")
@@ -261,7 +306,17 @@ def main():
     text = (ROOT / "CHANGELOG.md").read_text(encoding="utf-8")
     pending, _ = parse(text)
     note_blocks(pending)
-    if args.command == "ci":
+    if args.command == "sync":
+        if bool(args.archive) != bool(args.baseline):
+            raise ValueError("Fournir --archive et --baseline ensemble, ou aucun des deux.")
+        if args.archive:
+            published = args.archive.read_text(encoding="utf-8")
+            baseline = args.baseline.read_text(encoding="utf-8")
+        else:
+            published, baseline = download_history(args.repo)
+        (ROOT / "CHANGELOG.md").write_text(synchronize(text, published, baseline), encoding="utf-8")
+        print("Historique publié synchronisé ; notes locales conservées.")
+    elif args.command == "ci":
         print("version=" + ci_version(args.timestamp))
     elif args.command == "archive":
         previous = args.previous.read_text(encoding="utf-8") if args.previous else ""

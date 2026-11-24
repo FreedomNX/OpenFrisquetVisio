@@ -83,8 +83,7 @@ void LocalScreen::fail() {
 
 bool LocalScreen::availableBus() const {
     auto& radio = _manager->radio();
-    return !radio.busy() && !FrisquetRadio::receivedFlag
-        && !radio.hasReceivedPacket() && !radio.hasBufferedPacket();
+    return !radio.busy() && !radio.hasPendingPacket();
 }
 
 void LocalScreen::advance() {

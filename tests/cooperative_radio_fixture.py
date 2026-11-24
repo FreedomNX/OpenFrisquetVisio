@@ -52,6 +52,7 @@ def write_radio_fixture(directory, full_types=False):
         "bool FrisquetRadio::bufferUnexpectedPacket(",
         "bool FrisquetRadio::popBufferedPacket(",
         "bool FrisquetRadio::hasBufferedPacket(",
+        "bool FrisquetRadio::hasPendingPacket(",
         "int16_t FrisquetRadio::sendAsk(",
         "int16_t FrisquetRadio::sendInit(",
         "int16_t FrisquetRadio::sendAnswer(",

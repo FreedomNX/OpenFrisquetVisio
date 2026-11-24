@@ -825,7 +825,7 @@ void Connect::pollReads() {
         // Les commandes récentes passent entre les lectures. Une autre écoute
         // peut occuper la radio pendant les 100 ms d'intervalle.
         if (radio().busy() || _modeEcsCommandPending || static_cast<int32_t>(millis() - _readDeadline) < 0
-            || FrisquetRadio::receivedFlag || radio().hasReceivedPacket() || radio().hasBufferedPacket()) return;
+            || radio().hasPendingPacket()) return;
         uint16_t address = 0, words = 0;
         switch (_readKind) {
             case ReadKind::Firmware: address = 0x7541; words = 2; break;
@@ -1011,7 +1011,7 @@ void Connect::envoiZones() {
     verifierContexteEcoute();
     if(!_zone1.enAttente() && !_zone2.enAttente() && !_zone3.enAttente()) return;
     if(getConfig().useConnectPassive() || !estAssocie() || radio().busy() || _readKind != ReadKind::None
-        || FrisquetRadio::receivedFlag || radio().hasReceivedPacket() || radio().hasBufferedPacket()) return;
+        || radio().hasPendingPacket()) return;
     const uint32_t maintenant = millis();
     if(_aDejaEmis && maintenant - _lastEnvoiZone < 1000) return;
     // Les créneaux d’émission programmés ne concernent que les satellites virtuels.

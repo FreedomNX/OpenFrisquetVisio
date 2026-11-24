@@ -119,7 +119,7 @@ void FrisquetManager::loop()
     _connect.pollReads();
     if (_radio.busy()) return;
 
-    if (FrisquetRadio::receivedFlag || _radio.hasReceivedPacket() || _radio.hasBufferedPacket()) {
+    if (_radio.hasPendingPacket()) {
         onRadioReceive();
     }
     if (_radio.busy()) return;
@@ -152,7 +152,7 @@ void FrisquetManager::loop()
     constexpr uint32_t silenceAvantHistoriqueMs = 2000;
     if (_chaudiere.historiqueEnAttente() && !_radio.busy()
         && uint32_t(millis() - _radio.lastActivityMs()) >= silenceAvantHistoriqueMs
-        && !FrisquetRadio::receivedFlag && !_radio.hasReceivedPacket() && !_radio.hasBufferedPacket()) {
+        && !_radio.hasPendingPacket()) {
         _chaudiere.traiterHistorique();
     }
 }

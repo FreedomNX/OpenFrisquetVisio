@@ -10,7 +10,11 @@ void delay(unsigned ms) {
 }
 struct Service {
     unsigned calls = 0, polls = 0;
-    void loop() { ++calls; }
+    bool *arrivee = nullptr;
+    void loop() {
+        ++calls;
+        if (arrivee) *arrivee = true;
+    }
     void pollObservation() { ++polls; }
     void pollReads() {}
     void envoiZones() {}
@@ -38,6 +42,7 @@ struct FrisquetRadio {
     bool busy() { return occupied; }
     bool hasReceivedPacket() { return packet; }
     bool hasBufferedPacket() { return false; }
+    bool hasPendingPacket() { return receivedFlag || hasReceivedPacket() || hasBufferedPacket(); }
 };
 struct FrisquetManager {
     FrisquetRadio _radio;
@@ -94,6 +99,10 @@ int main() {
     ++clockMs;
     m.loop();
     assert(m._chaudiere.calls == 1);
+    // Une trame arrivée pendant le tour passe avant l'enregistrement.
+    m._satelliteZ3.arrivee = &FrisquetRadio::receivedFlag;
+    m.loop();
+    assert(FrisquetRadio::receivedFlag && m._chaudiere.calls == 1);
     puts("OK : les boucles App et du gestionnaire exécutent OTA, HTTP et MQTT pendant les attentes "
          "radio");
 }

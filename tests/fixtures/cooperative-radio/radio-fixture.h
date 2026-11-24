@@ -20,7 +20,7 @@ uint32_t millis() {
 void delay(uint32_t);
 void info(const char *, ...) {
 }
-void logRadio(bool, byte *, size_t, float = 0) {
+void logRadio(bool, const byte *, size_t, float = 0) {
 }
 struct NetworkID {
     byte bytes[4];

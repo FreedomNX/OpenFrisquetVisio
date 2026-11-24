@@ -39,7 +39,7 @@ int timeStatus(){return synced ? timeSet : timeNotSet;}
 uint32_t now(){return wallOffset+tick/1000;}
 void info(const char*,...){}
 void error(const char*,...){}
-void logRadio(bool,byte*,size_t,float=0){}
+void logRadio(bool,const byte*,size_t,float=0){}
 constexpr int RADIOLIB_ERR_NONE=0,RADIOLIB_ERR_RX_TIMEOUT=-6;
 constexpr int RADIOLIB_ERR_TX_TIMEOUT=-5,RADIOLIB_ERR_ADDRESS_NOT_FOUND=-7;
 constexpr size_t RADIOLIB_SX126X_MAX_PACKET_LENGTH=255;
@@ -72,7 +72,7 @@ volatile bool FrisquetRadio::interruptReceive=false;
 bool FrisquetRadio::bufferUnexpectedPacket(const byte*,size_t){return false;}
 ''' + '\n'.join(extract('src/Frisquet/FrisquetRadio.cpp', method) for method in (
     'int16_t FrisquetRadio::sendAsk(', 'int16_t FrisquetRadio::sendInit(',
-    'int16_t FrisquetRadio::receiveExpected(')) + r'''
+    'int16_t FrisquetRadio::selectPacket(', 'int16_t FrisquetRadio::receiveExpected(')) + r'''
 constexpr byte ID_ZONE_1=8;
 struct Zone {
     enum class MODE_ZONE {INCONNU,CONFORT};

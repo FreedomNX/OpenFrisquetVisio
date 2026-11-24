@@ -56,6 +56,7 @@ def write_radio_fixture(directory, full_types=False):
         "int16_t FrisquetRadio::sendAsk(",
         "int16_t FrisquetRadio::sendInit(",
         "int16_t FrisquetRadio::sendAnswer(",
+        "int16_t FrisquetRadio::selectPacket(",
         "int16_t FrisquetRadio::receiveExpected(",
     )
     (directory / "radio-methods.inc").write_text(

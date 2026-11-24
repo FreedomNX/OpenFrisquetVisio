@@ -159,12 +159,32 @@ int main() {
         poll(crc, clockMs + 1);
     }
     assert(take(crc) == -7);
+    // Refus tel que la chaudière l'émet : en-tête de la réponse, type 0x83, un octet
+    // de code. Il termine la lecture sans réémission. Si un identifiant diffère, il
+    // appartient à un autre échange : il est conservé et la lecture continue.
+    auto refusal = reply();
+    refusal.data.resize(7);
+    refusal.data[5] = 0x83;
+    refusal.data[6] = 2;
+    for (unsigned field : {0, 1, 3, 4}) {
+        R stray;
+        clockMs = 0;
+        begin(stray);
+        poll(stray, 30);
+        auto unrelated = refusal;
+        unrelated.data[field] ^= 1;
+        stray.packets.push_back(unrelated);
+        poll(stray, 40);
+        assert(!stray.readReady(0x7e) && stray.hasBufferedPacket());
+        stray.packets.push_back(reply());
+        poll(stray, 50);
+        assert(take(stray) == 0 && stray.sent.size() == 1);
+    }
     R address;
     clockMs = 0;
     begin(address);
     poll(address, 30);
-    other.data[5] = 0x83;
-    address.packets.push_back(other);
+    address.packets.push_back(refusal);
     poll(address, 31);
     assert(take(address) == -9 && address.sent.size() == 1);
     R assoc;

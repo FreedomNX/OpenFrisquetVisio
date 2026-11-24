@@ -20,6 +20,14 @@ Radio::Packet packet(R::RadioTrameHeader h = expected(), int16_t result = 0) {
     memcpy(p.data.data(), &h, sizeof(h));
     return p;
 }
+// Refus tel que la chaudière l'émet : en-tête d'une réponse, type 0x83, un octet de code.
+Radio::Packet refusal(R::RadioTrameHeader h = expected()) {
+    h.type = 0x83;
+    auto p = packet(h);
+    p.data.resize(7);
+    p.data[6] = 2;
+    return p;
+}
 void poll(R &r, uint32_t when) {
     clockMs = when;
     r.pollObservation();
@@ -107,14 +115,20 @@ int main() {
     }
     assert(exhausted.reads == 15 && take(exhausted) == -7);
 
-    // Conserver le traitement des adresses absentes et la règle de sélection des associations.
+    // Un refus 0x83 termine l'échange dont il reprend les identifiants ; celui d'un
+    // autre échange est conservé comme toute autre trame.
     R address;
     clockMs = 0;
     assert(address.beginObservation(8, expected()));
-    other.type = 0x83;
-    address.packets.push_back(packet(other));
+    other = expected();
+    other.idMessage = 9;
+    address.packets.push_back(refusal(other));
     poll(address, 300);
+    assert(!address.observationReady(8) && address.hasBufferedPacket());
+    address.packets.push_back(refusal());
+    poll(address, 310);
     assert(take(address) == -9);
+    // L'association n'est pas un critère de sélection.
     R association;
     clockMs = 0;
     assert(association.beginObservation(8, expected()));
@@ -192,6 +206,24 @@ int main() {
     wrap.packets.push_back(packet());
     poll(wrap, start + 350);
     assert(take(wrap) == 0);
+    {
+        // Réception bloquante : le refus 0x83 d'un autre échange est conservé ; celui
+        // de l'échange arrête l'attente sans rien copier ni consommer la trame suivante.
+        R refused;
+        auto stray = expected();
+        stray.idMessage = 9;
+        refused.packets.push_back(refusal(stray));
+        refused.packets.push_back(refusal());
+        refused.packets.push_back(packet());
+        byte reply[255];
+        size_t length = 0;
+        assert(refused.receiveExpected(0x80, 8, 55, 42, 0x81, 0x17, reply, length, 5, false, true) ==
+               RADIOLIB_ERR_ADDRESS_NOT_FOUND);
+        assert(length == 0 && refused.packets.size() == 1);
+        length = sizeof(reply);
+        assert(refused.popBufferedPacket(reply, length) && length == 7 && reply[3] == 9 &&
+               reply[5] == 0x83 && !refused.hasBufferedPacket());
+    }
     puts("OK : réception coopérative, garde, tentatives, sélection, CRC, tampon, réservation, "
          "annulation, suspension, échec de réarmement et débordement du compteur");
 }

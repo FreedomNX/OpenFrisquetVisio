@@ -259,6 +259,26 @@ int16_t FrisquetRadio::sendAnswer(
     return err;
 }
 
+// Sélection commune aux réceptions bloquantes et coopératives. L'association
+// figure dans la trame, mais n'est pas un critère de sélection. Un refus 0x83
+// reprend les identifiants de la demande, comme une réponse. Une trame d'un
+// autre échange, refus compris, est conservée dans le tampon logiciel.
+int16_t FrisquetRadio::selectPacket(const byte* data, size_t length, const RadioTrameHeader& expected) {
+    if (length < sizeof(RadioTrameHeader)) return RADIOLIB_ERR_RX_TIMEOUT;
+    logRadio(true, data, length, getLastPacketRSSI());
+    RadioTrameHeader header;
+    memcpy(&header, data, sizeof(header));
+    if (header.idExpediteur == expected.idExpediteur &&
+        header.idDestinataire == expected.idDestinataire &&
+        header.idMessage == expected.idMessage &&
+        header.idReception == expected.idReception) {
+        if (header.type == expected.type) return RADIOLIB_ERR_NONE;
+        if (header.type == 0x83) return RADIOLIB_ERR_ADDRESS_NOT_FOUND;
+    }
+    bufferUnexpectedPacket(data, length);
+    return RADIOLIB_ERR_RX_TIMEOUT;
+}
+
 int16_t FrisquetRadio::receiveExpected(
     uint8_t idExpediteur, 
     uint8_t idDestinataire, 
@@ -281,7 +301,13 @@ int16_t FrisquetRadio::receiveExpected(
 
     byte buff[RADIOLIB_SX126X_MAX_PACKET_LENGTH];
     int16_t err;
-    RadioTrameHeader radioTrameHeader;
+    RadioTrameHeader expected;
+    expected.idExpediteur = idExpediteur;
+    expected.idDestinataire = idDestinataire;
+    expected.idAssociation = idAssociation;
+    expected.idMessage = idMessage;
+    expected.idReception = idReception;
+    expected.type = type;
 
     if (_txWindowActive && !keepReceiving && !useReadData) {
         err = startReceive();
@@ -332,33 +358,16 @@ int16_t FrisquetRadio::receiveExpected(
         }
 
         size_t len = this->getPacketLength();
-
-        if(len < sizeof(radioTrameHeader)) {
-            err = RADIOLIB_ERR_RX_TIMEOUT;
-            continue;
-        }
-        
-        logRadio(true, (byte*)buff, len, getLastPacketRSSI());
-
-        memcpy(&radioTrameHeader, buff, sizeof(radioTrameHeader));
-        if( radioTrameHeader.idExpediteur == idExpediteur && 
-            radioTrameHeader.idDestinataire == idDestinataire && 
-            radioTrameHeader.idMessage == idMessage &&
-            radioTrameHeader.idReception ==  idReception &&
-            radioTrameHeader.type ==  type
-        ) {
+        err = selectPacket(buff, len, expected);
+        if(err == RADIOLIB_ERR_NONE) {
             if(length == 0 || len < length) {
                 length = len;   
             }
             memcpy(donnees, buff, length);
             break;
-        } else {
-            if(radioTrameHeader.type != type && radioTrameHeader.type == 0x83) {
-                err = RADIOLIB_ERR_ADDRESS_NOT_FOUND;
-                break;
-            }
-            bufferUnexpectedPacket(buff, len);
-            err = RADIOLIB_ERR_RX_TIMEOUT;
+        }
+        if(err == RADIOLIB_ERR_ADDRESS_NOT_FOUND) {
+            break;
         }
     } while (--retry > 0);
 
@@ -424,29 +433,10 @@ void FrisquetRadio::pollObservation() {
         result = readData(_operationData, 0);
         if (result == RADIOLIB_ERR_NONE) {
             _observation.length = getPacketLength();
-            if (_observation.length < sizeof(RadioTrameHeader)) {
-                result = RADIOLIB_ERR_RX_TIMEOUT;
-            } else {
-                logRadio(true, _operationData, _observation.length, getLastPacketRSSI());
-                RadioTrameHeader header;
-                memcpy(&header, _operationData, sizeof(header));
-                const auto& expected = _observation.expected;
-                // Même sélection que receiveExpected(), association comprise
-                // dans la requête mais non comparée par le protocole existant.
-                if (header.idExpediteur == expected.idExpediteur &&
-                    header.idDestinataire == expected.idDestinataire &&
-                    header.idMessage == expected.idMessage &&
-                    header.idReception == expected.idReception &&
-                    header.type == expected.type) {
-                    finishObservation(result);
-                    return;
-                }
-                if (header.type != expected.type && header.type == 0x83) {
-                    finishObservation(RADIOLIB_ERR_ADDRESS_NOT_FOUND);
-                    return;
-                }
-                bufferUnexpectedPacket(_operationData, _observation.length);
-                result = RADIOLIB_ERR_RX_TIMEOUT;
+            result = selectPacket(_operationData, _observation.length, _observation.expected);
+            if (result == RADIOLIB_ERR_NONE || result == RADIOLIB_ERR_ADDRESS_NOT_FOUND) {
+                finishObservation(result);
+                return;
             }
         }
     }
@@ -570,28 +560,10 @@ void FrisquetRadio::pollRead() {
         result = readData(_operationData, 0);
         if (result == RADIOLIB_ERR_NONE) {
             _read.length = getPacketLength();
-            if (_read.length < sizeof(RadioTrameHeader)) {
-                result = RADIOLIB_ERR_RX_TIMEOUT;
-            } else {
-                logRadio(true, _operationData, _read.length, getLastPacketRSSI());
-                RadioTrameHeader header;
-                memcpy(&header, _operationData, sizeof(header));
-                const auto& expected = _read.expected;
-                // Conserver la sélection de receiveExpected() : l'association
-                // figure dans la trame, mais n'est pas un critère de sélection.
-                if (header.idExpediteur == expected.idExpediteur &&
-                    header.idDestinataire == expected.idDestinataire &&
-                    header.idMessage == expected.idMessage &&
-                    header.idReception == expected.idReception && header.type == expected.type) {
-                    finishRead(result);
-                    return;
-                }
-                if (header.type != expected.type && header.type == 0x83) {
-                    finishRead(RADIOLIB_ERR_ADDRESS_NOT_FOUND);
-                    return;
-                }
-                bufferUnexpectedPacket(_operationData, _read.length);
-                result = RADIOLIB_ERR_RX_TIMEOUT;
+            result = selectPacket(_operationData, _read.length, _read.expected);
+            if (result == RADIOLIB_ERR_NONE || result == RADIOLIB_ERR_ADDRESS_NOT_FOUND) {
+                finishRead(result);
+                return;
             }
         }
     }

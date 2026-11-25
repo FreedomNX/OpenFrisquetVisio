@@ -4,6 +4,14 @@
 
 ### Corrections
 
+- Les entités Home Assistant deviennent indisponibles lorsque la passerelle perd
+  sa connexion MQTT, puis redeviennent disponibles à sa reconnexion
+  ([#88](https://github.com/FreedomNX/OpenFrisquetVisio/pull/88)).
+
+## 26.11.24.1425 — 2026-11-24
+
+### Corrections
+
 - Les outils mémoire n'utilisent plus l'identité de la box Connect passive ni celle
   d'un satellite Z1 physique ; l'émission brute au nom du Connect passif est refusée
   ([#77](https://github.com/FreedomNX/OpenFrisquetVisio/pull/77)).

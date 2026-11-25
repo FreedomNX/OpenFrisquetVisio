@@ -188,10 +188,19 @@ private:
 
   void reconnect() {
     if (_mqtt.connected()) return;
+    // Dernière volonté : si la passerelle disparaît sans se déconnecter (coupure,
+    // plantage, perte du Wi-Fi), le broker publie « offline » sur la disponibilité
+    // de l'appareil. Une connexion n'en porte qu'une : celle du premier appareil.
+    const MqttDevice* will = _devices.empty() ? nullptr : _devices.begin()->second;
+    if (will && !will->availabilityTopic.full.length()) will = nullptr;
     if (_mqtt.connect(_opts.clientId.c_str(),
                       _opts.username.length()? _opts.username.c_str(): nullptr,
                       _opts.password.length()? _opts.password.c_str(): nullptr,
-                      nullptr, 0, false, nullptr, _opts.cleanSession)) {
+                      will ? will->availabilityTopic.full.c_str() : nullptr,
+                      will ? will->availabilityTopic.qos : 0,
+                      will ? will->availabilityTopic.retain : false,
+                      will ? will->payloadNotAvailable.c_str() : nullptr,
+                      _opts.cleanSession)) {
 
       // Birth de chaque device + (re)publication des discovery + resubscribe
       for (auto i : _devices) {

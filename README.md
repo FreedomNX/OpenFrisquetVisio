@@ -93,6 +93,7 @@ créneau ; avant synchronisation, le cycle utilise le temps depuis le démarrage
   - Commandes de consigne, interrupteurs Boost/écrasement et boutons de réessai des commandes Connect
 - Les associations se font depuis le portail web ; aucun bouton d'association n'est publié dans Home Assistant.
 - Entités découvertes après connexion au broker MQTT, si l'intégration MQTT de Home Assistant est configurée et sa découverte activée. Les mesures restent inconnues jusqu'à leur réception.
+- Disponibilité : toutes les entités suivent `<préfixe>/openFrisquetVisio/availability` (`frisquet` par défaut). La passerelle y publie `online` à chaque connexion et déclare `offline` comme dernière volonté MQTT : après une coupure de courant, un plantage ou une perte du Wi-Fi, le broker le publie à l'expiration du keepalive (environ 90 s avec le keepalive de 60 s) et Home Assistant affiche les entités comme indisponibles au lieu de garder les dernières valeurs.
 - **État chaudière** regroupe l'activité : Chauffage, Chauffage ECS ou Veille (Inconnu si les données manquent). Cet état utilise uniquement les indicateurs de fonctionnement et le mode reçus par radio. **Anomalie chaudière** reste un capteur binaire indépendant ; une anomalie ne remplace plus l'activité affichée. L'ancien capteur « Mode de fonctionnement » est retiré de la découverte MQTT. Adapter les automatisations qui utilisaient ce capteur ou l'état « Fonctionnement ».
 
 Avec les seuls satellites, lorsque le mode détaillé chaudière manque, l'état peut

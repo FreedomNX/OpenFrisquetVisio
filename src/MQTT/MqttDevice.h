@@ -81,12 +81,25 @@ inline void MqttEntity::buildDiscoveryJson(JsonDocument& doc) const {
   if (commandTopic.full.length())    doc["command_topic"] = commandTopic.full;
   if (attributesTopic.full.length()) doc["json_attributes_topic"] = attributesTopic.full;
 
-  if (availabilityTopic.full.length()) {
+  // Disponibilité de l'appareil (« offline » publié par la dernière volonté MQTT),
+  // combinée à celle propre à l'entité : l'entité n'est disponible que si les deux le sont.
+  const bool deviceAvailability = device && device->availabilityTopic.full.length()
+      && device->availabilityTopic.full != availabilityTopic.full;
+  if (deviceAvailability || availabilityTopic.full.length()) {
     JsonArray av = doc["availability"].to<JsonArray>();
-    JsonObject a = av.add<JsonObject>();
-    a["topic"]   = availabilityTopic.full;
-    a["payload_available"]     = payloadAvailable;
-    a["payload_not_available"] = payloadNotAvailable;
+    if (deviceAvailability) {
+      JsonObject a = av.add<JsonObject>();
+      a["topic"]   = device->availabilityTopic.full;
+      a["payload_available"]     = device->payloadAvailable;
+      a["payload_not_available"] = device->payloadNotAvailable;
+    }
+    if (availabilityTopic.full.length()) {
+      JsonObject a = av.add<JsonObject>();
+      a["topic"]   = availabilityTopic.full;
+      a["payload_available"]     = payloadAvailable;
+      a["payload_not_available"] = payloadNotAvailable;
+    }
+    if (deviceAvailability && availabilityTopic.full.length()) doc["availability_mode"] = "all";
   }
 
   // Champs dynamiques

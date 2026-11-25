@@ -49,6 +49,8 @@ struct MqttEntity {
 };
 struct MqttDevice {
     String deviceId="openFrisquetVisio";
+    MqttTopic availabilityTopic;
+    String payloadNotAvailable="offline";
     std::map<String,MqttEntity*> entities;
 };
 ''' + extract(device_header, 'inline String MqttEntity::discoveryTopic() const') + r'''

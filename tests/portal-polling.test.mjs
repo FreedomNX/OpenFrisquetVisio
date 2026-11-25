@@ -220,6 +220,43 @@ for(const state of ['en cours','réussi','refusé','confirmation identique']) {
   });
 }
 
+// Le portail traite une requête à la fois, mais le réseau peut livrer la réponse d’une lecture
+// partie avant l’enregistrement après celle de l’enregistrement.
+for(const late of ['réponse','erreur'])for(const state of ['en cours','réussi','refusé']) {
+  test(`programmation : une ${late} tardive d’une lecture antérieure préserve un enregistrement ${state}`,async()=>{
+    const p=page('programming');
+    p.requests[0].finish(programmingData);await flush();
+    p.evaluate('draft[0][0]=false;dirty=true;refreshControls()');
+    const edited=p.evaluate('encodeProgram(draft)');
+    await p.advance(5000);const read=p.requests.at(-1);
+    assert.equal(read.method,'GET');
+    p.evaluate('save()');await flush();const save=p.requests.at(-1);
+    assert.equal(save.method,'POST');
+    if(state!=='en cours'){
+      save.finish(state==='refusé'?{ok:false,err:'Enregistrement refusé.'}:{ok:true,revision:'nouvelle'});
+      await flush();
+    }
+    const feedback=p.element('#message').textContent;
+    if(late==='réponse')read.finish(programmingData);else read.fail();
+    await flush();
+    assert.equal(p.element('#message').textContent,feedback,'l’ancienne lecture ne remplace pas le message de sauvegarde');
+    if(state==='en cours'){save.finish({ok:true,revision:'nouvelle'});await flush();}
+    const saved=state!=='refusé';
+    assert.equal(p.evaluate('revision'),saved?'nouvelle':'initiale');
+    assert.equal(p.evaluate('encodeProgram(draft)'),edited,'la semaine affichée reste celle de l’utilisateur');
+    assert.equal(p.evaluate('dirty'),!saved);
+    // La modification suivante part avec la révision de l’enregistrement, pas celle de l’ancienne lecture.
+    p.evaluate('draft[0][1]=false;dirty=true;refreshControls()');
+    p.evaluate('save()');await flush();
+    const next=p.requests.at(-1);
+    assert.equal(next.method,'POST');
+    assert.equal(next.body.get('revision'),saved?'nouvelle':'initiale');
+    next.finish({ok:true,revision:'suivante'});await flush();
+    await p.advance(5000);assert.equal(p.requests.at(-1).method,'GET','les lectures automatiques reprennent');
+    p.requests.at(-1).finish();await flush();
+  });
+}
+
 for(const name of ['index','logs','radio-logs']) {
   const interval=name==='index'?5000:2000;
   for(const phase of ['en-têtes','corps'])test(name+': reprise après un blocage des '+phase,async()=>{

@@ -8,6 +8,12 @@
   sa connexion MQTT, puis redeviennent disponibles à sa reconnexion
   ([#88](https://github.com/FreedomNX/OpenFrisquetVisio/pull/88)).
 
+### Changements
+
+- Après un mot de passe OTA refusé, les mises à jour réseau sont ignorées pendant
+  30 s : chaque essai faux bloquait le portail, MQTT et la radio environ une seconde
+  ([#90](https://github.com/FreedomNX/OpenFrisquetVisio/pull/90)).
+
 ## 26.11.24.1425 — 2026-11-24
 
 ### Corrections

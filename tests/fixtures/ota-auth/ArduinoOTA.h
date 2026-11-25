@@ -4,6 +4,7 @@
 
 enum { U_FLASH, U_SPIFFS };
 typedef int ota_error_t;
+enum { OTA_AUTH_ERROR, OTA_BEGIN_ERROR, OTA_CONNECT_ERROR, OTA_RECEIVE_ERROR, OTA_END_ERROR };
 
 using String = std::string;
 

@@ -65,7 +65,7 @@
       }
       return ranges.length ? ranges.join(', ') : 'Aucune période Confort';
     }
-    let zones=[],selected=null,draft=null,original='',revision='',dirty=false,brush=true,painting=false,busy=false,loading=false,polling=false;
+    let zones=[],selected=null,draft=null,original='',revision='',dirty=false,brush=true,painting=false,busy=false,loading=false,polling=false,saves=0;
     const LOAD_TIMEOUT_MESSAGE='Délai de chargement de la programmation dépassé.';
     let messageVersion=0;
     function message(text,error=false) { messageVersion++; $('#message').textContent=text; $('#message').className='message'+(error?' error':''); }
@@ -151,10 +151,11 @@
       // Le rafraîchissement automatique ne désactive pas l’éditeur, pour éviter un clignotement toutes les 5 s.
       if(manual) {loading=true;refreshControls();} else polling=true;
       const controller=new AbortController(),deadline=setTimeout(()=>controller.abort(),10000);
-      const messageVersionAtStart=messageVersion;
+      const messageVersionAtStart=messageVersion,savesAtStart=saves;
       try {
         const response=await fetch('/api/programming',{cache:'no-store',signal:controller.signal});const data=await response.json();
-        if(busy) return;
+        // Une lecture partie avant un enregistrement décrit l’état d’avant : la suivante prendra le relais.
+        if(saves!==savesAtStart) return;
         if(!response.ok || !data.ok) throw new Error(data.err || 'Chargement impossible.');
         sessionRestored();
         const incoming=(data.zones||[]).filter(zone=>zone.enabled);
@@ -175,13 +176,13 @@
         if(error.name==='AbortError') {
           // Une ancienne lecture ne doit pas masquer un message plus récent, notamment une sauvegarde.
           if(messageVersion===messageVersionAtStart) message(LOAD_TIMEOUT_MESSAGE,true);
-        } else message(error.message || 'Impossible de charger la programmation.',true);
+        } else if(saves===savesAtStart) message(error.message || 'Impossible de charger la programmation.',true);
       }
       finally {clearTimeout(deadline);if(manual) loading=false; else polling=false;refreshControls();}
     }
     async function save() {
       if(busy || loading || (!dirty && zones.find(zone=>zone.id===selected)?.known) || $('#editor').disabled) return;
-      busy=true;painting=false;refreshControls();message('Enregistrement…');
+      busy=true;saves++;painting=false;refreshControls();message('Enregistrement…');
       const program=encodeProgram(draft),body=new FormData();body.append('zone',selected);body.append('program',program);body.append('revision',revision);
       try {
         const response=await fetch('/api/programming',{method:'POST',body});const data=await response.json();

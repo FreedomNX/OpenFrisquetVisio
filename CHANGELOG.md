@@ -7,6 +7,10 @@
 - Les entités Home Assistant deviennent indisponibles lorsque la passerelle perd
   sa connexion MQTT, puis redeviennent disponibles à sa reconnexion
   ([#88](https://github.com/FreedomNX/OpenFrisquetVisio/pull/88)).
+- La page de programmation ignore une lecture automatique partie avant un
+  enregistrement : elle ne remet plus l'ancienne semaine à l'écran et ne fait plus
+  refuser l'enregistrement suivant
+  ([#89](https://github.com/FreedomNX/OpenFrisquetVisio/pull/89)).
 
 ## 26.11.24.1425 — 2026-11-24
 

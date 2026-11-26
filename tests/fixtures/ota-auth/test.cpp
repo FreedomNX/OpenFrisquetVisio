@@ -113,6 +113,33 @@ int main() {
         app._radio.suspend(R::Pause::HttpOta, false);
         assert(!app._radio.busy());
     }
+    // Un mot de passe refusé suspend l'OTA réseau 30 s sans arrêter la boucle ; les autres erreurs non.
+    {
+        ArduinoOTA = ArduinoOTAStub{};
+        App app;
+        app._cfg.password = "admin";
+        app.initOta();
+        clockMs = 0xFFFFF000u;  // la pause traverse le débordement de millis()
+        app._ota.loop();
+        ArduinoOTA.failure(OTA_BEGIN_ERROR);
+        app._ota.loop();
+        assert(ArduinoOTA.handled == 2);
+        ArduinoOTA.failure(OTA_AUTH_ERROR);
+        assert(!app._radio.busy());
+        for (int i = 0; i < 3; ++i) { clockMs += 9999; app._ota.loop(); }
+        assert(ArduinoOTA.handled == 2);
+        clockMs += 3; app._ota.loop();
+        assert(ArduinoOTA.handled == 3);
+        // Pause finie : même valeur de millis() un tour complet plus tard, pas de nouvelle pause.
+        clockMs -= 30000; app._ota.loop();
+        assert(ArduinoOTA.handled == 4);
+        ArduinoOTA.failure(OTA_AUTH_ERROR);
+        clockMs += 29999; app._ota.loop();
+        assert(ArduinoOTA.handled == 4);
+        clockMs += 1; app._ota.loop(); app._ota.loop();
+        assert(ArduinoOTA.handled == 6);
+        clockMs = 0;
+    }
     // Requête entièrement refusée : aucune écriture ni pause étrangère modifiée.
     for (auto reason : {R::Pause::ArduinoOta, R::Pause::Reboot, R::Pause::HttpOta}) {
         Portal p;

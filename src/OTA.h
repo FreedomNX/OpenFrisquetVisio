@@ -22,15 +22,30 @@ class OTA {
             }).onEnd([updating](){
                 if (updating) updating(false);
             }).onProgress([](unsigned int progress, unsigned int total){ 
-            }).onError([updating](ota_error_t err) {
+            }).onError([this, updating](ota_error_t err) {
                 if (updating) updating(false);
-                error("Erreur lors de la mise à jour !");
+                if (err == OTA_AUTH_ERROR) {
+                    // Vérifier un mot de passe bloque la boucle des services environ une seconde
+                    // (PBKDF2, 10 000 itérations) : les essais suivants attendent la fin de la pause.
+                    _authPauseStartMs = millis();
+                    _authPaused = true;
+                    error("[OTA] Mot de passe refusé, mises à jour réseau ignorées pendant 30 s.");
+                } else {
+                    error("Erreur lors de la mise à jour !");
+                }
             });
 
             ArduinoOTA.begin();
         }
 
         void loop() {
+            if (_authPaused && millis() - _authPauseStartMs < kAuthPauseMs) return;
+            _authPaused = false;
             ArduinoOTA.handle();
         }
+
+    private:
+        static constexpr uint32_t kAuthPauseMs = 30000;
+        bool _authPaused = false;
+        uint32_t _authPauseStartMs = 0;
 };
